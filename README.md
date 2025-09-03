@@ -4,7 +4,7 @@ This project analyses SQL statements and labels possible errors or complications
 # Credits
 Special thanks to Davide Miggiano for implementing most of the categorizers.
 
-# SQL Misconceptions TODO List
+# SQL Errors TODO List
 | ID    | Category  | Name                                  | Description                                                           | Base Query | Subquery | CTE |  
 | :---: | :-------: | :------------------------------------ | --------------------------------------------------------------------- | :-: | :-: | :-: |
 | 1     | SYN-1     | Ambiguous database object             | Omitting correlation names                                            | ✓ |     |     |
