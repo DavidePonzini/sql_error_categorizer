@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sqlerrcat"
+version = "0.1.0"
+authors = [
+  { name="Davide Ponzini", email="davide.ponzini95@gmail.com" },
+  { name="Davide Miggiano" },
+]
+description = "This project analyses SQL statements and labels possible errors or complications."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "psycopg2",
+    "pyyaml",
+    "sqlparse",
+    "sqlglot",
+]
+
+[project.urls]
+"Repository" = "https://github.com/Emulars/automatic_categorisation_of_sql_errors"
+"Documentation" = "https://sqlerrcat.readthedocs.io/en/latest/index.html"
+"Bug Tracker" = "https://github.com/Emulars/automatic_categorisation_of_sql_errors/issues"
