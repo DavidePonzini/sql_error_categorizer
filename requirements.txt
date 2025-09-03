@@ -2,4 +2,8 @@ psycopg2
 pyyaml
 sqlparse
 sqlglot
+
+build
+autoapi
+pytest
 sphinx-autoapi
