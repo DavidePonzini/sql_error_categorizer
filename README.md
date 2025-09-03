@@ -1,4 +1,4 @@
-# sqlerrcat
+# Introduction
 This project analyses SQL statements and labels possible errors or complications.
 
 # Credits
