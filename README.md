@@ -1,37 +1,8 @@
-# automatic_categorisation_of_sql_errors
-Master's Thesis 2024/25
-
-# Create the virtual environment
-```bash
-python -m venv venv
-```
-
-# Activate the python venv
-```bash
-venv\Scripts\Activate.ps1
-```
-
-# Install the required packages
-```bash
-pip install -r requirements.txt
-```
-
-# Initialize the database from YAML files
-
-```bash
-python main.py your_file.yaml --init-db
-```
-
-# Run the tool to analyze SQL queries
-
-```bash
-python .\main.py queries/ur_file.yaml
-```
+# sqlerrcat
+This project analyses SQL statements and labels possible errors or complications.
 
 # SQL Misconceptions TODO List
-
 ## SYN - Syntax Errors
-
 - [ ] SYN_1_AMBIGUOUS_DATABASE_OBJECT_OMITTING_CORRELATION_NAMES (ID: 1)
 - [ ] SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN (ID: 2)
 - [ ] SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_FUNCTION (ID: 3)
@@ -72,7 +43,6 @@ python .\main.py queries/ur_file.yaml
 - [ ] SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON (ID: 38)
 
 ## SEM - Semantic Errors
-
 - [ ] SEM_1_INCONSISTENT_EXPRESSION_AND_INSTEAD_OF_OR (ID: 39)
 - [ ] SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION (ID: 40)
 - [ ] SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG (ID: 41)
@@ -88,7 +58,6 @@ python .\main.py queries/ur_file.yaml
 - [ ] SEM_5_REDUNDANT_COLUMN_OUTPUT_DUPLICATE_COLUMN_OUTPUT (ID: 51)
 
 ## LOG - Logic Errors
-
 - [ ] LOG_1_OPERATOR_ERROR_OR_INSTEAD_OF_AND (ID: 52)
 - [ ] LOG_1_OPERATOR_ERROR_EXTRANEOUS_NOT_OPERATOR (ID: 53)
 - [ ] LOG_1_OPERATOR_ERROR_MISSING_NOT_OPERATOR (ID: 54)
@@ -121,7 +90,6 @@ python .\main.py queries/ur_file.yaml
 - [ ] LOG_6_FUNCTION_ERROR_INCORRECT_COLUMN_AS_FUNCTION_PARAMETER (ID: 81)
 
 ## COM - Complication Errors
-
 - [ ] COM_1_COMPLICATION_UNNECESSARY_COMPLICATION (ID: 82)
 - [ ] COM_1_COMPLICATION_UNNECESSARY_DISTINCT_IN_SELECT_CLAUSE (ID: 83)
 - [ ] COM_1_COMPLICATION_UNNECESSARY_JOIN (ID: 84)
@@ -146,45 +114,3 @@ python .\main.py queries/ur_file.yaml
 - [ ] COM_1_COMPLICATION_CONDITION_IN_SUBQUERY_CAN_BE_MOVED_UP (ID: 103)
 - [ ] COM_1_COMPLICATION_CONDITION_ON_LEFT_TABLE_IN_LEFT_OUTER_JOIN (ID: 104)
 - [ ] COM_1_COMPLICATION_OUTER_JOIN_CAN_BE_REPLACED_BY_INNER_JOIN (ID: 105)
-- [ ] COM_X_COMPLICATION_JOIN_CONDITION_IN_WHERE_CLAUSE (ID: 106)
-
-
-# SEMANTIC ERRORs
-## SEM-1 Inconsistent expression
-- AND instead of OR (empty result table) 
-- implied, tautological or inconsistent expression -> The WHERE-condition is unnecessarily complicated if a subcondition (some node in the operator tree) can be replaced by TRUE or FALSE and the condition is still equivalent. E.g. it happens sometimes that a condition is tested under WHERE that is actually a constraint on the relation.
-	This condition becomes even more strict if it is applied not to the given formula, but to the DNF of the formula. Then the check for unnecessary logical complications can be easily reduced to a series of consistency
-	tests. Let the DNF of the WHERE condition be C1 v ... v Cm with Ci = (Ai,1 ^ ... ^ Ai,ni).
-	There are really six cases to consider:
-	1. The entire formula C1 v ... v Cm can be replaced by FALSE, i.e. it is inconsistent.
-	2. The entire formula C1 v ... v Cm can be replaced by TRUE, , i.e. it is a tautology.
-	3. One of the Ci can be replaced by FALSE, i.e. removed from the disjunction. For example, SAL > 500 OR SAL > 700 is equivalent to SAL > 500.
-	4. One of the Ci can be replaced by TRUE. In this case, the entire disjunction can be replaced by TRUE
-	5. One of the Ai,j can be replaced by FALSE. In this case, the entire conjunction Ci = Ai,1 ^ ... ^ Ai,ni can be replace by FALSE.
-	6. One of the Ai,j can be replaced by TRUE, i.e. it can be removed from the conjunction. For instance, consider (SAL < 500 AND COMM > 1000) OR SAL >= 500. This can be simplified to ‘‘COMM > 1000 OR SAL >= 500’’, i.e. the underlined condition can be replaced by TRUE.
-	
-- DISTINCT in SUM or AVG
-- DISTINCT that might remove important duplicates -> Conversely, applying DISTINCT or GROUP BY sometimes removes important duplicates. Consider the following query:  SELECT DISTINCT M.ENAME FROM EMP M, EMP E WHERE E.MGR = M.EMPNO AND E.JOB = 'ANALYST'; The purpose of this query seems to find employees who have an analyst in their team. If it should ever happen that two different employees with the same name satisfy this condition, only one name is printed. Since the intention is to find employee objects, this result is at least misleading. We suggest to give a warning whenever a soft key of a tuple variable appears under SELECT DISTINCT or GROUP BY, but not the corresponding real key. This could also be seen as a violation of a standard pattern.
-- wildcards without LIKE -> When ‘‘=’’ is used with a comparison string that contains ‘‘%’’, probably ‘‘LIKE’’ was meant. For the other wildcard, ‘‘_’’, it is not that clear, because it might more often appear in normal strings.
-- incorrect wildcard: using _ instead of % or using, e.g., *
-- mixing a >0 with IS NOT NULL or empty string with NULL
-
-
-## SEM-2 Inconsistent join
-- NULL in IN/ANY/ALL subquery -> IN conditions and quantified comparisons with subqueries (ANY, ALL) can have a possibly surprising behaviour if the subquery returns a null value (among other values). An IN and ANY condition is then null/ unknown, when it otherwise would be false, and an ALL condition is null/unknown, when it otherwise would be true (ALL is treated like a large conjunction, and IN/ ANY like a large disjunction). For instance, the result of the following query is always empty as there exists one employee who is not a subordinate (MGR IS NULL for the president of the company): SELECT X.EMPNO, X.ENAME, X.JOB FROM EMP X WHERE X.EMPNO NOT IN (SELECT Y.MGR FROM EMP Y)
-This is a trap that many SQL programmers are not aware of. Indeed, it is quite common to assume that the above query is equivalent to SELECT X.EMPNO, X.ENAME, X.JOB FROM EMP X WHERE NOT EXISTS (SELECT * FROM EMP Y WHERE Y.MGR = X.EMPNO)
-This equivalence does not hold: The NOT EXISTS-query would work as intended. A warning should be printed whenever there is a database state in which the result of such a subquery includes a null value. We could also heuristically assume that if a column is not declared as NOT NULL, then every typical database state contains at least one row in which it is null. Now a query would be strange if it returns an empty result for all typical database states. (Of course, it might be that the programmer searches for untypical states, but then he/she could use a comment to switch off the warning).
-
-- join on incorrect column (matches impossible) -> SELECT in subquery uses no tuple variable of subquery or Comparison between different domains,  If there is no domain information, one could analyze an example database state for columns that are nearly disjoint. If that is not possible, at least comparisons between strings and numbers of different size (e.g., a VARCHAR(10) column and a VARCHAR(20) column) are suspicious.
-
-
-## SEM-3 Missing join
-- omitting a join -> to test it, First, the conditions is converted to DNF, and the test is done for each conjunction separately. One creates a graph with the tuple variables X as nodes. Edges are drawn between tuple variables for which a foreign key is equated to a key, except in the case of self-joins, where any equation suffices. The graph then should be connected, with the possible exception of nodes X such that there is a condition X.A = c with a key attribute A and a constant c. Another exception are tuple variables over relations that can contain only a single tuple. Unfortunately, standard SQL does not permit to declare this constraint (it would be a key with 0 columns). Note that in some cases, joins can also be done via subqueries. Thus, tuple variables in subqueries should be added to the graph.
-
-
-## SEM-4 Duplicate rows
-- many duplicates -> run the query on an example database state. If it produces a lot of duplicates, we could give a warning.
-
-## SEM-5 Redundant column output
-- constant column output -> The conjunctive normal form of the WHERE clause contains A = c with an attribute A and a constant c as one part of the conjunction, and A also appears as a term in the SELECT-list. Of course, if A = B appears in addition to A = c, also the value of B is obvious, and using B in the SELECT-list should generate a warning. And so on.
-- duplicate column output -> An output column is also unnecessary if it is always identical to another output column.
