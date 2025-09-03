@@ -109,3 +109,6 @@ This project analyses SQL statements and labels possible errors or complications
 | 103   | COM       | Complication                          | Condition in the subquery can be moved up                             | [ ] | [ ] | [ ] |
 | 104   | COM       | Complication                          | Condition on left table in LEFT OUTER JOIN                            | [ ] | [ ] | [ ] |
 | 105   | COM       | Complication                          | OUTER JOIN can be replaced by INNER JOIN                              | [ ] | [ ] | [ ] |
+
+# Credits
+TBA
