@@ -43,7 +43,7 @@ Special thanks to Davide Miggiano for implementing most of the categorizers.
 | 34    | SYN-6     | Common syntax error                   | Curly, square or unmatched brackets                                   | ✓ | ✓ | ✓ |
 | 35    | SYN-6     | Common syntax error                   | IS where not applicable                                               |     |     |     |
 | 36    | SYN-6     | Common syntax error                   | Nonstandard keywords or standard keywords in wrong context            |     |     |     |
-| 37    | SYN-6     | Common syntax error                   | Nonstandard operators (e.g., &&, || or ==)                            | ✓ | ✓ | ✓ |
+| 37    | SYN-6     | Common syntax error                   | Nonstandard operators (e.g., &&, \|\| or ==)                            | ✓ | ✓ | ✓ |
 | 38    | SYN-6     | Common syntax error                   | Additional semicolon                                                  | ✓ | ✓ | ✓ |
 | 39    | SEM-1     | Inconsistent expression               | AND instead of OR (empty result table)                                | ✓ |     |     |
 | 40    | SEM-1     | Inconsistent expression               | Implied, tautological or inconsistent expression                      |     |     |     |
