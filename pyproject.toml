@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sqlerrcat"
+name = "sql_error_categorizer"
 version = "0.1.0"
 authors = [
   { name="Davide Ponzini", email="davide.ponzini95@gmail.com" },

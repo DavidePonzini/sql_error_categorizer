@@ -2,7 +2,7 @@
 # Type: PyPi
 # Author: Davide Ponzini
 
-NAME=sqlerrcat
+NAME=sql_error_categorizer
 VENV=./venv
 REQUIREMENTS=requirements.txt
 
@@ -45,5 +45,8 @@ upload: test documentation
 download: uninstall
 	$(VENV_BIN)/python -m pip install $(NAME)
 
+clean:
+	find . -type d -name '__pycache__' -print0 | xargs -0 rm -r || true
+	rm -rf dist docs/_build
 
 ########## Makefile end ##########

@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to sqlerrcat's documentation!
+Welcome to sql_error_categorizer's documentation!
 =====================================
 This project analyses SQL statements to highlight possible **misconceptions**
 (common mistakes or misunderstandings). The detection engine tokenises the input
@@ -34,7 +34,7 @@ Indices and tables
 
 Installation
 ============
-``$ pip install sqlerrcat``
+``$ pip install sql_error_categorizer``
 
 What is checked right now?
 ==========================

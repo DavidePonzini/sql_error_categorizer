@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'sqlerrcat'
+project = 'sql_error_categorizer'
 copyright = '2025, Davide Ponzini, Davide Miggiano'
 author = 'Davide Ponzini, Davide Miggiano'
 

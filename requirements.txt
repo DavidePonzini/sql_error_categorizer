@@ -3,6 +3,8 @@ pyyaml
 sqlparse
 sqlglot
 
+ipython
+
 build
 autoapi
 pytest
