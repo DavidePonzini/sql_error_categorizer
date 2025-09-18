@@ -1,3 +1,5 @@
+'''Parses (possibly incorrect) SQL queries to extract CTEs, subqueries, and main query components.'''
+
 from dataclasses import dataclass
 import re
 from typing import Any
@@ -5,7 +7,7 @@ from typing import Any
 import sqlglot
 import sqlglot.errors
 
-from .ctes import extract_ctes, CTEMap, create_cte_catalog
+from .ctes import extract_ctes, CTEMap, create_cte_catalog, CTECatalog
 from .subqueries import extract_subqueries, SubqueryMap
 from .query import parse_query, QueryMap
 

@@ -1,3 +1,5 @@
+'''Builds a catalog of existing database tables by executing the provided SQL string in a temporary PostgreSQL database.'''
+
 from .catalog import Catalog, UniqueConstraintType
 import psycopg2
 import time
