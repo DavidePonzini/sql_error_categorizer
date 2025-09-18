@@ -1,6 +1,6 @@
 import json
 from .. import parser, catalog
-from . import tokenizer
+from .. import tokenizer
 from ..sql_errors import SqlErrors
 from .base import BaseErrorDetector
 from .syntax import SyntaxErrorDetector
