@@ -1,8 +1,9 @@
 import json
 from .. import parser, catalog
-from ..utils import tokenizer
+from . import tokenizer
 from ..sql_errors import SqlErrors
-from .detectors import BaseErrorDetector
+from .base import BaseErrorDetector
+from .syntax import SyntaxErrorDetector
 
 class ErrorDetector:
     def __init__(self, query: str, *,
