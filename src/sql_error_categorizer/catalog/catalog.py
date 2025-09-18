@@ -45,8 +45,6 @@ class Table:
     _columns: dict[str, Column] = field(default_factory=dict)
 
     def add_unique_constraint(self, columns: set[str], constraint_type: UniqueConstraintType) -> None:
-        from dav_tools import messages
-        messages.debug(columns, type(columns))
         self.unique_constraints.add(UniqueConstraint(columns, constraint_type))
 
     def add_column(self, name: str, column_type: str, numeric_precision: int | None = None, numeric_scale: int | None = None,
