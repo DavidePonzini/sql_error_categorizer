@@ -1,13 +1,16 @@
-'''Builds a catalog of existing database tables by executing the provided SQL string in a temporary PostgreSQL database.'''
+'''Builds a catalog of existing schemas/tables/columns by executing the provided SQL string in a temporary PostgreSQL database.'''
 
 from .catalog import Catalog, UniqueConstraintType
 import psycopg2
 import time
 from . import queries
 
-def build_catalog(sql_string: str, hostname: str, port: int, user: str, password: str, use_temp_schema: bool = True) -> Catalog:
+def build_catalog(sql_string: str, *, hostname: str, port: int, user: str, password: str, use_temp_schema: bool = True) -> Catalog:
     '''Builds a catalog by executing the provided SQL string in a temporary PostgreSQL database.'''
     result = Catalog()
+
+    if sql_string.strip() == '':
+        return result
 
     conn = psycopg2.connect(host=hostname, port=port, user=user, password=password)
     cur = conn.cursor()
