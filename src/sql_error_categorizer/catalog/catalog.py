@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Self
 from enum import Enum
+from copy import deepcopy
 
 class UniqueConstraintType(Enum):
     PRIMARY_KEY = 'PRIMARY KEY'
@@ -162,3 +163,7 @@ class Catalog:
     def functions(self) -> set[str]:
         # TODO: Implement function cataloging
         return set()
+
+    def copy(self) -> Self:
+        '''Creates a deep copy of the catalog.'''
+        return deepcopy(self)
