@@ -1,29 +1,23 @@
 from abc import ABC, abstractmethod
 from ..sql_errors import SqlErrors
+from ..tokenizer import TokenizedSQL
+from ..catalog import Catalog
+from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
 
 class BaseErrorDetector(ABC):
     def __init__(self,
-        query: str, tokens,
-        nl_description: str = '', correct_solutions: list[str] = [],
-        catalog=None,
-        query_map=None, subquery_map=None, cte_map=None,
-        cte_catalog=None,
-        debug=False):
-        
+                 query: TokenizedSQL,
+                 catalog: Catalog,
+                 query_map: QueryMap, subquery_map: SubqueryMap, cte_map: CTEMap, cte_catalog: CTECatalog,
+                 correct_solutions: list[str] = [],
+        ):        
         self.query = query
-        self.nl_description = nl_description
+        self.catalog = catalog
+        self.query_map = query_map
+        self.subquery_map = subquery_map
+        self.cte_map = cte_map
+        self.cte_catalog = cte_catalog
         self.correct_solutions = correct_solutions
-        self.tokens = tokens
-        
-        self.catalog = catalog or {
-            'schemas': [], 'tables': [], 'columns': [], 'functions': [],
-            'synonyms': {}, 'cte_tables': {}, 'subquery_tables': {}
-        }
-        self.query_map = query_map or {}
-        self.subquery_map = subquery_map or {}
-        self.cte_map = cte_map or {}
-        self.cte_catalog = cte_catalog or {}
-        self.debug = debug
 
     def _prepare(self):
         '''This method can be overridden by subclasses for additional preparation before running the detector'''

@@ -1,6 +1,6 @@
 '''Parses (possibly incorrect) SQL queries to extract CTEs, subqueries, and main query components.'''
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 from typing import Any
 
@@ -14,9 +14,9 @@ from .query import parse_query, QueryMap
 
 @dataclass
 class ParseResult:
-    cte_map: CTEMap
-    subquery_map: SubqueryMap
-    query_map: QueryMap
+    cte_map: CTEMap = field(default_factory=CTEMap)
+    subquery_map: SubqueryMap = field(default_factory=SubqueryMap)
+    query_map: QueryMap = field(default_factory=QueryMap)
 
 
 def parse(query: str) -> ParseResult:

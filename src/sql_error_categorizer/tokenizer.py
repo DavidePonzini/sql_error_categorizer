@@ -5,12 +5,12 @@ from sqlparse.tokens import Whitespace, Newline
 
 class TokenizedSQL:
     def __init__(self, query: str):
-        self.query = query
+        self.sql = query
         self.parsed = self._parse()
         self.tokens = self._tokenize()
 
     def _parse(self) -> sqlparse.sql.Statement | None:
-        parsed = sqlparse.parse(self.query)
+        parsed = sqlparse.parse(self.sql)
         
         if not parsed:
             return None
@@ -28,4 +28,4 @@ class TokenizedSQL:
         ]
 
     def __repr__(self) -> str:
-        return f'TokenizedSQL("{self.query!r}")'
+        return f'TokenizedSQL("{self.sql!r}")'
