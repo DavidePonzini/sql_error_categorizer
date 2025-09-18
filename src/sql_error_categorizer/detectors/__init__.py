@@ -13,7 +13,7 @@ class ErrorDetector:
         
         self.query = tokenizer.TokenizedSQL(query)
         self.correct_solutions = correct_solutions
-        self.catalog = catalog.copy()  # Make a copy to avoid modifying the original catalog on subsequent calls
+        self.catalog = catalog
         self.detectors: list[BaseErrorDetector] = []
 
         # Parse the query once here
@@ -29,8 +29,8 @@ class ErrorDetector:
 
     def add_detector(self, detector_cls: type[BaseErrorDetector]) -> None:
         detector = detector_cls(
-            query=self.query,
-            catalog=self.catalog,
+            query=self.query.copy(),    # Make a copy to avoid possible modifications during detection
+            catalog=self.catalog.copy(),
             correct_solutions=self.correct_solutions,
             query_map=self.parse_result.query_map,
             subquery_map=self.parse_result.subquery_map,

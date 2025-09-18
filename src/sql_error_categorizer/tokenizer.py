@@ -1,5 +1,6 @@
 '''Tokeninzes a SQL query into a list of tokens using `sqlparse`.'''
 
+from copy import deepcopy
 import sqlparse
 from sqlparse.tokens import Whitespace, Newline
 
@@ -29,3 +30,6 @@ class TokenizedSQL:
 
     def __repr__(self) -> str:
         return f'TokenizedSQL("{self.sql!r}")'
+    
+    def copy(self) -> 'TokenizedSQL':
+        return deepcopy(self)
