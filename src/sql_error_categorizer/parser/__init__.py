@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 import sqlglot
 import sqlglot.errors
 
-from .ctes import extract_ctes, CTEMap
+from .ctes import extract_ctes, CTEMap, create_cte_catalog
 from .subqueries import extract_subqueries, SubqueryMap
 from .query import parse_query, QueryMap
 
