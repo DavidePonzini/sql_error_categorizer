@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 from typing import List, Dict, Any
 # from sqlglot.expression import Expression
@@ -18,20 +18,20 @@ SQL_KEYWORDS = frozenset({
 
 @dataclass
 class QueryMap:
-    select_value: List[str]
-    from_value: str
-    join_value: List[str]
-    alias_mapping: Dict[str, List[str]]
-    where: bool
-    distinct: bool
-    order_by: List[str]
-    top_limit_first: bool
-    set_op: bool
-    set_op_values: Dict[str, List[str]]
-    group_by_values: List[str]
-    having: bool
-    exists: bool
-    all_any_condition: bool
+    select_value: List[str] = field(default_factory=list)
+    from_value: str = field(default='')
+    join_value: List[str] = field(default_factory=list)
+    alias_mapping: Dict[str, List[str]] = field(default_factory=dict)
+    where: bool = field(default=False)
+    distinct: bool = field(default=False)
+    order_by: List[str] = field(default_factory=list)
+    top_limit_first: bool = field(default=False)
+    set_op: bool = field(default=False)
+    set_op_values: Dict[str, List[str]] = field(default_factory=dict)
+    group_by_values: List[str] = field(default_factory=list)
+    having: bool = field(default=False)
+    exists: bool = field(default=False)
+    all_any_condition: bool = field(default=False)
 
     def __repr__(self) -> str:
         return (f'QueryMap('
