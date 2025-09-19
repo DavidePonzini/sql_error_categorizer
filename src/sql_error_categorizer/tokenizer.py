@@ -3,13 +3,35 @@
 from copy import deepcopy
 import sqlparse
 from sqlparse.tokens import Whitespace, Newline
+from sqlparse.sql import IdentifierList, Identifier
 
 class TokenizedSQL:
     def __init__(self, query: str):
         self.sql = query
         self.parsed = self._parse()
-        self.tokens = self._tokenize()
 
+        # Lazy properties
+        self._tokens = None
+        self._identifiers = None
+
+    @property
+    def tokens(self) -> list[tuple[sqlparse.tokens._TokenType, str]]:
+        if not self._tokens:
+            self._tokens = self._tokenize()
+        return self._tokens
+
+    @property
+    def identifiers(self) -> list[tuple[sqlparse.sql.Identifier, str]]:
+        '''
+            Returns a list of tuples (identifier, alias, clause) where:
+                - identifier: The name of the identifier (table or column)
+                - alias: The alias if present, else None
+                - clause: The SQL clause where the identifier appears (e.g., SELECT, FROM, WHERE)
+        '''
+        if not self._identifiers:
+            self._identifiers = self._extract_identifiers()
+        return self._identifiers
+    
     def _parse(self) -> sqlparse.sql.Statement | None:
         parsed = sqlparse.parse(self.sql)
         
@@ -28,8 +50,38 @@ class TokenizedSQL:
             if tok.ttype not in (Whitespace, Newline)
         ]
 
+    def _extract_identifiers(self) -> list[tuple[sqlparse.sql.Identifier, str]]:
+        if not self.parsed:
+            return []
+
+        return self._extract_identifiers_rec(self.parsed.tokens)
+    
+    @staticmethod
+    def _extract_identifiers_rec(tokens, current_clause: str = 'NONE') -> list[tuple[sqlparse.sql.Identifier, str]]:
+        identifiers = []
+
+        for token in tokens:
+            if token.ttype is sqlparse.tokens.Keyword or token.ttype is sqlparse.tokens.DML:
+                if token.value.upper() in ('SELECT', 'FROM', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'LIMIT'):
+                    current_clause = token.value.upper()
+                continue
+
+            if isinstance(token, IdentifierList):
+                for identifier in token.get_identifiers():
+                    identifiers.append((identifier, current_clause))
+            elif isinstance(token, Identifier):
+                identifiers.append((token, current_clause))
+            elif token.is_group:
+                sub_identifiers = TokenizedSQL._extract_identifiers_rec(token.tokens, current_clause)
+                identifiers.extend(sub_identifiers)
+        return identifiers
+
     def __repr__(self) -> str:
         return f'TokenizedSQL("{self.sql!r}")'
     
     def copy(self) -> 'TokenizedSQL':
         return deepcopy(self)
+    
+    def print_tree(self) -> None:
+        if self.parsed:
+            self.parsed._pprint_tree()

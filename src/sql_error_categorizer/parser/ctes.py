@@ -97,7 +97,18 @@ def extract_ctes(query: str) -> tuple[CTEMap, str]:
 
     return cte_map, remaining_query
 
-CTECatalog = dict[str, list[str]]
+class CTECatalog:
+    def __init__(self):
+        # k: cte name, v: column names
+        self.cte_tables: dict[str, list[str]] = {}
+
+    def add_cte(self, cte_name: str, columns: list[str]):
+        self.cte_tables[cte_name] = columns
+
+    @property
+    def tables(self) -> set[str]:
+        return set(self.cte_tables.keys())
+
 
 def create_cte_catalog(cte_map: CTEMap) -> CTECatalog:
     """
@@ -124,6 +135,6 @@ def create_cte_catalog(cte_map: CTEMap) -> CTECatalog:
                 
             columns.append(column_name)
         
-        cte_catalog[cte_name] = columns
+        cte_catalog.add_cte(cte_name, columns)
         
     return cte_catalog

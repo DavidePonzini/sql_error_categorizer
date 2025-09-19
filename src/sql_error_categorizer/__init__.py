@@ -7,12 +7,14 @@ def get_errors(query_str: str, correct_solutions: list[str] = [], dataset_str: s
     '''Detect SQL errors in the given query string.'''
 
     cat = catalog.build_catalog(dataset_str, hostname=db_host, port=db_port, user=db_user, password=db_password)
-    det = detectors.ErrorDetector(query_str, correct_solutions=correct_solutions, catalog=cat, debug=debug)
+    
+    det = detectors.Detector(query_str, correct_solutions=correct_solutions, catalog=cat, debug=debug)
+    det.add_detector(detectors.SyntaxErrorDetector)
 
     return det.run()
 
 
-def t() -> detectors.ErrorDetector:
+def t() -> detectors.Detector:
     with open('q_miedema.sql', 'r') as f:
         miedema = f.read()
     with open('q_q.sql', 'r') as f:
@@ -21,6 +23,8 @@ def t() -> detectors.ErrorDetector:
         s = f.read()
 
     cat = catalog.build_catalog(miedema, hostname='localhost', port=5432, user='postgres', password='password')
-    det = detectors.ErrorDetector(q, correct_solutions=[s], catalog=cat, debug=True)
+    
+    det = detectors.Detector(q, correct_solutions=[s], catalog=cat, debug=True)
+    det.add_detector(detectors.SyntaxErrorDetector)
 
     return det
