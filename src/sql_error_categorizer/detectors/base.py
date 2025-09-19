@@ -13,7 +13,10 @@ class DetectedError:
     data: tuple = field(default_factory=tuple)
 
     def __repr__(self):
-        return f"DetectedError({self.error.value.id} - {self.error.name}: {self.data})"
+        return f"DetectedError({self.error.value} - {self.error.name}: {self.data})"
+    
+    def __str__(self) -> str:
+        return f'[{self.error.value:3}] {self.error.name}: {self.data}]'
 
 class BaseErrorDetector(ABC):
     def __init__(self, *,
