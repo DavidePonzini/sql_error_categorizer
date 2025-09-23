@@ -4,14 +4,14 @@ import sqlparse
 import sqlparse.keywords
 from typing import Callable
 
-from .base import BaseErrorDetector, DetectedError
+from .base import BaseDetector, DetectedError
 from ..tokenizer import TokenizedSQL
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
 from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
 
 
-class SyntaxErrorDetector(BaseErrorDetector):
+class SyntaxErrorDetector(BaseDetector):
     def __init__(self, *,
                  query: TokenizedSQL,
                  catalog: Catalog,

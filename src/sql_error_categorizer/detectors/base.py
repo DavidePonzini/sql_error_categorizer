@@ -18,7 +18,7 @@ class DetectedError:
     def __str__(self) -> str:
         return f'[{self.error.value:3}] {self.error.name}: {self.data}]'
 
-class BaseErrorDetector(ABC):
+class BaseDetector(ABC):
     def __init__(self, *,
                  query: TokenizedSQL,
                  catalog: Catalog,
@@ -41,4 +41,4 @@ class BaseErrorDetector(ABC):
     @abstractmethod
     def run(self) -> list[DetectedError]:
         '''Run the detector and return a list of detected errors with their descriptions'''
-        pass
+        return []

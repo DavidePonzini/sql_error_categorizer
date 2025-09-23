@@ -2,20 +2,23 @@ import json
 from .. import parser, catalog
 from .. import tokenizer
 from ..sql_errors import SqlErrors
-from .base import BaseErrorDetector
+from .base import BaseDetector
 from .syntax import SyntaxErrorDetector
+from .semantic import SemanticErrorDetector
+from .logical import LogicalErrorDetector
+from .complications import ComplicationDetector
 
 class Detector:
     def __init__(self, query: str, *,
                  correct_solutions: list = [],
                  catalog: catalog.Catalog = catalog.Catalog(),
-                 detectors: list[type[BaseErrorDetector]] = [],
+                 detectors: list[type[BaseDetector]] = [],
                  debug: bool = False):
         
         # Context data: they don't need to be parsed again if the query changes
         self.correct_solutions = correct_solutions
         self.catalog = catalog
-        self.detectors: list[BaseErrorDetector] = []
+        self.detectors: list[BaseDetector] = []
         self.debug = debug
 
         self.set_query(query)
@@ -51,7 +54,7 @@ class Detector:
             detector.update_query = lambda new_query: self.set_query(new_query)
             detector.correct_solutions = self.correct_solutions
 
-    def add_detector(self, detector_cls: type[BaseErrorDetector]) -> None:
+    def add_detector(self, detector_cls: type[BaseDetector]) -> None:
         '''Add a detector instance to the list of detectors'''
 
         # Make copies to avoid possible modifications during detection
@@ -85,7 +88,7 @@ class Detector:
             if self.debug:
                 print(f'===== Detected errors from {detector.__class__.__name__} =====')
                 for error in errors:
-                    print(f'- {error}')
+                    print(error)
 
             for error in errors:
                 result.add(error.error)
