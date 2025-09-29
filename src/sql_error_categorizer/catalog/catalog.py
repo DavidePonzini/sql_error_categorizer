@@ -46,11 +46,11 @@ class Column:
 class Table:
     name: str
     schema: 'Schema' = field(repr=False)
-    unique_constraints: set[UniqueConstraint] = field(default_factory=set)
+    unique_constraints: list[UniqueConstraint] = field(default_factory=list)
     _columns: dict[str, Column] = field(default_factory=dict)
 
     def add_unique_constraint(self, columns: set[str], constraint_type: UniqueConstraintType) -> None:
-        self.unique_constraints.add(UniqueConstraint(columns, constraint_type))
+        self.unique_constraints.append(UniqueConstraint(columns, constraint_type))
 
     def add_column(self, name: str, column_type: str, numeric_precision: int | None = None, numeric_scale: int | None = None,
                    is_nullable: bool = True, fk_schema: str | None = None, fk_table: str | None = None, fk_column: str | None = None) -> None:
