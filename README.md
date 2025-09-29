@@ -4,6 +4,9 @@ This project analyses SQL statements and labels possible errors or complications
 # Credits
 Special thanks to Davide Miggiano for implementing most of the categorizers.
 
+# Limitations
+- Fully identified schema names are not supported when specifying column names (e.g. `SELECT schema.table.column [...]`)
+
 # SQL Errors TODO List
 ## Syntax Errors
 | ID    | Category  | Name                                  | Description                                                           | Base Query | Subquery | CTE |  
