@@ -36,19 +36,19 @@ def get_errors2(query_str: str, correct_solutions: list[str] = [], dataset_str: 
     return get_errors(query_str, correct_solutions=correct_solutions, catalog=cat, debug=debug)
 
 
-def t() -> _Detector:
+def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', dataset_file: str = 'q_miedema.sql') -> _Detector:
     '''Test function, remove before production'''
 
-    with open('q_miedema.sql', 'r') as f:
-        miedema = f.read()
-    with open('q_q.sql', 'r') as f:
-        q = f.read()
-    with open('q_s.sql', 'r') as f:
-        s = f.read()
+    with open(dataset_file) as f:
+        dataset = f.read()
+    with open(query_file) as f:
+        query = f.read()
+    with open(solution_file) as f:
+        solution = f.read()
 
-    cat = catalog.build_catalog(miedema, hostname='localhost', port=5432, user='postgres', password='password')
+    cat = catalog.build_catalog(dataset, hostname='localhost', port=5432, user='postgres', password='password')
 
-    det = _Detector(q, correct_solutions=[s], catalog=cat, debug=True)
+    det = _Detector(query, correct_solutions=[solution], catalog=cat, debug=True)
     det.add_detector(SyntaxErrorDetector)
     det.add_detector(SemanticErrorDetector)
     det.add_detector(LogicalErrorDetector)
