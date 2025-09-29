@@ -12,8 +12,9 @@ class UniqueConstraint:
         self.columns = {col.lower() for col in columns}
         self.constraint_type = constraint_type
 
-    def __repr__(self) -> str:
-        return f"UniqueConstraint({self.constraint_type.value}: {self.columns})"
+    def __repr__(self, level: int = 0) -> str:
+        indent = '  ' * level
+        return f'{indent}UniqueConstraint({self.constraint_type.value}: {self.columns})'
 
 @dataclass
 class Column:
@@ -35,6 +36,10 @@ class Column:
     @property
     def is_fk(self) -> bool:
         return all([self.fk_schema, self.fk_table, self.fk_column])
+
+    def __repr__(self, level: int = 0) -> str:
+        indent = '  ' * level
+        return f'{indent}Column(name=\'{self.name}\', type=\'{self.column_type}\', is_pk={self.is_pk}, is_fk={self.is_fk})'
 
 
 @dataclass
@@ -64,6 +69,16 @@ class Table:
         '''Returns all column names in the table.'''
         return set(self._columns.keys())
     
+    def __repr__(self, level: int = 0) -> str:
+        indent = '  ' * level
+
+        columns = '\n'.join([col.__repr__(level + 1) for col in self._columns.values()])
+        if len(self.unique_constraints) < 2:
+            unique_constraints_str = ', '.join([uc.__repr__(0) for uc in self.unique_constraints])
+        else:
+            unique_constraints_str = '\n' + '\n'.join([uc.__repr__(level + 1) for uc in self.unique_constraints]) + '\n' + indent
+        return f'{indent}Table(name=\'{self.name}\', columns=[\n{columns}\n{indent}], unique_constraints=[{unique_constraints_str}])'
+
 
 @dataclass
 class Schema:
@@ -91,6 +106,11 @@ class Schema:
     def columns(self) -> set[str]:
         '''Returns all column names in the schema, across all tables.'''
         return {col for table in self._tables.values() for col in table.columns}
+
+    def __repr__(self, level: int = 0) -> str:
+        indent = '  ' * level
+        tables = '\n'.join([table.__repr__(level + 1) for table in self._tables.values()])
+        return f'{indent}Schema(name=\'{self.name}\', tables=[\n{tables}\n{indent}])'
 
 @dataclass
 class Catalog:
@@ -165,3 +185,13 @@ class Catalog:
     def copy(self) -> Self:
         '''Creates a deep copy of the catalog.'''
         return deepcopy(self)
+    
+    def __repr__(self) -> str:
+        schemas = [schema.__repr__(1) for schema in self._schemas.values()]
+
+        result = 'Catalog('
+        for schema in schemas:
+            result += '\n' + schema
+        result += '\n)'
+
+        return result
