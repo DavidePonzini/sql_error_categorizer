@@ -26,9 +26,11 @@ def parse(query: str) -> ParseResult:
 
     return ParseResult(cte_map=cte_map, query_map=query_map, subquery_map=subquery_map)
 
-# The query_parser does not extract WHERE, HAVING, or ON clauses, so we extract them manually.
-# Works only from the WHERE clause to the end of the query.
 def get_clause_content(clause, query):
+    '''
+        The query_parser does not extract WHERE, HAVING, or ON clauses, so we extract them manually.
+        Works only from the WHERE clause to the end of the query.
+    '''
     pattern = rf'\b{clause}\b(.*?)(?:\bGROUP BY|\bHAVING|\bORDER BY|\bLIMIT|\bUNION\b|\bINTERSECT\b|\bEXCEPT\b|$)'
     match = re.search(pattern, query, re.IGNORECASE | re.DOTALL)
     return match.group(1).strip() if match else ""
