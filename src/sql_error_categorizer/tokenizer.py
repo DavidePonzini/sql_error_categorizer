@@ -61,8 +61,8 @@ class TokenizedSQL:
         identifiers = []
 
         for token in tokens:
-            if token.ttype is sqlparse.tokens.Keyword or token.ttype is sqlparse.tokens.DML:
-                if token.value.upper() in ('SELECT', 'FROM', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'LIMIT'):
+            if token.ttype is sqlparse.tokens.Keyword or token.ttype is sqlparse.tokens.DML or token.ttype is sqlparse.tokens.CTE:
+                if token.value.upper() in ('WITH', 'SELECT', 'FROM', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'LIMIT'):
                     current_clause = token.value.upper()
                 continue
 
