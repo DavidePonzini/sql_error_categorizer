@@ -5,7 +5,7 @@ import re
 CTEMap = dict[str, QueryMap]
 
 def extract_ctes(query: str) -> tuple[CTEMap, str]:
-    """Extract and parse CTE blocks from the beginning of the query."""
+    '''Extract and parse CTE blocks from the beginning of the query.'''
     # self.IS_CTE = True
     query = normalize_query(query)
 
@@ -108,13 +108,16 @@ class CTECatalog:
     @property
     def tables(self) -> set[str]:
         return set(self.cte_tables.keys())
+    
+    def __repr__(self) -> str:
+        return f'CTECatalog(cte_tables={self.cte_tables.__repr__()})'
 
 
 def create_cte_catalog(cte_map: CTEMap) -> CTECatalog:
-    """
+    '''
     Creates a catalog of CTEs, mapping CTE names to their column names.
     It resolves column aliases from the CTE's SELECT statement.
-    """
+    '''
     cte_catalog = CTECatalog()
     for cte_name, cte_data in cte_map.items():
         columns = []
