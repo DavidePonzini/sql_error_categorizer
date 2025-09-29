@@ -15,6 +15,7 @@ class SemanticErrorDetector(BaseDetector):
     def __init__(self, *,
                  query: TokenizedSQL,
                  catalog: Catalog,
+                 search_path: str,
                  query_map: QueryMap,
                  subquery_map: SubqueryMap,
                  cte_map: CTEMap,
@@ -25,6 +26,7 @@ class SemanticErrorDetector(BaseDetector):
         super().__init__(
             query=query,
             catalog=catalog,
+            search_path=search_path,
             query_map=query_map,
             subquery_map=subquery_map,
             cte_map=cte_map,
