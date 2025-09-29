@@ -3,7 +3,7 @@ from .detectors import BaseDetector as _BaseDetector, Detector as _Detector
 
 # Public API
 from .sql_errors import SqlErrors
-from .catalog import Catalog, build_catalog
+from .catalog import Catalog, build_catalog, load_json as load_catalog
 from .detectors import SyntaxErrorDetector, SemanticErrorDetector, LogicalErrorDetector, ComplicationDetector
 
 def get_errors(query_str: str,
@@ -37,19 +37,17 @@ def get_errors2(query_str: str, correct_solutions: list[str] = [], dataset_str: 
     return get_errors(query_str, correct_solutions=correct_solutions, catalog=cat, search_path=cat.schemas.pop(), debug=debug)
 
 
-def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', dataset_file: str = 'q_miedema.sql') -> _Detector:
+def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', catalog_file: str = 'cat_miedema.json') -> _Detector:
     '''Test function, remove before production'''
 
-    with open(dataset_file) as f:
-        dataset = f.read()
     with open(query_file) as f:
         query = f.read()
     with open(solution_file) as f:
         solution = f.read()
 
-    cat = catalog.build_catalog(dataset, hostname='localhost', port=5432, user='postgres', password='password')
+    cat = load_catalog(catalog_file)
 
-    det = _Detector(query, correct_solutions=[solution], catalog=cat, search_path=cat.schemas.pop(), debug=True)
+    det = _Detector(query, correct_solutions=[solution], catalog=cat, search_path=cat.schemas.pop() or 'public', debug=True)
     det.add_detector(SyntaxErrorDetector)
     det.add_detector(SemanticErrorDetector)
     det.add_detector(LogicalErrorDetector)

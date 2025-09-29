@@ -61,3 +61,7 @@ def build_catalog(sql_string: str, *, hostname: str, port: int, user: str, passw
 
     return result
 
+def load_json(path: str) -> Catalog:
+    '''Loads a catalog from a JSON file.'''
+    return Catalog.load_json(path)
+
