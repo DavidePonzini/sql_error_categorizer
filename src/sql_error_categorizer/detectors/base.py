@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
 
 from ..sql_errors import SqlErrors
 from ..tokenizer import TokenizedSQL
@@ -10,7 +10,7 @@ from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
 @dataclass(repr=False)
 class DetectedError:
     error: SqlErrors
-    data: tuple = field(default_factory=tuple)
+    data: tuple[Any, ...] = field(default_factory=tuple)
 
     def __repr__(self):
         return f"DetectedError({self.error.value} - {self.error.name}: {self.data})"
@@ -22,6 +22,7 @@ class BaseDetector(ABC):
     def __init__(self, *,
                  query: TokenizedSQL,
                  catalog: Catalog,
+                 search_path: str = '',
                  query_map: QueryMap,
                  subquery_map: SubqueryMap,
                  cte_map: CTEMap,
@@ -31,6 +32,7 @@ class BaseDetector(ABC):
         ):        
         self.query = query
         self.catalog = catalog
+        self.search_path = search_path
         self.query_map = query_map
         self.subquery_map = subquery_map
         self.cte_map = cte_map
@@ -42,3 +44,11 @@ class BaseDetector(ABC):
     def run(self) -> list[DetectedError]:
         '''Run the detector and return a list of detected errors with their descriptions'''
         return []
+    
+    @staticmethod
+    def _normalize(identifier: str) -> str:
+        '''Normalize an SQL identifier by stripping quotes and converting to lowercase if unquoted.'''
+        if identifier.startswith('"') and identifier.endswith('"') and len(identifier) > 1:
+            return identifier[1:-1]
+        
+        return identifier.lower()

@@ -10,12 +10,14 @@ from .complications import ComplicationDetector
 
 class Detector:
     def __init__(self, query: str, *,
+                 search_path: str = '',
                  correct_solutions: list = [],
                  catalog: catalog.Catalog = catalog.Catalog(),
                  detectors: list[type[BaseDetector]] = [],
                  debug: bool = False):
         
         # Context data: they don't need to be parsed again if the query changes
+        self.search_path = search_path
         self.correct_solutions = correct_solutions
         self.catalog = catalog
         self.detectors: list[BaseDetector] = []
@@ -62,6 +64,7 @@ class Detector:
         detector = detector_cls(
             query=self.query,
             catalog=self.catalog,
+            search_path=self.search_path,
             query_map=self.parse_result.query_map,
             subquery_map=self.parse_result.subquery_map,
             cte_map=self.parse_result.cte_map,

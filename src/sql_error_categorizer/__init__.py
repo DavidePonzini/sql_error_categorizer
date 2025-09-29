@@ -9,6 +9,7 @@ from .detectors import SyntaxErrorDetector, SemanticErrorDetector, LogicalErrorD
 def get_errors(query_str: str,
                correct_solutions: list[str] = [],
                catalog: catalog.Catalog = catalog.Catalog(),
+               search_path: str = 'public',
                detectors: list[type[_BaseDetector]] = [
                    SyntaxErrorDetector,
                    SemanticErrorDetector,
@@ -17,7 +18,7 @@ def get_errors(query_str: str,
                 ],
                debug: bool = False) -> set[SqlErrors]:
     '''Detect SQL errors in the given query string.'''
-    det = _Detector(query_str, correct_solutions=correct_solutions, catalog=catalog, debug=debug)
+    det = _Detector(query_str, correct_solutions=correct_solutions, catalog=catalog, search_path=search_path, debug=debug)
 
     for detector in detectors:
         det.add_detector(detector)
@@ -32,8 +33,8 @@ def get_errors2(query_str: str, correct_solutions: list[str] = [], dataset_str: 
     '''Detect SQL errors in the given query string.'''
 
     cat = build_catalog(dataset_str, hostname=db_host, port=db_port, user=db_user, password=db_password)
-    
-    return get_errors(query_str, correct_solutions=correct_solutions, catalog=cat, debug=debug)
+
+    return get_errors(query_str, correct_solutions=correct_solutions, catalog=cat, search_path=cat.schemas.pop(), debug=debug)
 
 
 def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', dataset_file: str = 'q_miedema.sql') -> _Detector:
@@ -48,7 +49,7 @@ def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', dataset_file:
 
     cat = catalog.build_catalog(dataset, hostname='localhost', port=5432, user='postgres', password='password')
 
-    det = _Detector(query, correct_solutions=[solution], catalog=cat, debug=True)
+    det = _Detector(query, correct_solutions=[solution], catalog=cat, search_path=cat.schemas.pop(), debug=True)
     det.add_detector(SyntaxErrorDetector)
     det.add_detector(SemanticErrorDetector)
     det.add_detector(LogicalErrorDetector)
