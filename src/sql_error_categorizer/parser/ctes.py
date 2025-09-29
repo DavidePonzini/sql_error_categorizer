@@ -109,6 +109,9 @@ class CTECatalog:
     def tables(self) -> set[str]:
         return set(self.cte_tables.keys())
     
+    def get_columns(self, cte_name: str) -> list[str]:
+        return self.cte_tables.get(cte_name, [])
+    
     def __repr__(self) -> str:
         return f'CTECatalog(cte_tables={self.cte_tables.__repr__()})'
 
