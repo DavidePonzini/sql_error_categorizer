@@ -3,7 +3,7 @@
 from copy import deepcopy
 import sqlparse
 from sqlparse.tokens import Whitespace, Newline
-from sqlparse.sql import IdentifierList, Identifier
+from sqlparse.sql import IdentifierList, Identifier, Function
 
 class TokenizedSQL:
     def __init__(self, query: str):
@@ -13,9 +13,11 @@ class TokenizedSQL:
         # Lazy properties
         self._tokens = None
         self._identifiers = None
+        self._functions = None
 
     @property
     def tokens(self) -> list[tuple[sqlparse.tokens._TokenType, str]]:
+        '''Returns a flattened list of tokens as (ttype, value) tuples, excluding whitespace and newlines.'''
         if not self._tokens:
             self._tokens = self._tokenize()
         return self._tokens
@@ -32,6 +34,12 @@ class TokenizedSQL:
             self._identifiers = self._extract_identifiers()
         return self._identifiers
     
+    @property
+    def functions(self) -> list[sqlparse.sql.Function]:
+        if self._functions is None:
+            self._functions = self._extract_functions()
+        return self._functions
+
     def _parse(self) -> sqlparse.sql.Statement | None:
         parsed = sqlparse.parse(self.sql)
         
@@ -50,6 +58,7 @@ class TokenizedSQL:
             if tok.ttype not in (Whitespace, Newline)
         ]
 
+    # region Identifiers
     def _extract_identifiers(self) -> list[tuple[sqlparse.sql.Identifier, str]]:
         if not self.parsed:
             return []
@@ -75,7 +84,29 @@ class TokenizedSQL:
                 sub_identifiers = TokenizedSQL._extract_identifiers_rec(token.tokens, current_clause)
                 identifiers.extend(sub_identifiers)
         return identifiers
+    # endregion
 
+    # region Functions
+    def _extract_functions(self) -> list[sqlparse.sql.Function]:
+        if not self.parsed:
+            return []
+        return self._extract_functions_rec(self.parsed.tokens)
+
+    @staticmethod
+    def _extract_functions_rec(tokens) -> list[sqlparse.sql.Function]:
+        funcs: list[sqlparse.sql.Function] = []
+        for tok in tokens:
+            if isinstance(tok, Function):
+                # Include this function
+                funcs.append(tok)
+                # Also search inside for nested function calls
+                funcs.extend(TokenizedSQL._extract_functions_rec(tok.tokens))
+            elif tok.is_group:
+                funcs.extend(TokenizedSQL._extract_functions_rec(tok.tokens))
+        return funcs
+    # endregion
+
+    # region Utilities
     def __repr__(self) -> str:
         return f'TokenizedSQL("{self.sql!r}")'
     
@@ -85,3 +116,4 @@ class TokenizedSQL:
     def print_tree(self) -> None:
         if self.parsed:
             self.parsed._pprint_tree()
+    # endregion
