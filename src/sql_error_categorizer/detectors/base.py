@@ -14,9 +14,11 @@ class DetectedError:
 
     def __repr__(self):
         return f"DetectedError({self.error.value} - {self.error.name}: {self.data})"
-    
+
     def __str__(self) -> str:
-        return f'[{self.error.value:3}] {self.error.name}: {self.data}]'
+        if self.data:
+            return f'[{self.error.value:3}] {self.error.name}: {self.data}'
+        return f'[{self.error.value:3}] {self.error.name}'
 
 class BaseDetector(ABC):
     def __init__(self, *,
