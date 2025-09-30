@@ -1,7 +1,7 @@
 import difflib
 import re
 import sqlparse
-from typing import Callable
+from typing import Any, Callable
 
 from .base import BaseDetector, DetectedError
 from ..tokenizer import TokenizedSQL
@@ -78,7 +78,7 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_4_illegal_aggregate_function_placement_using_aggregate_function_outside_select_or_having,    # TODO: refactor
             # self.syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested,  # TODO: refactor
             # self.syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column, # TODO: refactor
-            # self.syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by,   # TODO: refactor
+            self.syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by,   # TODO: refactor
             # self.syn_6_common_syntax_error_using_where_twice, # TODO: refactor
             # self.syn_6_common_syntax_error_omitting_the_from_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_comparison_with_null,  # TODO: refactor
@@ -571,20 +571,20 @@ class SyntaxErrorDetector(BaseDetector):
     # region SYN-4
     # TODO: refactor
     def syn_4_illegal_aggregate_function_placement_using_aggregate_function_outside_select_or_having(self) -> list[DetectedError]:
-        """
+        '''
         Flags use of aggregate functions (SUM, AVG, COUNT, MIN, MAX) outside SELECT or HAVING clauses,
         respecting subquery scopes.
-        """
+        '''
         results = []
         aggregate_functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
         allowed_clauses = {"SELECT", "HAVING"}
 
         # A recursive helper is needed to handle nested scopes correctly.
         def find_misplaced_aggregates(token_list, current_clause=""):
-            """
+            '''
             Recursively checks a list of tokens, tracking the current clause context.
             The context is reset upon entering a subquery.
-            """
+            '''
             local_clause = current_clause
             
             # Ensure we are working with a list of tokens
@@ -635,9 +635,9 @@ class SyntaxErrorDetector(BaseDetector):
             return results
 
         def contains_nested_agg(token_list, in_aggregate=False):
-            """
+            '''
             Recursively check for nested aggregate functions, only flagging true nesting (e.g., SUM(AVG(x))).
-            """
+            '''
             aggregate_functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
 
             for token in token_list.tokens if hasattr(token_list, 'tokens') else []:
@@ -682,20 +682,20 @@ class SyntaxErrorDetector(BaseDetector):
     # region SYN-5
     # TODO: refactor
     def syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column(self) -> list[DetectedError]:
-        """
+        '''
         Enforces the SQL "single-value rule":
         All selected columns must be either included in the GROUP BY clause or aggregated.
-        """
+        '''
         results = []
         aggregate_funcs = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
 
         def is_aggregate(expr: str) -> bool:
-            """Returns True if the select expression is an aggregate function."""
+            '''Returns True if the select expression is an aggregate function.'''
             expr_upper = expr.upper().strip()
             return any(expr_upper.startswith(func + '(') for func in aggregate_funcs)
 
         def extract_columns(expr: str) -> list:
-            """Extracts raw column names from a select expression like 't.col' or 'SUM(t.col)'."""
+            '''Extracts raw column names from a select expression like 't.col' or 'SUM(t.col)'.'''
             expr = expr.strip()
             if '(' in expr:
                 inner = expr[expr.find('(') + 1 : expr.rfind(')')]
@@ -734,30 +734,26 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
      
-    # TODO: refactor
     def syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by(self) -> list[DetectedError]:
-        """
+        '''
         Flags queries where HAVING is used without a GROUP BY clause.
-        """
-        results = []
+        '''
+        results: list[DetectedError] = []
 
-        def check_having_without_group_by(map_name: str, query_map: dict):
-            if query_map.get("having", False) and not query_map.get("group_by_values"):
-                results.append((
-                    SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY,
-                    f"HAVING used without GROUP BY clause."
-                ))
+        def check_having_without_group_by(query_map: QueryMap, data: tuple[Any, ...]):
+            if query_map.having and not query_map.group_by_values:
+                results.append(DetectedError(SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY, data))
 
         # Check main query
-        check_having_without_group_by("main query", self.query_map)
+        check_having_without_group_by(self.query_map, ('Main',))
 
         # Check CTEs
         for name, cte in self.cte_map.items():
-            check_having_without_group_by(f"CTE '{name}'", cte)
+            check_having_without_group_by(cte, ('CTE', name))
 
         # Check subqueries
         for cond, subq in self.subquery_map.items():
-            check_having_without_group_by(f"subquery in '{cond}'", subq)
+            check_having_without_group_by(subq, ('Subquery', cond))
 
         return results
     # endregion
@@ -767,9 +763,9 @@ class SyntaxErrorDetector(BaseDetector):
     
     # TODO: refactor
     def syn_6_common_syntax_error_using_where_twice(self) -> list[DetectedError]:
-        """
+        '''
         Flags multiple WHERE clauses in a single query block (main query, CTEs, subqueries).
-        """
+        '''
         results = []
 
         def count_where_clauses(query: str) -> int:
@@ -827,7 +823,7 @@ class SyntaxErrorDetector(BaseDetector):
 
         # --- Step 3: Check the main query (with subqueries conceptually removed) ---
         def count_top_level_where(query_str: str) -> int:
-            """Counts WHERE clauses at the top level, ignoring those inside parentheses."""
+            '''Counts WHERE clauses at the top level, ignoring those inside parentheses.'''
             depth = 0
             count = 0
             in_string = False
@@ -854,12 +850,12 @@ class SyntaxErrorDetector(BaseDetector):
 
     # TODO: refactor
     def syn_6_common_syntax_error_omitting_the_from_clause(self) -> list[DetectedError]:
-        """
+        '''
         Flags queries that omit the FROM clause entirely when it's required.
         A FROM clause is not required if:
         - The query selects only constants/literals
         - The query uses CTEs and references them implicitly
-        """
+        '''
         results = []
 
         def check_from_clause(map_name: str, query_map: dict):
@@ -907,9 +903,9 @@ class SyntaxErrorDetector(BaseDetector):
 
     # TODO: refactor
     def syn_6_common_syntax_error_comparison_with_null(self) -> list[DetectedError]:
-        """
+        '''
         Flags SQL comparisons using = NULL, <> NULL, etc. instead of IS NULL / IS NOT NULL.
-        """
+        '''
         results = []
         comparison_ops = {"=", "<>", "!=", "<", ">", "<=", ">="}
         null_literals = {"NULL", "null"}
@@ -949,10 +945,10 @@ class SyntaxErrorDetector(BaseDetector):
     
     # TODO: refactor
     def syn_6_common_syntax_error_restriction_in_select_clause(self) -> list[DetectedError]:
-        """
+        '''
         Flags queries where comparison operations (restrictions) are used in SELECT clause
         instead of WHERE clause. For example: SELECT quantity > 100 FROM transaction
-        """
+        '''
         results = []
         comparison_operators = {"=", "<>", "!=", "<", ">", "<=", ">=", "IS", "LIKE"}
         
@@ -1010,11 +1006,11 @@ class SyntaxErrorDetector(BaseDetector):
     
     # TODO: refactor
     def syn_6_common_syntax_error_projection_in_where_clause(self) -> list[DetectedError]:
-        """
+        '''
         Flags queries where a WHERE clause contains only a projection (e.g., column name)
         instead of a valid condition, including after AND/OR.
         Ignores valid literal comparisons, EXISTS(...), or qualified identifiers like t.cID.
-        """
+        '''
         results = []
         tokens = self.tokens
         logical_keywords = {"AND", "OR", "WHERE"}
@@ -1092,11 +1088,11 @@ class SyntaxErrorDetector(BaseDetector):
 
     # TODO: refactor
     def syn_6_common_syntax_error_confusing_the_order_of_keywords(self) -> list[DetectedError]:
-        """
+        '''
         Flags queries where the standard order of SQL clauses is not respected.
         Expected order:
         SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY → LIMIT
-        """
+        '''
         results = []
 
         clause_order = {
@@ -1151,9 +1147,9 @@ class SyntaxErrorDetector(BaseDetector):
     
     # TODO: refactor
     def syn_6_common_syntax_error_confusing_the_syntax_of_keywords(self) -> list[DetectedError]:
-        """
+        '''
         Flags use of SQL keywords like LIKE, IN, BETWEEN, etc. with incorrect function-like syntax (e.g., LIKE(...)).
-        """
+        '''
         results = []
         tokens = self.tokens
         keywords = {"LIKE", "BETWEEN", "IS", "IS NOT"}
@@ -1192,10 +1188,10 @@ class SyntaxErrorDetector(BaseDetector):
 
     # TODO: refactor
     def syn_6_common_syntax_error_omitting_commas(self) -> list[DetectedError]:
-        """
+        '''
         Flags queries where commas are likely missing between column expressions 
         (e.g., SELECT name age FROM ..., GROUP BY x y).
-        """
+        '''
         results = []
 
         clause_starters = {
@@ -1319,10 +1315,10 @@ class SyntaxErrorDetector(BaseDetector):
 
     # TODO: refactor
     def syn_6_common_syntax_error_additional_semicolon(self) -> list[DetectedError]:
-        """
+        '''
         Flags queries where semicolons are incorrectly used,
         excluding those inside string literals or comments.
-        """
+        '''
         results = []
         query = self.query
         length = len(query)
