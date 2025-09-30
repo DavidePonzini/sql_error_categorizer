@@ -1,4 +1,3 @@
-import json
 from .. import parser, catalog
 from .. import tokenizer
 from ..sql_errors import SqlErrors

@@ -1,7 +1,6 @@
 import difflib
 import re
 import sqlparse
-import sqlparse.keywords
 from typing import Callable
 
 from .base import BaseDetector, DetectedError
