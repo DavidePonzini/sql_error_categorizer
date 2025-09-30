@@ -1,7 +1,7 @@
 from .. import parser, catalog
 from .. import tokenizer
 from ..sql_errors import SqlErrors
-from .base import BaseDetector
+from .base import BaseDetector, DetectedError
 from .syntax import SyntaxErrorDetector
 from .semantic import SemanticErrorDetector
 from .logical import LogicalErrorDetector
@@ -74,15 +74,17 @@ class Detector:
 
         self.detectors.append(detector)
 
-
-    def run(self) -> set[SqlErrors]:
-        '''Run all detectors and return detected error types'''
+    def _run(self) -> list[DetectedError]:
+        '''
+        Run all detectors and return a list of detected errors.
+        This function can return duplicate errors, as well as additional information on the detected errors.
+        '''
 
         if self.debug:
             print('===== Query =====')
             print(self.query.sql)
 
-        result = set()
+        results: list[DetectedError] = []
 
         for detector in self.detectors:
             errors = detector.run()
@@ -92,7 +94,11 @@ class Detector:
                 for error in errors:
                     print(error)
 
-            for error in errors:
-                result.add(error.error)
+            results.extend(errors)
 
-        return result
+        return results
+
+    def run(self) -> set[SqlErrors]:
+        '''Run all detectors and return detected error types'''
+
+        return {error.error for error in self._run()}

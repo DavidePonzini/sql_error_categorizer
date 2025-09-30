@@ -270,7 +270,7 @@ class SyntaxErrorDetector(BaseDetector):
         Returns:
         A list of DetectedErrors. data=(offending_value,corrected_value)
         '''
-        results: list[DetectedError] = []    
+        results: list[DetectedError] = []
 
 
         # # 3. Build sets of ALL known identifiers for the entire query (main + subqueries + CTEs)
