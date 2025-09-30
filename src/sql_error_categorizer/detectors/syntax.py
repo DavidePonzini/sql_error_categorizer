@@ -41,17 +41,19 @@ class SyntaxErrorDetector(BaseDetector):
 
         # First, detect unexisting objects (before misspellings, to avoid false positives)
         unexisting_checks = [
-            # self.syn_2_undefined_database_objects,    # TODO: refactor
-            # self.syn_2_undefined_database_object_invalid_schema_name, # TODO: refactor
+            self.syn_1_syn_2_undefined_tables_columns_schemas_ambiguous_columns,
+            self.syn_2_undefined_functions,
+            self.syn_2_undefined_functions_parameters,
         ]
 
         for check in unexisting_checks:
             results.extend(check())
 
-        # Second, detect object misspellings and apply corrections for improved subsequent checks
+        # Second, detect object misspellings and missing quotes and apply corrections for improved subsequent checks
         misspelling_checks = [
-            self.syn_2_undefined_database_object_misspellings,
-            # self.syn_2_undefined_database_object_synonyms,    # TODO: implement
+            self.syn_2_misspellings,
+            # self.syn_2_synonyms,      # TODO: implement
+            # self.syn_2_omitted_quotes,
         ]
 
         # Apply corrections: replace misspelled strings in query and retokenize
@@ -73,7 +75,6 @@ class SyntaxErrorDetector(BaseDetector):
             
         # Proceed with all other checks
         checks = [
-            # self.syn_1_ambiguous_database_object_ambiguous_column,    # TODO: refactor
             # self.syn_3_data_type_mismatch,    # TODO: refactor
             # self.syn_4_illegal_aggregate_function_placement_using_aggregate_function_outside_select_or_having,    # TODO: refactor
             # self.syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested,  # TODO: refactor
@@ -82,14 +83,14 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_6_common_syntax_error_using_where_twice, # TODO: refactor
             # self.syn_6_common_syntax_error_omitting_the_from_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_comparison_with_null,  # TODO: refactor
-            # self.syn_6_common_syntax_error_omitting_the_semicolon,    # TODO: refactor
+            self.syn_6_common_syntax_error_omitting_the_semicolon,
             # self.syn_6_common_syntax_error_restriction_in_select_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_projection_in_where_clause,    # TODO: refactor
             # self.syn_6_common_syntax_error_confusing_the_order_of_keywords,   # TODO: refactor
             # self.syn_6_common_syntax_error_confusing_the_syntax_of_keywords,  # TODO: refactor
             # self.syn_6_common_syntax_error_omitting_commas,   # TODO: refactor
-            # self.syn_6_common_syntax_error_curly_square_or_unmatched_brackets,    # TODO: refactor
-            # self.syn_6_common_syntax_error_nonstandard_operators, # TODO: refactor
+            self.syn_6_common_syntax_error_curly_square_or_unmatched_brackets,
+            self.syn_6_common_syntax_error_nonstandard_operators,
             # self.syn_6_common_syntax_error_additional_semicolon   # TODO: refactor
         ]
     
@@ -100,13 +101,13 @@ class SyntaxErrorDetector(BaseDetector):
     # region Utils
     def _get_referenceable_tables(self) -> set[str]:
         '''
-            Get catalog and CTE table names.
-            Table names are returned in lowercase for case-insensitive comparison.
+            Get table names available for the current query. Includes all tables in the current schema, CTEs, and table aliases
         ''' 
-        tables = self.catalog.tables
+        tables = self.catalog.get_schema(self.search_path).tables
         cte_tables = self.cte_catalog.tables
+        table_aliases = self.query_map.alias_mapping.keys()
 
-        return {table.lower() for table in tables.union(cte_tables)}
+        return {self._normalize(table) for table in tables.union(cte_tables).union(table_aliases)}
 
         # db_tables = self.catalog.get('tables', [])
         # db_tables.extend(self.cte_catalog.keys())
@@ -117,18 +118,17 @@ class SyntaxErrorDetector(BaseDetector):
     def _get_referenced_tables(self) -> set[str]:
         '''
             Get all table references from the query map.
-            Table names are returned in lowercase for case-insensitive comparison.
         '''
         result = set()
         
         # FROM
         from_value = self.query_map.from_value
         if from_value:
-            result.add(from_value.lower())
+            result.add(self._normalize(from_value))
         
         # JOINs
         for joined_table in self.query_map.join_value:
-            result.add(joined_table.lower())
+            result.add(self._normalize(joined_table))
 
         return result
     
@@ -157,161 +157,168 @@ class SyntaxErrorDetector(BaseDetector):
         return False
     # endregion
 
-    # region Error checks
-    #TODO def syn_1_ambiguous_database_object_omitting_correlation_names(self):
+    #TODO: implement
+    def syn_1_ambiguous_database_object_ambiguous_function(self) -> list[DetectedError]:
+        return []
+    # endregion
+
+    # region SYN-2
+    def syn_1_syn_2_undefined_tables_columns_schemas_ambiguous_columns(self) -> list[DetectedError]:
+        '''
+        Checks for undefined tables, undefined columns, ambiguous columns, and invalid schemas.
+        '''
+        
+        results: list[DetectedError] = []
+        
+        # Get tables
+        table_identifiers = [identifier[0] for identifier in self.query.identifiers if identifier[1] == 'FROM']
+        tables: list[tuple[str | None, str]] = []   # (schema_name, table_name)
+        for t in table_identifiers:
+            schema = t.get_parent_name()
+            if schema is not None:
+                schema = self._normalize(schema)
+
+            tables.append((schema, self._normalize(t.get_real_name())))
+
+        # Check for undefined tables in FROM clause
+        for schema_name, table_name in tables:
+            if schema_name is not None:
+                # Qualified table (schema.table)
+                if schema_name not in self.catalog.schemas:
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_INVALID_SCHEMA_NAME, (schema_name,)))
+                    continue
+
+                # Check if table exists in the specified schema
+                if table_name not in self.catalog.get_schema(schema_name).tables:
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (f'{schema_name}.{table_name}',)))
+
+            else:
+                # Unqualified table (table)
+                # Check in current schema and CTEs
+                cte_tables = self.cte_catalog.tables
+                current_schema_tables = self.catalog.get_schema(self.search_path).tables
+                if table_name not in cte_tables and table_name not in current_schema_tables:
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (f'{table_name}',)))
+
+        # Get columns
+        # Ignore FROM (it contains tables), CTE names (they contain the CTE definition), ORDER BY (it can contain aliases)
+        column_identifiers = [identifier[0] for identifier in self.query.identifiers if identifier[1] not in ('FROM', 'WITH', 'ORDER BY')]
+        columns: list[tuple[str | None, str, str | None]] = []    # (table_name, column_name, alias)
+        for c in column_identifiers:
+            table_name = c.get_parent_name()
+            if table_name is not None:
+                table_name = self._normalize(table_name)
     
-    # TODO: refactor
-    def syn_1_ambiguous_database_object_ambiguous_column(self):
-        """
-        Flags ambiguous column names when more than one table is referenced and the same column exists in multiple tables,
-        but is used without qualification (e.g., 'id' when both table A and B have an 'id').
-        NOTICE: Currently workds only for main query, not for CTEs or subqueries.
-        """
-        results = []
-        query_tables = self._get_referenced_tables()
-        if len(query_tables) <= 1:
-            return []
+            alias = c.get_alias()
+            if alias is not None:
+                alias = self._normalize(alias)
 
-        # Build a column → [tables] mapping
-        col_to_tables = {}
-        table_columns = self.catalog.get('table_columns', {})
+            columns.append((table_name, self._normalize(c.get_real_name()), alias))
 
-        for table in query_tables:
-            actual_table = next((t for t in table_columns if t.lower() == table.lower()), None)
-            if not actual_table:
-                continue
-            for col in table_columns.get(actual_table, []):
-                col_to_tables.setdefault(col.lower(), set()).add(actual_table.lower())
+        # Check for undefined columns
+        available_tables = self._get_referenceable_tables()
 
-        # Scan tokens
-        for i, (ttype, val) in enumerate(self.tokens):
-            if ttype != sqlparse.tokens.Name:
-                continue
+        for table_name, column_name, alias in columns:
+            if table_name is not None:
+                # Qualified column (table.column)
+                if table_name not in available_tables:
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (f'{table_name}.{column_name}',)))
+                    continue
 
-            val_lower = val.lower()
+                # Check if table is a CTE
+                if table_name in self.cte_catalog.tables:
+                    if column_name not in self.cte_catalog.get_columns(table_name):
+                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, (f'{table_name}.{column_name}',)))
+                    continue
 
-            # Skip qualified columns (e.g., t.col)
-            if i > 0 and self.tokens[i - 1][1] == ".":
-                continue
+                # table is not a CTE, so it must be a regular table
+                table_columns = self.catalog.get_table(self.search_path, table_name).columns
+                if column_name not in table_columns:
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, (f'{table_name}.{column_name}',)))
+                    continue
 
-            # Skip if it's a known alias or SQL keyword
-            val_upper = val.upper()
-            if val in getattr(self, "column_aliases", set()) or val_upper in sqlparse.keywords.KEYWORDS:
-                continue
-            tables = col_to_tables.get(val_lower, set())
-            if len(tables) > 1:
-                results.append((SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, val))
+            # Unqualified column (column)
+            possible_matches = []
+            
+            # Check tables included in the FROM clause
+            for table in self._get_referenced_tables():
+                if table in self.cte_catalog.tables:
+                    # CTE table
+                    if column_name in self.cte_catalog.get_columns(table):
+                        possible_matches.append(table)
+                        continue
+
+                # Regular table
+                table_columns = self.catalog.get_table(self.search_path, table).columns
+                if column_name in table_columns:
+                    possible_matches.append(table)
+                    continue 
+
+            if len(possible_matches) == 0:
+                # No matches found, column does not exist in any referenced table
+                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, (column_name,)))
+            elif len(possible_matches) > 1:
+                # More than one match found, we cannot determine which table the column belongs to
+                results.append(DetectedError(SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, (column_name, possible_matches)))
 
         return results
- 
-    #TODO def syn_1_ambiguous_database_object_ambiguous_function(self):
-   
+
     # TODO: refactor
-    def syn_2_undefined_database_objects(self) -> list:
-        """
-        A unified check for undefined database objects, with correct precedence for functions,
-        parameters, unquoted strings, and columns.
-        """
-        results = []
+    def syn_2_omitted_quotes(self) -> list[DetectedError]:
+        '''
+        Checks for potential omitting of quotes around character data in WHERE/HAVING clauses.
         
-        # 1. Correctly identify output column aliases (e.g., ... AS ID1) by parsing the query.
-        output_aliases_lower = set()
-        if self.parsed_qry:
-            is_select_part = False
-            for token in self.parsed_qry.tokens:
-                if token.is_keyword and token.normalized == 'SELECT':
-                    is_select_part = True
-                    continue
-                if token.is_keyword and token.normalized == 'FROM':
-                    is_select_part = False
-                    break
-                
-                if is_select_part:
-                    items_to_check = []
-                    if isinstance(token, sqlparse.sql.IdentifierList):
-                        items_to_check = token.get_identifiers()
-                    elif isinstance(token, sqlparse.sql.Identifier):
-                        items_to_check = [token]
+        Returns:
+        A list of DetectedErrors. data=(offending_value,corrected_value)
+        '''
+        results: list[DetectedError] = []    
 
-                    for item in items_to_check:
-                        if isinstance(item, sqlparse.sql.Identifier):
-                            alias = item.get_alias()
-                            if alias:
-                                output_aliases_lower.add(alias.lower())
 
-        # 2. Check for undefined table.column in SELECT clause
-        select_values = self.query_map.get("select_value", [])
-        alias_map = self.query_map.get('alias_mapping', {})
-        lower_alias_map = {k.lower(): v for k, v in alias_map.items()}
+        # # 3. Build sets of ALL known identifiers for the entire query (main + subqueries + CTEs)
+        # valid_source_identifiers = set()
+        # all_known_columns_lower = set()
+        # db_tables = self.catalog.get('table_columns', {})
 
-        table_columns_map = self.catalog.get('table_columns', {})
-        lower_table_columns_map = {k.lower(): {col.lower() for col in v} for k, v in table_columns_map.items()}
+        # # -- Main Query --
+        # main_query_sources = self._get_referenced_tables()
+        # main_alias_map = self.query_map.alias_mapping
+        # valid_source_identifiers.update(s.lower() for s in main_query_sources)
+        # valid_source_identifiers.update(a.lower() for a in main_alias_map.keys())
+        # for source in main_query_sources:
+        #     actual_base_name = next((k for k in db_tables if k.lower() == source.lower()), None)
+        #     if actual_base_name:
+        #         all_known_columns_lower.update(c.lower() for c in db_tables[actual_base_name])
 
-        from_and_join_sources = self._get_referenced_tables()
-        all_valid_sources_lower = {s.lower() for s in from_and_join_sources}
-        all_valid_sources_lower.update(lower_alias_map.keys())
-
-        for expr in select_values:
-            clean_expr = re.split(r'\s+as\s+', expr, flags=re.IGNORECASE)[0].strip()
-            if '.' in clean_expr:
-                table_part, column_part = clean_expr.split('.', 1)
-                table_part_lower = table_part.lower()
-                if table_part_lower not in all_valid_sources_lower:
-                    results.append((SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, expr))
-                    continue
-                actual_table_list = lower_alias_map.get(table_part_lower)
-                actual_table_name_lower = actual_table_list[0].lower() if actual_table_list else table_part_lower
-                if actual_table_name_lower in lower_table_columns_map:
-                    if column_part.lower() not in lower_table_columns_map[actual_table_name_lower]:
-                        results.append((SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, expr))
-                else:
-                    results.append((SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, expr))
+        # # -- Subqueries --
+        # for subq_map in self.subquery_map.values():
+        #     sub_sources = []
+        #     sub_from = subq_map.from_value
+        #     if sub_from:
+        #         sub_sources.append(sub_from)
+        #     sub_joins = subq_map.join_value
+        #     sub_sources.extend(sub_joins)
+        #     sub_aliases = subq_map.alias_mapping
+        #     valid_source_identifiers.update(s.lower() for s in sub_sources)
+        #     valid_source_identifiers.update(a.lower() for a in sub_aliases.keys())
+        #     for source in sub_sources:
+        #         actual_base_name = next((k for k in db_tables if k.lower() == source.lower()), None)
+        #         if actual_base_name:
+        #             all_known_columns_lower.update(c.lower() for c in db_tables[actual_base_name])
         
-        # 3. Build sets of ALL known identifiers for the entire query (main + subqueries + CTEs)
-        valid_source_identifiers = set()
-        all_known_columns_lower = set()
-        db_tables = self.catalog.get('table_columns', {})
-
-        # -- Main Query --
-        main_query_sources = self._get_referenced_tables()
-        main_alias_map = self.query_map.get('alias_mapping', {})
-        valid_source_identifiers.update(s.lower() for s in main_query_sources)
-        valid_source_identifiers.update(a.lower() for a in main_alias_map.keys())
-        for source in main_query_sources:
-            actual_base_name = next((k for k in db_tables if k.lower() == source.lower()), None)
-            if actual_base_name:
-                all_known_columns_lower.update(c.lower() for c in db_tables[actual_base_name])
-
-        # -- Subqueries --
-        for subq_map in self.subquery_map.values():
-            sub_sources = []
-            sub_from = subq_map.get('from_value')
-            if sub_from:
-                sub_sources.append(sub_from)
-            sub_joins = subq_map.get('join_value', [])
-            sub_sources.extend(sub_joins)
-            sub_aliases = subq_map.get('alias_mapping', {})
-            valid_source_identifiers.update(s.lower() for s in sub_sources)
-            valid_source_identifiers.update(a.lower() for a in sub_aliases.keys())
-            for source in sub_sources:
-                actual_base_name = next((k for k in db_tables if k.lower() == source.lower()), None)
-                if actual_base_name:
-                    all_known_columns_lower.update(c.lower() for c in db_tables[actual_base_name])
-        
-        # -- CTEs --
-        if self.cte_map:
-            valid_source_identifiers.update(name.lower() for name in self.cte_map.keys())
-            for cte_name, cte_columns in self.cte_catalog.items():
-                all_known_columns_lower.update(c.lower() for c in cte_columns)
+        # # -- CTEs --
+        # if self.cte_map:
+        #     valid_source_identifiers.update(name.lower() for name in self.cte_map.keys())
+        #     for cte_name, cte_columns in self.cte_catalog.cte_tables.items():
+        #         all_known_columns_lower.update(c.lower() for c in cte_columns)
 
 
-        # 4. Main Token-based Check
+                # 4. Main Token-based Check
         is_where_or_having = False
-        is_rhs_of_comparison = False
+        is_rhs_of_comparison = False    #   nothing prevents an expression to have its sides inverted, although it's unlikely to happen
         comparison_operators = {'=', '<>', '!=', '<', '>', '<=', '>=', 'LIKE', 'NOT LIKE'}
         known_keywords = {'SELECT', 'FROM', 'WHERE', 'JOIN', 'ON', 'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT', 'AS', 'DISTINCT'}
 
-        for i, (tt, val) in enumerate(self.tokens):
+        for i, (tt, val) in enumerate(self.query.tokens):
             if tt == sqlparse.tokens.Keyword and val.upper() in {'WHERE', 'HAVING'}:
                 is_where_or_having = True
             if tt == sqlparse.tokens.Error:
@@ -323,7 +330,7 @@ class SyntaxErrorDetector(BaseDetector):
                 if is_where_or_having and is_rhs_of_comparison:
                     stripped_val = val.strip()
                     if stripped_val.startswith('"') and stripped_val.endswith('"'):
-                        results.append((SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_OMITTING_QUOTES_AROUND_CHARACTER_DATA, val))
+                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_OMITTING_QUOTES_AROUND_CHARACTER_DATA, (val,)))
                 is_rhs_of_comparison = False
                 continue
             if tt is not sqlparse.tokens.Name:
@@ -339,95 +346,110 @@ class SyntaxErrorDetector(BaseDetector):
                 continue
 
             clean_val = val
-            known_aggregate_functions = {'SUM', 'AVG', 'COUNT', 'MIN', 'MAX', 'IN', 'EXISTS', 'ANY', 'ALL', 'COALESCE', 'NULLIF', 'CAST', 'CONVERT'}
-            if i + 1 < len(self.values) and self.values[i + 1] == '(':
-                if clean_val.upper() not in known_aggregate_functions:
-                    results.append((SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, clean_val))
-                is_rhs_of_comparison = False
-                continue
-            if any(val.startswith(p) for p in (':', '@', '?')):
-                results.append((SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER, val))
-                is_rhs_of_comparison = False
-                continue
+            
+            # is this the correct approach? col OP notColumn
+            # TODO: literal or string.single/string.symbol in RHS of WHERE/HAVING
             if is_where_or_having and is_rhs_of_comparison:
                 if clean_val.isalpha() and clean_val.lower() not in all_known_columns_lower:
-                    results.append((SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_OMITTING_QUOTES_AROUND_CHARACTER_DATA, val))
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_OMITTING_QUOTES_AROUND_CHARACTER_DATA, (val,)))
                     is_rhs_of_comparison = False
                     continue
-            if '.' in clean_val and clean_val.lower() not in all_known_columns_lower:
-                results.append((SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, clean_val))
-                is_rhs_of_comparison = False
-                continue
-            if '.' not in clean_val and clean_val.lower() not in all_known_columns_lower:
-                results.append((SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, clean_val))
-            is_rhs_of_comparison = False
+            
         return results
-     
-    def syn_2_undefined_database_object_invalid_schema_name(self) -> list[DetectedError]:
-        '''
-        Check for invalid schema names in the query.
-        '''
+
+
+    def syn_2_undefined_functions(self) -> list[DetectedError]:
+        '''Checks for undefined functions (i.e. invalid names followed by parentheses).'''
+
         results: list[DetectedError] = []
 
-        # Collect all schema references from the FROM and JOIN clauses of the main query.
-        tables = [self.query_map.from_value.lower()] + [joined_table.lower() for joined_table in self.query_map.join_value]
-        
-        schemas = set()
-        for table in tables:
-            if not table or '.' not in table:
+        # standard_functions = {
+        known_aggregate_functions = {'SUM', 'AVG', 'COUNT', 'MIN', 'MAX', 'IN', 'EXISTS', 'ANY', 'ALL', 'COALESCE', 'NULLIF', 'CAST', 'CONVERT'}
+        user_defined_functions = self.catalog.functions
+
+        all_functions = known_aggregate_functions.union(user_defined_functions)
+
+
+        for func in self.query.functions:
+            func_name = func.get_name()
+            
+            if func_name is None:
                 continue
-            schema = table.split('.', 1)[0]
-            if schema.startswith('"') and schema.endswith('"') and len(schema) > 1:
-                schema = schema[1:-1]
-            schemas.add(schema)
+            
+            if func_name.upper() not in all_functions:
+                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, (func_name,)))
 
-        # Check against catalog schemas
+        return results
 
+    def syn_2_undefined_functions_parameters(self) -> list[DetectedError]:
+        '''Checks for undefined function parameters'''
 
-        available_schemas = self.catalog.schemas
-        schemas - available_schemas
-        for schema in schemas:
-            if schema not in available_schemas:
-                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_INVALID_SCHEMA_NAME, (schema,)))
-        return list(set(results))
-    
-    def syn_2_undefined_database_object_misspellings(self) -> list[DetectedError]:
+        results: list[DetectedError] = []
+
+        for token, val in self.query.tokens:
+            if any(val.startswith(p) for p in (':', '@', '?')):
+                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER, (val,)))
+
+        return results
+
+    def syn_2_misspellings(self) -> list[DetectedError]:
         '''
             Check for misspellings in table and column names.
             Performs two passes: first try to match objects to their own type, then try to match to any type.
         '''
         results: list[DetectedError] = []
 
+        available_schemas = {self._normalize(schema) for schema in self.catalog.schemas}
         available_tables = self._get_referenceable_tables()
-        available_columns = {col.lower() for col in self.catalog.columns}
+        available_columns: set[str] = set()
 
-
+        for table in self._get_referenced_tables():
+            if table in self.cte_catalog.tables:
+                # add columns from CTE
+                available_columns.update(self._normalize(col) for col in self.cte_catalog.get_columns(table))
+                continue
+            if table in self.catalog.get_schema(self.search_path).tables:
+                # add columns from regular table
+                available_columns.update(self._normalize(col) for col in self.catalog.get_table(self.search_path, table).columns)
+        
+        print(f'Available columns: {available_columns}')
         identifiers = self.query.identifiers
         
         # start from tables detected using the custom parser
         # this should be redundant, but in case sqlparse can't properly parse the query we want to have this as a fallback
+        schemas = set()
         tables = self._get_referenced_tables()
         columns = set()
 
         for ident, clause in identifiers:
-            if clause == 'FROM':
-                name = ident.get_real_name().lower()
-            else:
-                name = ident.get_real_name().lower()
-
-            if name.startswith('"') and name.endswith('"') and len(name) > 1:
-                name = name[1:-1]
-
-            # NOTE: we are skipping case-sensitive checks for quoted identifiers, as they are rare and would require a different handling
+            name = self._normalize(ident.get_real_name())
 
             if clause == 'FROM':
                 tables.add(name)
             else:
                 columns.add(name)
 
+            parent_name = ident.get_parent_name()
+            if parent_name is not None:
+                parent_name = self._normalize(parent_name)
+                if clause == 'FROM':
+                    schemas.add(parent_name)
+                else:
+                    tables.add(parent_name)
+                
 
         # First pass: try to match objects to their own type
         matches = set()
+
+        # Match schemas to schemas
+        for schema in schemas:
+            if schema in available_schemas:
+                matches.add(schema)
+                continue
+            match = difflib.get_close_matches(schema, available_schemas, n=1, cutoff=0.6)
+            if match:
+                matches.add(schema)
+                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (schema, match[0])))
 
         # Match tables to tables
         for table in tables:
@@ -450,8 +472,8 @@ class SyntaxErrorDetector(BaseDetector):
                 results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (column, match[0])))
 
         # Second pass: try to match remaining values to any type
-        unmatched = tables.union(columns) - matches
-        all_possible_values = available_tables.union(available_columns)
+        unmatched = schemas.union(tables).union(columns) - matches
+        all_possible_values = available_schemas.union(available_tables).union(available_columns)
 
         for string in unmatched:
             match = difflib.get_close_matches(string, all_possible_values, n=1, cutoff=0.8)
@@ -461,15 +483,17 @@ class SyntaxErrorDetector(BaseDetector):
         return results
     
     # TODO: implement
-    def syn_2_undefined_database_object_synonyms(self) -> list[DetectedError]:
+    def syn_2_synonyms(self) -> list[DetectedError]:
         return []
+    # endregion
 
+    # region SYN-3
     # TODO: implement
-    def syn_3_data_type_mismatch_failure_to_specify_column_name_twice(self):
-        pass
+    def syn_3_data_type_mismatch_failure_to_specify_column_name_twice(self) -> list[DetectedError]:
+        return []
     
     # TODO: refactor
-    def syn_3_data_type_mismatch(self) -> list:
+    def syn_3_data_type_mismatch(self) -> list[DetectedError]:
         # Check for data type mismatches in the query.
         results = []
         comparison_operators = {'=', '<>', '!=', '<', '>', '<=', '>='}
@@ -543,9 +567,11 @@ class SyntaxErrorDetector(BaseDetector):
             i += 1
 
         return results    
-    
+    # endregion
+
+    # region SYN-4
     # TODO: refactor
-    def syn_4_illegal_aggregate_function_placement_using_aggregate_function_outside_select_or_having(self) -> list:
+    def syn_4_illegal_aggregate_function_placement_using_aggregate_function_outside_select_or_having(self) -> list[DetectedError]:
         """
         Flags use of aggregate functions (SUM, AVG, COUNT, MIN, MAX) outside SELECT or HAVING clauses,
         respecting subquery scopes.
@@ -601,7 +627,7 @@ class SyntaxErrorDetector(BaseDetector):
         return list(set(results))
     
     # TODO: refactor
-    def syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested(self) -> list:
+    def syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested(self) -> list[DetectedError]:
         '''Flags cases where aggregate functions are nested, which is not allowed in SQL.'''
         results = []
         aggregate_functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
@@ -652,9 +678,11 @@ class SyntaxErrorDetector(BaseDetector):
                     results.append(nested_result)
 
         return results
-          
+    # endregion
+
+    # region SYN-5
     # TODO: refactor
-    def syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column(self) -> list:
+    def syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column(self) -> list[DetectedError]:
         """
         Enforces the SQL "single-value rule":
         All selected columns must be either included in the GROUP BY clause or aggregated.
@@ -708,7 +736,7 @@ class SyntaxErrorDetector(BaseDetector):
         return results
      
     # TODO: refactor
-    def syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by(self) -> list:
+    def syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by(self) -> list[DetectedError]:
         """
         Flags queries where HAVING is used without a GROUP BY clause.
         """
@@ -733,11 +761,13 @@ class SyntaxErrorDetector(BaseDetector):
             check_having_without_group_by(f"subquery in '{cond}'", subq)
 
         return results
-    
+    # endregion
+
+    # region SYN-6
     #TODO def syn_6_common_syntax_error_confusing_function_with_function_parameter(self):
     
     # TODO: refactor
-    def syn_6_common_syntax_error_using_where_twice(self) -> list:
+    def syn_6_common_syntax_error_using_where_twice(self) -> list[DetectedError]:
         """
         Flags multiple WHERE clauses in a single query block (main query, CTEs, subqueries).
         """
@@ -824,7 +854,7 @@ class SyntaxErrorDetector(BaseDetector):
         return list(set(results))
 
     # TODO: refactor
-    def syn_6_common_syntax_error_omitting_the_from_clause(self) -> list:
+    def syn_6_common_syntax_error_omitting_the_from_clause(self) -> list[DetectedError]:
         """
         Flags queries that omit the FROM clause entirely when it's required.
         A FROM clause is not required if:
@@ -877,7 +907,7 @@ class SyntaxErrorDetector(BaseDetector):
         return results
 
     # TODO: refactor
-    def syn_6_common_syntax_error_comparison_with_null(self) -> list:
+    def syn_6_common_syntax_error_comparison_with_null(self) -> list[DetectedError]:
         """
         Flags SQL comparisons using = NULL, <> NULL, etc. instead of IS NULL / IS NOT NULL.
         """
@@ -902,17 +932,14 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
     
-    # TODO: refactor
-    def syn_6_common_syntax_error_omitting_the_semicolon(self) -> list:
-        """
+    def syn_6_common_syntax_error_omitting_the_semicolon(self) -> list[DetectedError]:
+        '''
         Flags queries that omit the semicolon at the end.
-        """
+        '''
+
         # Check if the last token is a semicolon
-        if self.tokens and self.tokens[-1][1].strip() != ';':
-            return [(
-                SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_SEMICOLON,
-                "Missing semicolon at the end of the query"
-            )]
+        if self.query.tokens and self.query.tokens[-1][1].strip() != ';':
+            return [DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_SEMICOLON)]
         return []
     
     #TODO def syn_6_common_syntax_error_date_time_field_overflow(self):
@@ -922,7 +949,7 @@ class SyntaxErrorDetector(BaseDetector):
     #TODO def syn_6_common_syntax_error_confusing_table_names_with_column_names(self):
     
     # TODO: refactor
-    def syn_6_common_syntax_error_restriction_in_select_clause(self) -> list:
+    def syn_6_common_syntax_error_restriction_in_select_clause(self) -> list[DetectedError]:
         """
         Flags queries where comparison operations (restrictions) are used in SELECT clause
         instead of WHERE clause. For example: SELECT quantity > 100 FROM transaction
@@ -983,7 +1010,7 @@ class SyntaxErrorDetector(BaseDetector):
         return results
     
     # TODO: refactor
-    def syn_6_common_syntax_error_projection_in_where_clause(self) -> list:
+    def syn_6_common_syntax_error_projection_in_where_clause(self) -> list[DetectedError]:
         """
         Flags queries where a WHERE clause contains only a projection (e.g., column name)
         instead of a valid condition, including after AND/OR.
@@ -1065,7 +1092,7 @@ class SyntaxErrorDetector(BaseDetector):
 
 
     # TODO: refactor
-    def syn_6_common_syntax_error_confusing_the_order_of_keywords(self) -> list:
+    def syn_6_common_syntax_error_confusing_the_order_of_keywords(self) -> list[DetectedError]:
         """
         Flags queries where the standard order of SQL clauses is not respected.
         Expected order:
@@ -1124,7 +1151,7 @@ class SyntaxErrorDetector(BaseDetector):
     #TODO def syn_6_common_syntax_error_confusing_the_logic_of_keywords(self):
     
     # TODO: refactor
-    def syn_6_common_syntax_error_confusing_the_syntax_of_keywords(self) -> list:
+    def syn_6_common_syntax_error_confusing_the_syntax_of_keywords(self) -> list[DetectedError]:
         """
         Flags use of SQL keywords like LIKE, IN, BETWEEN, etc. with incorrect function-like syntax (e.g., LIKE(...)).
         """
@@ -1165,7 +1192,7 @@ class SyntaxErrorDetector(BaseDetector):
         return results
 
     # TODO: refactor
-    def syn_6_common_syntax_error_omitting_commas(self) -> list:
+    def syn_6_common_syntax_error_omitting_commas(self) -> list[DetectedError]:
         """
         Flags queries where commas are likely missing between column expressions 
         (e.g., SELECT name age FROM ..., GROUP BY x y).
@@ -1224,68 +1251,75 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-    # TODO: refactor
-    def syn_6_common_syntax_error_curly_square_or_unmatched_brackets(self) -> list:
-        """
+    def syn_6_common_syntax_error_curly_square_or_unmatched_brackets(self) -> list[DetectedError]:
+        '''
         Flags unmatched parentheses or usage of non-standard square or curly brackets in the SQL query.
-        """
-        results = []
-        query_str = self.query
+        '''
 
-        # Count parentheses
-        round_open = query_str.count('(')
-        round_close = query_str.count(')')
-        square_open = query_str.count('[')
-        square_close = query_str.count(']')
-        curly_open = query_str.count('{')
-        curly_close = query_str.count('}')
+        results: list[DetectedError] = []
+        
+        round_open = 0
+        round_close = 0
+        square_open = 0
+        square_close = 0
+        curly_open = 0
+        curly_close = 0
+
+        for ttype, val in self.query.tokens:
+            if ttype is sqlparse.tokens.Punctuation:
+                if val == '(':
+                    round_open += 1
+                elif val == ')':
+                    round_close += 1
+                elif val == '[':
+                    square_open += 1
+                elif val == ']':
+                    square_close += 1
+            elif ttype is sqlparse.tokens.Error:
+                if val == '{':
+                    curly_open += 1
+                elif val == '}':
+                    curly_close += 1
 
         # Check for imbalance
         if round_open != round_close:
-            results.append((
-                SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CURLY_SQUARE_OR_UNMATCHED_BRACKETS,
-                f"Unmatched round brackets: found {round_open} '(' and {round_close} ')'"
-            ))
+            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CURLY_SQUARE_OR_UNMATCHED_BRACKETS, ('round', round_open, round_close)))
         if square_open > 0 or square_close > 0:
-            results.append((
-                SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CURLY_SQUARE_OR_UNMATCHED_BRACKETS,
-                f"Square brackets are not valid in standard SQL: found {square_open} '[' and {square_close} ']'"
-            ))
+            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CURLY_SQUARE_OR_UNMATCHED_BRACKETS, ('square', square_open, square_close)))
         if curly_open > 0 or curly_close > 0:
-            results.append((
-                SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CURLY_SQUARE_OR_UNMATCHED_BRACKETS,
-                f"Curly brackets are not valid in SQL: found {curly_open} '{{' and {curly_close} '}}'"
-            ))
+            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CURLY_SQUARE_OR_UNMATCHED_BRACKETS, ('curly', curly_open, curly_close)))
 
         return results
     
-    #TODO def syn_6_common_syntax_error_is_where_not_applicable(self):
-    #TODO def syn_6_common_syntax_error_nonstandard_keywords_or_standard_keywords_in_wrong_context(self):
+    #TODO: implement
+    def syn_6_common_syntax_error_is_where_not_applicable(self) -> list[DetectedError]:
+        return []
     
-    # TODO: refactor
-    def syn_6_common_syntax_error_nonstandard_operators(self) -> list:
-        """
+    #TODO: implement
+    def syn_6_common_syntax_error_nonstandard_keywords_or_standard_keywords_in_wrong_context(self) -> list[DetectedError]:
+        return []
+    
+    def syn_6_common_syntax_error_nonstandard_operators(self) -> list[DetectedError]:
+        '''
         Flags usage of non-standard or language-specific operators like &&, ||, ==, etc.
-        """
-        results = []
+        '''
+
+        results: list[DetectedError] = []
         
         nonstandard_ops = {
-            "==", "===", "!==", "&&", "||", "!", "+=", "-=", "*=", "/=", "^", "~", ">>", "<<"
+            '==', '===', '!==', '&&', '||', '!', '+=', '-=', '*=', '/=', '^', '~', '>>', '<<', '≠', '≥', '≤'
         }
 
-        for i, (ttype, val) in enumerate(self.tokens):
+        for ttype, val in self.query.tokens:
             val_stripped = val.strip()
             if ttype in sqlparse.tokens.Operator or ttype in sqlparse.tokens.Operator.Comparison:
                 if val_stripped in nonstandard_ops:
-                    results.append((
-                        SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_NONSTANDARD_OPERATORS,
-                        f"Non-standard SQL operator used: '{val_stripped}'"
-                    ))
+                    results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_NONSTANDARD_OPERATORS, (val_stripped,)))
 
         return results
 
     # TODO: refactor
-    def syn_6_common_syntax_error_additional_semicolon(self) -> list:
+    def syn_6_common_syntax_error_additional_semicolon(self) -> list[DetectedError]:
         """
         Flags queries where semicolons are incorrectly used,
         excluding those inside string literals or comments.
