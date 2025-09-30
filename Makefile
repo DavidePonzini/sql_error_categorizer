@@ -12,6 +12,7 @@ else
 	VENV_BIN=$(VENV)/bin
 endif
 
+.PHONY: install build uninstall documentation test upload download clean
 
 $(VENV):
 	python -m venv --clear $(VENV)
