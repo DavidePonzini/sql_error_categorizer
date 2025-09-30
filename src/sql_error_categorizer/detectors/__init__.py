@@ -78,6 +78,8 @@ class Detector:
         '''
         Run all detectors and return a list of detected errors.
         This function can return duplicate errors, as well as additional information on the detected errors.
+        
+        Useful for automated testing.
         '''
 
         if self.debug:
