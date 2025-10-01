@@ -1,6 +1,6 @@
 from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error
 
-def test_syn_2_undefined_functions_simple():
+def test_simple():
     detected_errors = run_test(
         query='SELECT not_a_function();',
         detectors=[SyntaxErrorDetector]
@@ -8,7 +8,7 @@ def test_syn_2_undefined_functions_simple():
 
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function', 'SELECT'))
 
-def test_syn_2_undefined_functions_standard_function():
+def test_standard_function():
     detected_errors = run_test(
         query='SELECT COUNT(*) FROM table;',
         detectors=[SyntaxErrorDetector]
@@ -16,7 +16,7 @@ def test_syn_2_undefined_functions_standard_function():
 
     assert not has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('COUNT', 'SELECT'))
 
-def test_syn_2_undefined_functions_subquery_from():
+def test_subquery_from():
     detected_errors = run_test(
         query='''
         SELECT *
@@ -27,7 +27,7 @@ def test_syn_2_undefined_functions_subquery_from():
 
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function', 'SELECT'))
 
-def test_syn_2_undefined_functions_subquery_where():
+def test_subquery_where():
     detected_errors = run_test(
         query='''
         SELECT *
