@@ -9,20 +9,20 @@ from . import extractors
 class TokenizedSQL:
     def __init__(self, query: str):
         self.sql = query
-        self.parsed = self._parse()
+
+        parsed_statements = sqlparse.parse(self.sql)
+        if not parsed_statements:
+            self.all_statements: list[sqlparse.sql.Statement] = []
+            self.parsed = sqlparse.sql.Statement()
+        else:
+            self.all_statements = list(parsed_statements)
+            self.parsed = parsed_statements[0]
 
         # Lazy properties
         self._tokens = None
         self._identifiers = None
         self._functions = None
         self._comparisons = None
-
-    def _parse(self) -> sqlparse.sql.Statement:
-        parsed = sqlparse.parse(self.sql)
-        
-        if not parsed:
-            return sqlparse.sql.Statement()
-        return parsed[0]
 
     def _flatten(self) -> list[tuple[sqlparse.tokens._TokenType, str]]:
         '''Flattens the parsed SQL statement into a list of (ttype, value) tuples. Ignores whitespace and newlines.'''

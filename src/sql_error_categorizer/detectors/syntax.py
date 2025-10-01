@@ -82,7 +82,7 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_6_common_syntax_error_using_where_twice, # TODO: refactor
             # self.syn_6_common_syntax_error_omitting_the_from_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_comparison_with_null,  # TODO: refactor
-            self.syn_6_common_syntax_error_omitting_the_semicolon,
+            self.syn_6_additional_omitted_semicolons,
             # self.syn_6_common_syntax_error_restriction_in_select_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_projection_in_where_clause,    # TODO: refactor
             # self.syn_6_common_syntax_error_confusing_the_order_of_keywords,   # TODO: refactor
@@ -90,7 +90,6 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_6_common_syntax_error_omitting_commas,   # TODO: refactor
             self.syn_6_common_syntax_error_curly_square_or_unmatched_brackets,
             self.syn_6_common_syntax_error_nonstandard_operators,
-            # self.syn_6_common_syntax_error_additional_semicolon   # TODO: refactor
         ]
     
         for check in checks:
@@ -356,7 +355,6 @@ class SyntaxErrorDetector(BaseDetector):
             
         return results
 
-
     def syn_2_undefined_functions(self) -> list[DetectedError]:
         '''Checks for undefined functions (i.e. invalid names followed by parentheses).'''
 
@@ -369,14 +367,14 @@ class SyntaxErrorDetector(BaseDetector):
         all_functions = known_aggregate_functions.union(user_defined_functions)
 
 
-        for func in self.query.functions:
+        for func, clause in self.query.functions:
             func_name = func.get_name()
             
             if func_name is None:
                 continue
             
             if func_name.upper() not in all_functions:
-                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, (func_name,)))
+                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, (func_name, clause)))
 
         return results
 
@@ -493,9 +491,16 @@ class SyntaxErrorDetector(BaseDetector):
     
     # TODO: refactor
     def syn_3_data_type_mismatch(self) -> list[DetectedError]:
+        '''
+        Checks for data type mismatches in comparisons within the query.
+        '''
+        
         # Check for data type mismatches in the query.
-        results = []
+        results: list[DetectedError] = []
+
         comparison_operators = {'=', '<>', '!=', '<', '>', '<=', '>='}
+
+        
         tokens = self.tokens
         alias_map = self.query_map.get('alias_mapping', {})
         all_table_columns = self.catalog.get("table_columns", {})
@@ -927,15 +932,31 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
     
-    def syn_6_common_syntax_error_omitting_the_semicolon(self) -> list[DetectedError]:
+    def syn_6_additional_omitted_semicolons(self) -> list[DetectedError]:
         '''
-        Flags queries that omit the semicolon at the end.
+        Flags queries that omit the semicolon at the end or have multiple semicolons.
         '''
 
+        results: list[DetectedError] = []
+
+        has_semicolon_at_end = self.query.tokens and self.query.tokens[-1][1].strip() == ';'
         # Check if the last token is a semicolon
-        if self.query.tokens and self.query.tokens[-1][1].strip() != ';':
-            return [DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_SEMICOLON)]
-        return []
+        if not has_semicolon_at_end:
+            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_SEMICOLON))
+        
+        # Check for multiple semicolons inside the query
+        tokens_to_check = self.query.tokens[:-1] if has_semicolon_at_end else self.query.tokens
+        for token, val in tokens_to_check:
+            if token == sqlparse.tokens.Punctuation and val == ';':
+                results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON)) 
+
+        # Check for multiple semicolons at the end of the query (resulting in multiple statements)
+        for _ in self.query.all_statements[1:]:     # skip the actual query
+            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
+        
+        return results
+
+
     
     #TODO def syn_6_common_syntax_error_date_time_field_overflow(self):
     #TODO def syn_6_common_syntax_error_duplicate_clause(self):
@@ -1310,81 +1331,6 @@ class SyntaxErrorDetector(BaseDetector):
             if ttype in sqlparse.tokens.Operator or ttype in sqlparse.tokens.Operator.Comparison:
                 if val_stripped in nonstandard_ops:
                     results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_NONSTANDARD_OPERATORS, (val_stripped,)))
-
-        return results
-
-    # TODO: refactor
-    def syn_6_common_syntax_error_additional_semicolon(self) -> list[DetectedError]:
-        '''
-        Flags queries where semicolons are incorrectly used,
-        excluding those inside string literals or comments.
-        '''
-        results = []
-        query = self.query
-        length = len(query)
-
-        in_single_quote = False
-        in_double_quote = False
-        in_line_comment = False
-        in_block_comment = False
-
-        semicolon_positions = []
-
-        i = 0
-        while i < length:
-            char = query[i]
-            next_char = query[i + 1] if i + 1 < length else ''
-
-            # Detect start/end of block comment
-            if not in_single_quote and not in_double_quote:
-                if not in_block_comment and char == '/' and next_char == '*':
-                    in_block_comment = True
-                    i += 2
-                    continue
-                elif in_block_comment and char == '*' and next_char == '/':
-                    in_block_comment = False
-                    i += 2
-                    continue
-
-            # Detect start of line comment
-            if not in_single_quote and not in_double_quote and not in_block_comment:
-                if not in_line_comment and char == '-' and next_char == '-':
-                    in_line_comment = True
-                    i += 2
-                    continue
-                elif in_line_comment and char == '\n':
-                    in_line_comment = False
-
-            # Toggle quote flags
-            if not in_block_comment and not in_line_comment:
-                if char == "'" and not in_double_quote:
-                    in_single_quote = not in_single_quote
-                elif char == '"' and not in_single_quote:
-                    in_double_quote = not in_double_quote
-
-            # If we find a semicolon outside strings/comments, record it
-            if char == ';' and not in_single_quote and not in_double_quote and not in_line_comment and not in_block_comment:
-                semicolon_positions.append(i)
-
-            i += 1
-
-        # Logic for reporting:
-        if len(semicolon_positions) > 1:
-            for pos in semicolon_positions[:-1]:  # all but last
-                results.append((
-                    SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON,
-                    f"Unexpected additional semicolon"
-                ))
-
-        elif len(semicolon_positions) == 1:
-            last_pos = semicolon_positions[0]
-            # Allow it only if it's at the end (with optional whitespace after)
-            stripped = query[last_pos + 1:].strip()
-            if stripped:  # something after the semicolon = not final
-                results.append((
-                    SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON,
-                    f"Unexpected semicolon in middle of query at position {last_pos}"
-                ))
 
         return results
 
