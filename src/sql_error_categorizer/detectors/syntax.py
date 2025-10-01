@@ -8,6 +8,7 @@ from ..tokenizer import TokenizedSQL
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
 from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
+from collections import Counter
 
 
 class SyntaxErrorDetector(BaseDetector):
@@ -90,7 +91,9 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_6_common_syntax_error_omitting_commas,   # TODO: refactor
             self.syn_6_common_syntax_error_curly_square_or_unmatched_brackets,
             self.syn_6_common_syntax_error_nonstandard_operators,
-            # self.syn_6_common_syntax_error_additional_semicolon   # TODO: refactor
+            # self.syn_6_common_syntax_error_additional_semicolon,   # TODO: refactor
+            self.syn_6_common_syntax_error_using_an_undefined_correlation_name,  # TODO: subqueries and ctes
+            self.syn_6_common_syntax_error_duplicate_clause  # TODO: subqueries and ctes
         ]
     
         for check in checks:
@@ -1385,6 +1388,44 @@ class SyntaxErrorDetector(BaseDetector):
                     SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON,
                     f"Unexpected semicolon in middle of query at position {last_pos}"
                 ))
+
+        return results
+
+    # TODO: subqueries and ctes
+    def syn_6_common_syntax_error_using_an_undefined_correlation_name(self) -> list[DetectedError]:
+        '''
+        Flags queries that reference an alias that is not defined in the FROM clause.
+        '''
+
+        results: list[DetectedError] = []
+
+        aliases = [identifier[0].get_parent_name() for identifier in self.query.identifiers if identifier[1] not in ('FROM', 'WITH')]
+
+        # Main Query
+        for alias in aliases:
+            if alias and alias not in self.query_map.alias_mapping:
+                results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_AN_UNDEFINED_CORRELATION_NAME, (alias,)))
+
+        return results
+        
+
+    #TODO: subqueries and ctes
+    def syn_6_common_syntax_error_duplicate_clause(self) -> list[DetectedError]:
+        '''
+        Flags queries that contain duplicate SQL clauses like multiple WHERE or GROUP BY clauses.
+        '''
+        results: list[DetectedError] = []
+
+        single_use_clauses = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT']
+
+        found_clauses = [val for ttype, val in self.query.tokens if ttype == sqlparse.tokens.Keyword and val in single_use_clauses]
+
+        count = Counter(found_clauses)
+
+        for clause, occurrences in count.items():
+            if occurrences > 1:
+                print(clause)
+                results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, (clause,)))
 
         return results
 
