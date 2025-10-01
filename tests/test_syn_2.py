@@ -6,7 +6,7 @@ def test_syn_2_undefined_functions_simple():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function',))
+    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function', 'SELECT'))
 
 def test_syn_2_undefined_functions_standard_function():
     detected_errors = run_test(
@@ -14,7 +14,7 @@ def test_syn_2_undefined_functions_standard_function():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert not has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('COUNT',))
+    assert not has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('COUNT', 'SELECT'))
 
 def test_syn_2_undefined_functions_subquery_from():
     detected_errors = run_test(
@@ -25,7 +25,7 @@ def test_syn_2_undefined_functions_subquery_from():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function',))
+    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function', 'SELECT'))
 
 def test_syn_2_undefined_functions_subquery_where():
     detected_errors = run_test(
@@ -37,4 +37,4 @@ def test_syn_2_undefined_functions_subquery_where():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function',))
+    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function', 'SELECT'))

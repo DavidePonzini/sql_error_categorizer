@@ -37,7 +37,7 @@ def get_errors2(query_str: str, correct_solutions: list[str] = [], dataset_str: 
     return get_errors(query_str, correct_solutions=correct_solutions, catalog=cat, search_path=cat.schemas.pop(), debug=debug)
 
 
-def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', catalog_file: str = 'cat_miedema.json') -> _Detector:
+def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', catalog_file: str = 'tests/datasets/cat_miedema.json') -> _Detector:
     '''Test function, remove before production'''
 
     with open(query_file) as f:
