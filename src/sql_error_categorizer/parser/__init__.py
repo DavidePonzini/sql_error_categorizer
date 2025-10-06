@@ -17,14 +17,16 @@ class ParseResult:
     cte_map: CTEMap = field(default_factory=CTEMap)
     subquery_map: SubqueryMap = field(default_factory=SubqueryMap)
     query_map: QueryMap = field(default_factory=QueryMap)
+    stripped_query: str = field(default='')
+    main_query: str = field(default='')
 
 
 def parse(query: str) -> ParseResult:
     cte_map, stripped_query = extract_ctes(query)
-    subquery_map, stripped_query = extract_subqueries(stripped_query)
-    query_map = parse_query(stripped_query)
+    subquery_map, main_query = extract_subqueries(stripped_query)
+    query_map = parse_query(main_query)
 
-    return ParseResult(cte_map=cte_map, query_map=query_map, subquery_map=subquery_map)
+    return ParseResult(cte_map=cte_map, query_map=query_map, subquery_map=subquery_map, stripped_query=stripped_query, main_query=main_query)
 
 def get_clause_content(clause, query):
     '''

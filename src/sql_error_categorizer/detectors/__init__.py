@@ -51,6 +51,8 @@ class Detector:
             detector.query_map = self.parse_result.query_map
             detector.subquery_map = self.parse_result.subquery_map
             detector.cte_map = self.parse_result.cte_map
+            detector.stripped_query = self.parse_result.stripped_query
+            detector.main_query = self.parse_result.main_query
             detector.cte_catalog = self.cte_catalog
             detector.update_query = lambda new_query: self.set_query(new_query)
             detector.correct_solutions = self.correct_solutions
@@ -68,6 +70,8 @@ class Detector:
             subquery_map=self.parse_result.subquery_map,
             cte_map=self.parse_result.cte_map,
             cte_catalog=self.cte_catalog,
+            stripped_query=self.parse_result.stripped_query,
+            main_query=self.parse_result.main_query,
             update_query=lambda new_query: self.set_query(new_query),
             correct_solutions=self.correct_solutions,
         )
