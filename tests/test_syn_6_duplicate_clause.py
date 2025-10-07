@@ -11,7 +11,7 @@ def test_cte():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'cte'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'CTE cte'))
 
 def test_multiple_ctes():
     detected_errors = run_test(
@@ -27,7 +27,7 @@ def test_multiple_ctes():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'cte2'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'CTE cte2'))
 
 def test_cte_with_multiple_parentheses():
     detected_errors = run_test(
@@ -40,7 +40,7 @@ def test_cte_with_multiple_parentheses():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'cte'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'CTE cte'))
 
 def test_correct_cte():
     detected_errors = run_test(
@@ -63,7 +63,7 @@ def test_main_query():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'main query'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'MAIN QUERY'))
 
 def test_multiple_clauses_main_query():
     detected_errors = run_test(
@@ -73,10 +73,10 @@ def test_multiple_clauses_main_query():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('ORDER BY', 'main query'))
-    assert not has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'main query'))
-    assert not has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('WHERE', 'main query'))
-    assert not has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('LIMIT', 'main query'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('ORDER BY', 'MAIN QUERY'))
+    assert not has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'MAIN QUERY'))
+    assert not has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('WHERE', 'MAIN QUERY'))
+    assert not has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('LIMIT', 'MAIN QUERY'))
 
 def test_subquery():
     detected_errors = run_test(
@@ -86,7 +86,7 @@ def test_subquery():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'subquery'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'SUBQUERY'))
 
 def test_multiple_subqueries():
     detected_errors = run_test(
@@ -97,8 +97,8 @@ def test_multiple_subqueries():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('ORDER BY', 'subquery'))
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'subquery'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('ORDER BY', 'SUBQUERY'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'SUBQUERY'))
 
 def test_query_subquery_cte():
     detected_errors = run_test(
@@ -111,6 +111,6 @@ def test_query_subquery_cte():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'cte'))
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('WHERE', 'main query'))
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'subquery'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'CTE cte'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('WHERE', 'MAIN QUERY'))
+    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, ('FROM', 'SUBQUERY'))

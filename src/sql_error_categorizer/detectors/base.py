@@ -28,7 +28,7 @@ class BaseDetector(ABC):
                  query_map: QueryMap,
                  subquery_map: SubqueryMap,
                  cte_map: CTEMap,
-                 stripped_query: str,
+                 ctes: list[str],
                  main_query: str,
                  cte_catalog: CTECatalog,
                  update_query: Callable[[str], None],
@@ -41,7 +41,7 @@ class BaseDetector(ABC):
         self.subquery_map = subquery_map
         self.cte_map = cte_map
         self.cte_catalog = cte_catalog
-        self.stripped_query = stripped_query
+        self.ctes = ctes
         self.main_query = main_query
         self.update_query = update_query
         self.correct_solutions = correct_solutions

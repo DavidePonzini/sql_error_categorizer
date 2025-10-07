@@ -1,7 +1,5 @@
-from calendar import c
 import difflib
 import re
-from unittest import result
 import sqlparse
 from typing import Any, Callable
 
@@ -21,7 +19,7 @@ class SyntaxErrorDetector(BaseDetector):
                  query_map: QueryMap,
                  subquery_map: SubqueryMap,
                  cte_map: CTEMap,
-                 stripped_query: str,
+                 ctes: list[str],
                  main_query: str,
                  cte_catalog: CTECatalog,
                  update_query: Callable[[str], None],
@@ -34,7 +32,7 @@ class SyntaxErrorDetector(BaseDetector):
             query_map=query_map,
             subquery_map=subquery_map,
             cte_map=cte_map,
-            stripped_query=stripped_query,
+            ctes=ctes,
             main_query=main_query,
             cte_catalog=cte_catalog,
             update_query=update_query,
@@ -97,7 +95,7 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_6_common_syntax_error_omitting_commas,   # TODO: refactor
             self.syn_6_common_syntax_error_curly_square_or_unmatched_brackets,
             self.syn_6_common_syntax_error_nonstandard_operators,
-            self.syn_6_common_syntax_error_duplicate_clause # TODO: implement
+            self.syn_6_common_syntax_error_duplicate_clause
         ]
     
         for check in checks:
@@ -1342,24 +1340,24 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-    def syn_6_duplicate_clause_query(self, current_query: str, clauses: set[str]={}, name: str="main query") -> list[DetectedError]:
+    def syn_6_duplicate_clause(self, current_query: str, clauses: set[str], name: str="MAIN QUERY") -> list[DetectedError]:
 
-        errors: list[DetectedError] = []
+        result: list[DetectedError] = []
 
-        result = TokenizedSQL(current_query.replace("(...)","")).tokens
+        abstract_query = TokenizedSQL(current_query.replace("(...)","")).tokens
 
-        found_clauses = set()
+        found_clauses = set("WITH")  # WITH cannot be duplicated in a single query block
 
-        for ttype, val in result:
+        for ttype, val in abstract_query:
             if( ttype is sqlparse.tokens.Keyword.DML or ttype is sqlparse.tokens.Keyword):
                 clause = val.upper()
                 if clause in clauses:
                     if clause in found_clauses:
-                        errors.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, (clause, name)))
+                        result.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, (clause, name)))
                     else:
                         found_clauses.add(clause)
 
-        return errors
+        return result
 
     def syn_6_common_syntax_error_duplicate_clause(self) -> list[DetectedError]:
         '''
@@ -1367,46 +1365,21 @@ class SyntaxErrorDetector(BaseDetector):
         '''
         results: list[DetectedError] = []
 
-        clauses = {"SELECT", "FROM", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT"}
+        clauses = {"WITH", "SELECT", "FROM", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT"}
         
-        current_index = 0
-
-        # CTE check
-        for cte_name, _ in self.cte_map.items():
-            current_index += 3 # Skip "WITH cte_name AS" or ", cte_name AS"
-            found_clauses = set("WITH")  # WITH is always present in CTE
-            parenthesis_count = 0
-            for i, (ttype, val) in enumerate(self.query.tokens[current_index:], start=current_index):
-
-                if(val == '('):
-                    parenthesis_count += 1
-                    continue
-
-                if( val == ')' ):
-                    parenthesis_count -= 1
-                    if parenthesis_count == 0:
-                        # End of CTE reached
-                        current_index = i + 1 # Move index to pass the closing parenthesis
-                        break
-
-                if( ttype is sqlparse.tokens.Keyword.DML or ttype is sqlparse.tokens.Keyword):
-                    clause = val.upper()
-                    if clause in clauses:
-                        if clause in found_clauses:
-                            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, (clause, cte_name)))
-                        else:
-                            found_clauses.add(clause)
+        # CTEs check
+        for i, (cte_name, _) in enumerate(self.cte_map.items()):
+            cte = parser.extract_subqueries(self.ctes[i])[1]
+            results.extend(self.syn_6_duplicate_clause(cte, clauses, f"CTE {cte_name}"))
 
         # Main query
-        results.extend(self.syn_6_duplicate_clause_query(self.main_query, clauses))
+        results.extend(self.syn_6_duplicate_clause(self.main_query, clauses))
 
         # Subquery check
         for cond, _ in self.subquery_map.items():
             # Extract the subquery from the condition
-            _, subquery = parser.extract_subqueries(cond[cond.find('('):])
-            results.extend(self.syn_6_duplicate_clause_query(subquery, clauses, "subquery"))
-
-
+            subquery = parser.extract_subqueries(cond[cond.find('('):])[1]
+            results.extend(self.syn_6_duplicate_clause(subquery.strip(), clauses, "SUBQUERY"))
 
 
         return results
