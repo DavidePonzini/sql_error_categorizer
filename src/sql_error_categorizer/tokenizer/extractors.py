@@ -1,8 +1,13 @@
 '''Extracts components from list of tokens using `sqlparse`.'''
 
+import sqlglot
+import sqlglot.errors
+from sqlglot import expressions as E
+
 import sqlparse
-from sqlparse.tokens import Whitespace, Newline
 from sqlparse.sql import IdentifierList, Identifier, Function
+
+import copy
 
 def extract_identifiers(tokens, current_clause: str = 'NONE') -> list[tuple[sqlparse.sql.Identifier, str]]:
     result = []
@@ -51,9 +56,37 @@ def extract_comparisons(tokens, current_clause: str = 'NONE') -> list[tuple[sqlp
                 current_clause = token.value.upper()
             continue
 
-
         if isinstance(token, sqlparse.sql.Comparison):
             result.append((token, current_clause))
         elif token.is_group:
             result.extend(extract_comparisons(token.tokens, current_clause))
     return result
+
+def extract_ctes(ast: E.Expression | None) -> list[tuple[str, str]]:
+    '''Extracts CTEs from the SQL query and returns them as a list of (cte_name, sql_string) tuples.'''
+
+    if ast is None:
+        return []
+    
+    ctes = ast.args.get('with')
+    if ctes is None:
+        return []
+
+    result = []
+    for cte in ctes.expressions:
+        cte_name = cte.alias_or_name
+        cte_sql = cte.this.sql()
+        result.append((cte_name, cte_sql))
+
+    return result
+
+def remove_ctes(ast: E.Expression | None) -> str:
+    '''Removes CTEs from the SQL query and returns the main query as a string.'''
+
+    if ast is None:
+        return ''
+
+    ast_copy = copy.deepcopy(ast)
+
+    ast_copy.set('with', None)
+    return ast_copy.sql()
