@@ -47,10 +47,3 @@ class BaseDetector(ABC):
         '''Run the detector and return a list of detected errors with their descriptions'''
         return []
     
-    @staticmethod
-    def _normalize(identifier: str) -> str:
-        '''Normalize an SQL identifier by stripping quotes and converting to lowercase if unquoted.'''
-        if identifier.startswith('"') and identifier.endswith('"') and len(identifier) > 1:
-            return identifier[1:-1]
-        
-        return identifier.lower()
