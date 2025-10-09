@@ -26,11 +26,17 @@ def build_catalog(sql_string: str, *, hostname: str, port: int, user: str, passw
     # Create the tables
     cur.execute(sql_string)
 
+    from dav_tools import messages
+    messages.info(queries.COLUMNS(schema_name))
+
     # Fetch the catalog information
     cur.execute(queries.COLUMNS(schema_name))
     columns_info = cur.fetchall()
 
+    messages.debug(f'Fetched {len(columns_info)} columns from the database.')
+
     for column in columns_info:
+        messages.debug(f'Processing column: {column}')
         schema_name, table_name, column_name, column_type, numeric_precision, numeric_scale, is_nullable, fk_schema, fk_table, fk_column = column
 
         result.add_column(schema_name, table_name, column_name,
@@ -51,8 +57,8 @@ def build_catalog(sql_string: str, *, hostname: str, port: int, user: str, passw
             constraint_type = UniqueConstraintType.UNIQUE
         else:
             raise ValueError(f'Unknown constraint type: {constraint_type}')
-        
-        result.get_table(schema_name, table_name).add_unique_constraint(columns, constraint_type)
+
+        result[schema_name][table_name].add_unique_constraint(columns, constraint_type)
 
     # Clean up
     if use_temp_schema:
