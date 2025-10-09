@@ -40,13 +40,17 @@ def COLUMNS(schema_name: str = '%') -> str:
             kcu.table_name,
             kcu.column_name,
             ccu.table_schema AS foreign_table_schema,
-            ccu.table_name AS foreign_table_name,
-            ccu.column_name AS foreign_column_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu
-        ON tc.constraint_name = kcu.constraint_name
-        JOIN information_schema.constraint_column_usage ccu
-        ON tc.constraint_name = ccu.constraint_name
+            ccu.table_name   AS foreign_table_name,
+            ccu.column_name  AS foreign_column_name
+        FROM information_schema.table_constraints AS tc
+            JOIN information_schema.key_column_usage AS kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.constraint_schema = kcu.constraint_schema
+            AND tc.table_schema = kcu.table_schema
+            AND tc.table_name = kcu.table_name
+            JOIN information_schema.constraint_column_usage AS ccu
+            ON tc.constraint_name = ccu.constraint_name
+            AND tc.constraint_schema = ccu.constraint_schema
         WHERE tc.constraint_type = 'FOREIGN KEY'
     ) fk ON fk.table_schema = cols.table_schema
         AND fk.table_name = cols.table_name
