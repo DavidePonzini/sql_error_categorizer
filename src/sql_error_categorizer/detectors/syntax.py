@@ -8,6 +8,7 @@ from ..tokenizer import TokenizedSQL
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
 from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
+from .. import parser
 
 
 class SyntaxErrorDetector(BaseDetector):
@@ -18,6 +19,8 @@ class SyntaxErrorDetector(BaseDetector):
                  query_map: QueryMap,
                  subquery_map: SubqueryMap,
                  cte_map: CTEMap,
+                 ctes: list[str],
+                 main_query: str,
                  cte_catalog: CTECatalog,
                  update_query: Callable[[str], None],
                  **kwargs,  # we don't need correct solutions for syntax errors, but we may still receive it during initialization
@@ -29,6 +32,8 @@ class SyntaxErrorDetector(BaseDetector):
             query_map=query_map,
             subquery_map=subquery_map,
             cte_map=cte_map,
+            ctes=ctes,
+            main_query=main_query,
             cte_catalog=cte_catalog,
             update_query=update_query,
         )
@@ -90,6 +95,7 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_6_common_syntax_error_omitting_commas,   # TODO: refactor
             self.syn_6_common_syntax_error_curly_square_or_unmatched_brackets,
             self.syn_6_common_syntax_error_nonstandard_operators,
+            self.syn_6_common_syntax_error_duplicate_clause
         ]
     
         for check in checks:
@@ -1331,6 +1337,50 @@ class SyntaxErrorDetector(BaseDetector):
             if ttype in sqlparse.tokens.Operator or ttype in sqlparse.tokens.Operator.Comparison:
                 if val_stripped in nonstandard_ops:
                     results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_NONSTANDARD_OPERATORS, (val_stripped,)))
+
+        return results
+
+    def syn_6_duplicate_clause(self, current_query: str, clauses: set[str], name: str="MAIN QUERY") -> list[DetectedError]:
+
+        result: list[DetectedError] = []
+
+        abstract_query = TokenizedSQL(current_query.replace("(...)","")).tokens
+
+        found_clauses = set("WITH")  # WITH cannot be duplicated in a single query block
+
+        for ttype, val in abstract_query:
+            if( ttype is sqlparse.tokens.Keyword.DML or ttype is sqlparse.tokens.Keyword):
+                clause = val.upper()
+                if clause in clauses:
+                    if clause in found_clauses:
+                        result.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, (clause, name)))
+                    else:
+                        found_clauses.add(clause)
+
+        return result
+
+    def syn_6_common_syntax_error_duplicate_clause(self) -> list[DetectedError]:
+        '''
+        Flags queries that contain duplicate SQL clauses like multiple WHERE or FROM clauses.
+        '''
+        results: list[DetectedError] = []
+
+        clauses = {"WITH", "SELECT", "FROM", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT"}
+        
+        # CTEs check
+        for i, (cte_name, _) in enumerate(self.cte_map.items()):
+            cte = parser.extract_subqueries(self.ctes[i])[1]
+            results.extend(self.syn_6_duplicate_clause(cte, clauses, f"CTE {cte_name}"))
+
+        # Main query
+        results.extend(self.syn_6_duplicate_clause(self.main_query, clauses))
+
+        # Subquery check
+        for cond, _ in self.subquery_map.items():
+            # Extract the subquery from the condition
+            subquery = parser.extract_subqueries(cond[cond.find('('):])[1]
+            results.extend(self.syn_6_duplicate_clause(subquery.strip(), clauses, "SUBQUERY"))
+
 
         return results
 

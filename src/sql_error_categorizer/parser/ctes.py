@@ -4,14 +4,14 @@ import re
 
 CTEMap = dict[str, QueryMap]
 
-def extract_ctes(query: str) -> tuple[CTEMap, str]:
+def extract_ctes(query: str) -> tuple[CTEMap, str, list[str]]:
     '''Extract and parse CTE blocks from the beginning of the query.'''
     # self.IS_CTE = True
     query = normalize_query(query)
 
     if not re.match(r'^\s*WITH\b', query, re.IGNORECASE):
         # self.IS_CTE = False
-        return CTEMap(), query
+        return CTEMap(), query, []
 
     cte_map = CTEMap()
 
@@ -51,7 +51,7 @@ def extract_ctes(query: str) -> tuple[CTEMap, str]:
         match = re.search(r'\(|\)|\bSELECT\b', temp_query[search_start:], re.IGNORECASE)
         if not match:
             # No SELECT found, something is wrong with the query.
-            return CTEMap(), query
+            return CTEMap(), query, []
 
         if match.group(0).upper() == 'SELECT' and depth == 0:
             # This is the main query's SELECT
@@ -85,6 +85,7 @@ def extract_ctes(query: str) -> tuple[CTEMap, str]:
     if current.strip():
         cte_defs.append(current.strip())
 
+    ctes = []
     for cte_def in cte_defs:
         # The regex needs to handle CTE names that might be keywords if not quoted
         # And it needs to handle optional column lists like `cte(c1, c2) AS ...`
@@ -92,10 +93,11 @@ def extract_ctes(query: str) -> tuple[CTEMap, str]:
         if name_match:
             cte_name, cte_query = name_match.groups()
             cte_query = cte_query.strip()
+            ctes.append(cte_query)
             # The query is already without the outer parentheses from the regex
             cte_map[cte_name.strip()] = parse_query(cte_query, in_cte=True)
 
-    return cte_map, remaining_query
+    return cte_map, remaining_query, ctes
 
 class CTECatalog:
     def __init__(self):
