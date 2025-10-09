@@ -1,5 +1,4 @@
-from .. import parser, catalog
-from .. import tokenizer
+from .. import parser, catalog, tokenizer
 from ..sql_errors import SqlErrors
 from .base import BaseDetector, DetectedError
 from .syntax import SyntaxErrorDetector
@@ -36,7 +35,7 @@ class Detector:
             print(f'Updating query:\n{query}')
             print('=' * 20)
 
-        self.query = tokenizer.TokenizedSQL(query)
+        self.query = tokenizer.TokenizedSQL(query, catalog=self.catalog, search_path=self.search_path)
         try:
             self.parse_result = parser.parse(self.query.sql)
             self.cte_catalog = parser.create_cte_catalog(self.parse_result.cte_map)
