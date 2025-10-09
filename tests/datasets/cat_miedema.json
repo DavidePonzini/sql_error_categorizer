@@ -1,9 +1,115 @@
 {
   "version": 1,
   "schemas": {
-    "miedema": {
-      "name": "miedema",
+    "sql_error_categorizer_1760019578832753026": {
+      "name": "sql_error_categorizer_1760019578832753026",
       "tables": {
+        "store": {
+          "name": "store",
+          "unique_constraints": [
+            {
+              "columns": [
+                "sid"
+              ],
+              "constraint_type": "PRIMARY KEY"
+            }
+          ],
+          "columns": [
+            {
+              "name": "sid",
+              "column_type": "numeric",
+              "numeric_precision": 5,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "sname",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "street",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "city",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            }
+          ]
+        },
+        "customer": {
+          "name": "customer",
+          "unique_constraints": [
+            {
+              "columns": [
+                "cid"
+              ],
+              "constraint_type": "PRIMARY KEY"
+            }
+          ],
+          "columns": [
+            {
+              "name": "cid",
+              "column_type": "numeric",
+              "numeric_precision": 5,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "cname",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "street",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "city",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            }
+          ]
+        },
         "shoppinglist": {
           "name": "shoppinglist",
           "unique_constraints": [
@@ -15,38 +121,28 @@
               "constraint_type": "PRIMARY KEY"
             }
           ],
-          "columns": {
-            "cid": {
+          "columns": [
+            {
               "name": "cid",
               "column_type": "numeric",
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "miedema",
+              "fk_schema": "sql_error_categorizer_1760019578832753026",
               "fk_table": "customer",
               "fk_column": "cid"
             },
-            "pid": {
+            {
               "name": "pid",
               "column_type": "numeric",
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "miedema",
+              "fk_schema": "sql_error_categorizer_1760019578832753026",
               "fk_table": "product",
               "fk_column": "pid"
             },
-            "date": {
-              "name": "date",
-              "column_type": "date",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "quantity": {
+            {
               "name": "quantity",
               "column_type": "numeric",
               "numeric_precision": 10,
@@ -55,8 +151,61 @@
               "fk_schema": null,
               "fk_table": null,
               "fk_column": null
+            },
+            {
+              "name": "date",
+              "column_type": "date",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
             }
-          }
+          ]
+        },
+        "product": {
+          "name": "product",
+          "unique_constraints": [
+            {
+              "columns": [
+                "pid"
+              ],
+              "constraint_type": "PRIMARY KEY"
+            }
+          ],
+          "columns": [
+            {
+              "name": "pid",
+              "column_type": "numeric",
+              "numeric_precision": 5,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "pname",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "suffix",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": true,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            }
+          ]
         },
         "transaction": {
           "name": "transaction",
@@ -69,68 +218,8 @@
               "constraint_type": "PRIMARY KEY"
             }
           ],
-          "columns": {
-            "cid": {
-              "name": "cid",
-              "column_type": "numeric",
-              "numeric_precision": 5,
-              "numeric_scale": 0,
-              "is_nullable": false,
-              "fk_schema": "miedema",
-              "fk_table": "customer",
-              "fk_column": "cid"
-            },
-            "sid": {
-              "name": "sid",
-              "column_type": "numeric",
-              "numeric_precision": 5,
-              "numeric_scale": 0,
-              "is_nullable": false,
-              "fk_schema": "miedema",
-              "fk_table": "store",
-              "fk_column": "sid"
-            },
-            "pid": {
-              "name": "pid",
-              "column_type": "numeric",
-              "numeric_precision": 5,
-              "numeric_scale": 0,
-              "is_nullable": false,
-              "fk_schema": "miedema",
-              "fk_table": "product",
-              "fk_column": "pid"
-            },
-            "date": {
-              "name": "date",
-              "column_type": "date",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "quantity": {
-              "name": "quantity",
-              "column_type": "numeric",
-              "numeric_precision": 10,
-              "numeric_scale": 0,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "price": {
-              "name": "price",
-              "column_type": "numeric",
-              "numeric_precision": 10,
-              "numeric_scale": 2,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "tid": {
+          "columns": [
+            {
               "name": "tid",
               "column_type": "numeric",
               "numeric_precision": 5,
@@ -139,43 +228,38 @@
               "fk_schema": null,
               "fk_table": null,
               "fk_column": null
-            }
-          }
-        },
-        "inventory": {
-          "name": "inventory",
-          "unique_constraints": [
+            },
             {
-              "columns": [
-                "date",
-                "pid",
-                "sid"
-              ],
-              "constraint_type": "PRIMARY KEY"
-            }
-          ],
-          "columns": {
-            "sid": {
+              "name": "cid",
+              "column_type": "numeric",
+              "numeric_precision": 5,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": "sql_error_categorizer_1760019578832753026",
+              "fk_table": "customer",
+              "fk_column": "cid"
+            },
+            {
               "name": "sid",
               "column_type": "numeric",
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "miedema",
+              "fk_schema": "sql_error_categorizer_1760019578832753026",
               "fk_table": "store",
               "fk_column": "sid"
             },
-            "pid": {
+            {
               "name": "pid",
               "column_type": "numeric",
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "miedema",
+              "fk_schema": "sql_error_categorizer_1760019578832753026",
               "fk_table": "product",
               "fk_column": "pid"
             },
-            "date": {
+            {
               "name": "date",
               "column_type": "date",
               "numeric_precision": null,
@@ -185,7 +269,7 @@
               "fk_table": null,
               "fk_column": null
             },
-            "quantity": {
+            {
               "name": "quantity",
               "column_type": "numeric",
               "numeric_precision": 10,
@@ -195,7 +279,72 @@
               "fk_table": null,
               "fk_column": null
             },
-            "unit_price": {
+            {
+              "name": "price",
+              "column_type": "numeric",
+              "numeric_precision": 10,
+              "numeric_scale": 2,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            }
+          ]
+        },
+        "inventory": {
+          "name": "inventory",
+          "unique_constraints": [
+            {
+              "columns": [
+                "sid",
+                "pid",
+                "date"
+              ],
+              "constraint_type": "PRIMARY KEY"
+            }
+          ],
+          "columns": [
+            {
+              "name": "sid",
+              "column_type": "numeric",
+              "numeric_precision": 5,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": "sql_error_categorizer_1760019578832753026",
+              "fk_table": "store",
+              "fk_column": "sid"
+            },
+            {
+              "name": "pid",
+              "column_type": "numeric",
+              "numeric_precision": 5,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": "sql_error_categorizer_1760019578832753026",
+              "fk_table": "product",
+              "fk_column": "pid"
+            },
+            {
+              "name": "date",
+              "column_type": "date",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "quantity",
+              "column_type": "numeric",
+              "numeric_precision": 10,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
               "name": "unit_price",
               "column_type": "numeric",
               "numeric_precision": 10,
@@ -205,156 +354,7 @@
               "fk_table": null,
               "fk_column": null
             }
-          }
-        },
-        "store": {
-          "name": "store",
-          "unique_constraints": [
-            {
-              "columns": [
-                "sid"
-              ],
-              "constraint_type": "PRIMARY KEY"
-            }
-          ],
-          "columns": {
-            "sid": {
-              "name": "sid",
-              "column_type": "numeric",
-              "numeric_precision": 5,
-              "numeric_scale": 0,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "sname": {
-              "name": "sname",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "street": {
-              "name": "street",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "city": {
-              "name": "city",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            }
-          }
-        },
-        "customer": {
-          "name": "customer",
-          "unique_constraints": [
-            {
-              "columns": [
-                "cid"
-              ],
-              "constraint_type": "PRIMARY KEY"
-            }
-          ],
-          "columns": {
-            "cid": {
-              "name": "cid",
-              "column_type": "numeric",
-              "numeric_precision": 5,
-              "numeric_scale": 0,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "cname": {
-              "name": "cname",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "city": {
-              "name": "city",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "street": {
-              "name": "street",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            }
-          }
-        },
-        "product": {
-          "name": "product",
-          "unique_constraints": [
-            {
-              "columns": [
-                "pid"
-              ],
-              "constraint_type": "PRIMARY KEY"
-            }
-          ],
-          "columns": {
-            "pid": {
-              "name": "pid",
-              "column_type": "numeric",
-              "numeric_precision": 5,
-              "numeric_scale": 0,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "suffix": {
-              "name": "suffix",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": true,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            "pname": {
-              "name": "pname",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            }
-          }
+          ]
         }
       }
     }
