@@ -48,6 +48,6 @@ download: uninstall
 
 clean:
 	find . -type d -name '__pycache__' -print0 | xargs -0 rm -r || true
-	rm -rf dist docs/_build
+	rm -rf dist docs/_build .pytest_cache
 
 ########## Makefile end ##########
