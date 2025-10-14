@@ -128,7 +128,7 @@
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1760019578832753026",
+              "fk_schema": "miedema",
               "fk_table": "customer",
               "fk_column": "cid"
             },
@@ -138,7 +138,7 @@
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1760019578832753026",
+              "fk_schema": "miedema",
               "fk_table": "product",
               "fk_column": "pid"
             },
@@ -235,7 +235,7 @@
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1760019578832753026",
+              "fk_schema": "miedema",
               "fk_table": "customer",
               "fk_column": "cid"
             },
@@ -245,7 +245,7 @@
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1760019578832753026",
+              "fk_schema": "miedema",
               "fk_table": "store",
               "fk_column": "sid"
             },
@@ -255,7 +255,7 @@
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1760019578832753026",
+              "fk_schema": "miedema",
               "fk_table": "product",
               "fk_column": "pid"
             },
@@ -310,7 +310,7 @@
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1760019578832753026",
+              "fk_schema": "miedema",
               "fk_table": "store",
               "fk_column": "sid"
             },
@@ -320,7 +320,7 @@
               "numeric_precision": 5,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1760019578832753026",
+              "fk_schema": "miedema",
               "fk_table": "product",
               "fk_column": "pid"
             },
