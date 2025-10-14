@@ -12,7 +12,7 @@ def run_test(query: str, *,
     ) -> list[DetectedError]:
     
     if catalog_filename:
-        catalog = load_catalog(f'catalogs/{catalog_filename}')
+        catalog = load_catalog(f'tests/datasets/{catalog_filename}')
     else:
         catalog = Catalog()
 
