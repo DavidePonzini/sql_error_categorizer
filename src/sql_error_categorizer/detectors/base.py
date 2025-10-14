@@ -24,7 +24,6 @@ class BaseDetector(ABC):
     def __init__(self, *,
                  query: TokenizedSQL,
                  catalog: Catalog,
-                 search_path: str = '',
                  query_map: QueryMap,
                  subquery_map: SubqueryMap,
                  cte_map: CTEMap,
@@ -34,7 +33,6 @@ class BaseDetector(ABC):
         ):        
         self.query = query
         self.catalog = catalog
-        self.search_path = search_path
         self.query_map = query_map
         self.subquery_map = subquery_map
         self.cte_map = cte_map

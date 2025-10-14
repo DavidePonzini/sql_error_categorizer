@@ -1,20 +1,22 @@
 import difflib
 import re
 import sqlparse
+from sqlglot import exp
 from typing import Any, Callable
+from copy import deepcopy
 
 from .base import BaseDetector, DetectedError
 from ..tokenizer import TokenizedSQL
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
 from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
+from .. import util
 
 
 class SyntaxErrorDetector(BaseDetector):
     def __init__(self, *,
                  query: TokenizedSQL,
                  catalog: Catalog,
-                 search_path: str,
                  query_map: QueryMap,
                  subquery_map: SubqueryMap,
                  cte_map: CTEMap,
@@ -25,7 +27,6 @@ class SyntaxErrorDetector(BaseDetector):
         super().__init__(
             query=query,
             catalog=catalog,
-            search_path=search_path,
             query_map=query_map,
             subquery_map=subquery_map,
             cte_map=cte_map,
@@ -40,7 +41,8 @@ class SyntaxErrorDetector(BaseDetector):
 
         # First, detect unexisting objects (before misspellings, to avoid false positives)
         unexisting_checks = [
-            self.syn_1_syn_2_undefined_tables_columns_schemas_ambiguous_columns,
+            self.syn_2_undefined_tables,
+            self.syn_1_syn_2_undefined_columns_ambiguous_columns,
             self.syn_2_undefined_functions,
             self.syn_2_undefined_functions_parameters,
         ]
@@ -50,9 +52,10 @@ class SyntaxErrorDetector(BaseDetector):
 
         # Second, detect object misspellings and missing quotes and apply corrections for improved subsequent checks
         misspelling_checks = [
-            self.syn_2_misspellings,
+            self.syn_2_misspellings_schemas_tables,
+            self.syn_2_misspellings_columns,
             # self.syn_2_synonyms,      # TODO: implement
-            # self.syn_2_omitted_quotes,
+            self.syn_2_omitted_quotes,
         ]
 
         # Apply corrections: replace misspelled strings in query and retokenize
@@ -65,17 +68,17 @@ class SyntaxErrorDetector(BaseDetector):
                     pattern,
                     error.data[1],
                     corrected_sql,
-                    flags=re.IGNORECASE
+                    # flags=re.IGNORECASE
                 )
 
-        # Use the corrected query from here on (across all detectors)
-        if corrected_sql != self.query.sql:
-            self.update_query(corrected_sql)
+            # Use the corrected query from here on (across all detectors)
+            if corrected_sql != self.query.sql:
+                self.update_query(corrected_sql)
             
         # Proceed with all other checks
         checks = [
             # self.syn_3_data_type_mismatch,    # TODO: refactor
-            # self.syn_4_illegal_aggregate_function_placement_using_aggregate_function_outside_select_or_having,    # TODO: refactor
+            self.syn_4_aggregate_function_outside_select_or_having,
             # self.syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested,  # TODO: refactor
             # self.syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column, # TODO: refactor
             self.syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by,   # TODO: refactor
@@ -97,38 +100,6 @@ class SyntaxErrorDetector(BaseDetector):
         return results
 
     # region Utils
-    def _get_referenceable_tables(self) -> set[str]:
-        '''
-            Get table names available for the current query. Includes all tables in the current schema, CTEs, and table aliases
-        ''' 
-        tables = self.catalog.get_schema(self.search_path).tables
-        cte_tables = self.cte_catalog.tables
-        table_aliases = self.query_map.alias_mapping.keys()
-
-        return {self._normalize(table) for table in tables.union(cte_tables).union(table_aliases)}
-
-        # db_tables = self.catalog.get('tables', [])
-        # db_tables.extend(self.cte_catalog.keys())
-        # # Set them all to lowercase for case-insensitive comparison.
-        # db_tables = {table.lower() for table in db_tables if isinstance(table, str)}
-        # return db_tables
-    
-    def _get_referenced_tables(self) -> set[str]:
-        '''
-            Get all table references from the query map.
-        '''
-        result = set()
-        
-        # FROM
-        from_value = self.query_map.from_value
-        if from_value:
-            result.add(self._normalize(from_value))
-        
-        # JOINs
-        for joined_table in self.query_map.join_value:
-            result.add(self._normalize(joined_table))
-
-        return result
     
     @staticmethod
     def _are_types_compatible(type1: str, type2: str) -> bool:
@@ -160,108 +131,107 @@ class SyntaxErrorDetector(BaseDetector):
         return []
     # endregion
 
-    # region SYN-2
-    def syn_1_syn_2_undefined_tables_columns_schemas_ambiguous_columns(self) -> list[DetectedError]:
+    def syn_2_undefined_tables(self) -> list[DetectedError]:
         '''
-        Checks for undefined tables, undefined columns, ambiguous columns, and invalid schemas.
+        Checks for undefined tables in the FROM clause
         '''
-        
+
+        return self._syn_2_undefined_tables_rec(self.query)
+
+    @staticmethod
+    def _syn_2_undefined_tables_rec(query: TokenizedSQL) -> list[DetectedError]:
         results: list[DetectedError] = []
-        
-        # Get tables
-        table_identifiers = [identifier[0] for identifier in self.query.identifiers if identifier[1] == 'FROM']
-        tables: list[tuple[str | None, str]] = []   # (schema_name, table_name)
-        for t in table_identifiers:
-            schema = t.get_parent_name()
-            if schema is not None:
-                schema = self._normalize(schema)
 
-            tables.append((schema, self._normalize(t.get_real_name())))
+        for cte in query.ctes:
+            results.extend(SyntaxErrorDetector._syn_2_undefined_tables_rec(cte[1]))
 
-        # Check for undefined tables in FROM clause
-        for schema_name, table_name in tables:
-            if schema_name is not None:
-                # Qualified table (schema.table)
-                if schema_name not in self.catalog.schemas:
-                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_INVALID_SCHEMA_NAME, (schema_name,)))
+        # run only on main query, CTEs are processed recursively
+        query = query.main_query
+
+        if query.ast is None:
+            return []
+
+        for table in query.ast.find_all(exp.Table):
+            table_name = util.normalize_ast_table_real_name(table)
+            schema_name = util.normalize_ast_schema_name(table)
+
+            if schema_name:
+                # Fully qualified table (schema.table)
+                if not query.catalog.has_schema(schema_name):
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_INVALID_SCHEMA_NAME, (table.sql(),)))
                     continue
 
-                # Check if table exists in the specified schema
-                if table_name not in self.catalog.get_schema(schema_name).tables:
-                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (f'{schema_name}.{table_name}',)))
-
+                if not query.catalog.has_table(schema_name, table_name):
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (table.sql(),)))
+                    continue
             else:
                 # Unqualified table (table)
-                # Check in current schema and CTEs
-                cte_tables = self.cte_catalog.tables
-                current_schema_tables = self.catalog.get_schema(self.search_path).tables
-                if table_name not in cte_tables and table_name not in current_schema_tables:
-                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (f'{table_name}',)))
-
-        # Get columns
-        # Ignore FROM (it contains tables), CTE names (they contain the CTE definition), ORDER BY (it can contain aliases)
-        column_identifiers = [identifier[0] for identifier in self.query.identifiers if identifier[1] not in ('FROM', 'WITH', 'ORDER BY')]
-        columns: list[tuple[str | None, str, str | None]] = []    # (table_name, column_name, alias)
-        for c in column_identifiers:
-            table_name = c.get_parent_name()
-            if table_name is not None:
-                table_name = self._normalize(table_name)
-    
-            alias = c.get_alias()
-            if alias is not None:
-                alias = self._normalize(alias)
-
-            columns.append((table_name, self._normalize(c.get_real_name()), alias))
-
-        # Check for undefined columns
-        available_tables = self._get_referenceable_tables()
-
-        for table_name, column_name, alias in columns:
-            if table_name is not None:
-                # Qualified column (table.column)
-                if table_name not in available_tables:
-                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (f'{table_name}.{column_name}',)))
-                    continue
-
                 # Check if table is a CTE
-                if table_name in self.cte_catalog.tables:
-                    if column_name not in self.cte_catalog.get_columns(table_name):
-                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, (f'{table_name}.{column_name}',)))
+                if query.catalog.has_table('', table_name):
                     continue
 
-                # table is not a CTE, so it must be a regular table
-                table_columns = self.catalog.get_table(self.search_path, table_name).columns
-                if column_name not in table_columns:
-                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, (f'{table_name}.{column_name}',)))
+                # Check if table is in the current schema
+                if query.catalog.has_table(query.search_path, table_name):
                     continue
 
-            # Unqualified column (column)
-            possible_matches = []
-            
-            # Check tables included in the FROM clause
-            for table in self._get_referenced_tables():
-                if table in self.cte_catalog.tables:
-                    # CTE table
-                    if column_name in self.cte_catalog.get_columns(table):
-                        possible_matches.append(table)
-                        continue
-
-                # Regular table
-                table_columns = self.catalog.get_table(self.search_path, table).columns
-                if column_name in table_columns:
-                    possible_matches.append(table)
-                    continue 
-
-            if len(possible_matches) == 0:
-                # No matches found, column does not exist in any referenced table
-                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, (column_name,)))
-            elif len(possible_matches) > 1:
-                # More than one match found, we cannot determine which table the column belongs to
-                results.append(DetectedError(SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, (column_name, possible_matches)))
+                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (table.sql(),)))
 
         return results
 
-    # TODO: refactor
+    def syn_1_syn_2_undefined_columns_ambiguous_columns(self) -> list[DetectedError]:
+        '''
+        Checks for undefined and ambiguous columns.
+        '''
+
+        return self._syn_1_syn_2_undefined_columns_ambiguous_columns_rec(self.query)
+
+    
+    @staticmethod
+    def _syn_1_syn_2_undefined_columns_ambiguous_columns_rec(query: TokenizedSQL) -> list[DetectedError]:
+        results: list[DetectedError] = []
+
+        for cte in query.ctes:
+            results.extend(SyntaxErrorDetector._syn_2_undefined_tables_rec(cte[1]))
+
+        # run only on main query, CTEs are processed recursively
+        query = query.main_query
+
+        if query.ast is None:
+            return []
+
+        for column in query.ast.find_all(exp.Column):
+            column_name = util.normalize_ast_column_name(column)
+            table_name = util.normalize_ast_column_table(column)
+
+            possible_matches = []
+
+            if table_name:
+                # Qualified column (table.column)
+                for table in query.referenced_tables:
+                    if table.name != table_name:
+                        continue
+
+                    for possible_match in table.columns:
+                        if possible_match.name == column_name:
+                            possible_matches.append(f'{table_name}.{column_name}')
+            else:
+                # Unqualified column (column)
+                for table in query.referenced_tables:
+                    for possible_match in table.columns:
+                        if possible_match.name == column_name:
+                            possible_matches.append(f'{table.name}.{column_name}')
+
+            if len(possible_matches) == 0:
+                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, (column.sql(),)))
+            elif len(possible_matches) > 1:
+                results.append(DetectedError(SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, (column.sql(), possible_matches)))
+
+        return results
+
+
+
+    # region SYN-2
+    # TODO: refactor, needs AST
     def syn_2_omitted_quotes(self) -> list[DetectedError]:
         '''
         Checks for potential omitting of quotes around character data in WHERE/HAVING clauses.
@@ -271,6 +241,13 @@ class SyntaxErrorDetector(BaseDetector):
         '''
         results: list[DetectedError] = []
 
+        comparisons = self.query.comparisons
+
+
+        # for comparison in comparisons:
+
+
+        return results
 
         # # 3. Build sets of ALL known identifiers for the entire query (main + subqueries + CTEs)
         # valid_source_identifiers = set()
@@ -344,6 +321,12 @@ class SyntaxErrorDetector(BaseDetector):
                 continue
 
             clean_val = val
+
+
+            # if string OP notcol -> error
+            # if date OP notcol2 -> error
+            # if extract(notstring FROM ...) -> error
+            # like notstring -> error
             
             # is this the correct approach? col OP notColumn
             # TODO: literal or string.single/string.symbol in RHS of WHERE/HAVING
@@ -362,10 +345,9 @@ class SyntaxErrorDetector(BaseDetector):
 
         # standard_functions = {
         known_aggregate_functions = {'SUM', 'AVG', 'COUNT', 'MIN', 'MAX', 'IN', 'EXISTS', 'ANY', 'ALL', 'COALESCE', 'NULLIF', 'CAST', 'CONVERT'}
-        user_defined_functions = self.catalog.functions
+        user_defined_functions = set() # TODO: self.catalog.functions
 
         all_functions = known_aggregate_functions.union(user_defined_functions)
-
 
         for func, clause in self.query.functions:
             func_name = func.get_name()
@@ -389,93 +371,119 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-    def syn_2_misspellings(self) -> list[DetectedError]:
+    def syn_2_misspellings_schemas_tables(self) -> list[DetectedError]:
+        '''
+        Check for misspellings in table names.
+        '''
+
+        return self._syn_2_misspellings_schemas_tables_rec(self.query)
+
+    @staticmethod
+    def _syn_2_misspellings_schemas_tables_rec(query: TokenizedSQL) -> list[DetectedError]:
+        results: list[DetectedError] = []
+
+        for cte in query.ctes:
+            results.extend(SyntaxErrorDetector._syn_2_misspellings_schemas_tables_rec(cte[1]))
+
+        # run only on main query, CTEs are processed recursively
+        query = query.main_query
+
+        if query.ast is None:
+            return []
+
+        for table in query.ast.find_all(exp.Table):
+            table = deepcopy(table)  # avoid modifying the original AST until we are sure we want to apply the correction
+            table_str = table.sql()
+            table_name = util.normalize_ast_table_real_name(table)
+            schema_name = util.normalize_ast_schema_name(table)
+
+            if schema_name:
+                # Fully qualified table (schema.table)
+                if query.catalog.has_table(schema_name, table_name):
+                    continue
+
+                # check "schema.table" for more accurate matches in edge cases (i.e. can't determine if the misspelled part is schema or table)
+                available_tables = {f'{s}.{t}' for s in query.catalog.schema_names for t in query.catalog[s].table_names}
+                match = difflib.get_close_matches(f'{schema_name}.{table_name}', available_tables, n=1, cutoff=0.6)
+                if match:
+                    s, t = match[0].split('.')
+
+                    table.set('db', exp.TableAlias(this=exp.to_identifier(s, quoted=True)))
+                    table.set('this', exp.to_identifier(t, quoted=True))
+                    
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
+                continue
+            
+            else:
+                # Unqualified table (table)
+                # Check if table is a CTE
+                if query.catalog.has_table('', table_name):
+                    continue
+
+                # Check if table is in the current schema
+                if query.catalog.has_table(query.search_path, table_name):
+                    continue
+
+                available_tables = {t for s in query.catalog.schema_names for t in query.catalog[s].table_names}
+                match = difflib.get_close_matches(table_name, available_tables, n=1, cutoff=0.6)
+                if match:
+                    table.set('this', exp.to_identifier(match[0], quoted=True))
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
+
+        return results
+            
+
+    def syn_2_misspellings_columns(self) -> list[DetectedError]:
         '''
             Check for misspellings in table and column names.
             Performs two passes: first try to match objects to their own type, then try to match to any type.
         '''
+        return self._syn_2_misspellings_columns_rec(self.query)
+
+    @staticmethod
+    def _syn_2_misspellings_columns_rec(query: TokenizedSQL) -> list[DetectedError]:
+        if query.ast is None:
+            return []
+
         results: list[DetectedError] = []
 
-        available_schemas = {self._normalize(schema) for schema in self.catalog.schemas}
-        available_tables = self._get_referenceable_tables()
-        available_columns: set[str] = set()
+        for column in query.ast.find_all(exp.Column):
+            column = deepcopy(column)  # avoid modifying the original AST until we are sure we want to apply the correction
+            column_str = column.sql()
+            column_name = util.normalize_ast_column_name(column)
+            table_name = util.normalize_ast_column_table(column)
 
-        for table in self._get_referenced_tables():
-            if table in self.cte_catalog.tables:
-                # add columns from CTE
-                available_columns.update(self._normalize(col) for col in self.cte_catalog.get_columns(table))
+            found = False
+
+            for table in query.referenced_tables:
+                if table_name and table.name != table_name:
+                    # Qualified column (table.column)
+                    # check if column exists only in the specified table
+                    continue
+                if table.has_column(column_name):
+                    found = True
+                    break
+
+            if found:
                 continue
-            if table in self.catalog.get_schema(self.search_path).tables:
-                # add columns from regular table
-                available_columns.update(self._normalize(col) for col in self.catalog.get_table(self.search_path, table).columns)
-        
-        print(f'Available columns: {available_columns}')
-        identifiers = self.query.identifiers
-        
-        # start from tables detected using the custom parser
-        # this should be redundant, but in case sqlparse can't properly parse the query we want to have this as a fallback
-        schemas = set()
-        tables = self._get_referenced_tables()
-        columns = set()
 
-        for ident, clause in identifiers:
-            name = self._normalize(ident.get_real_name())
-
-            if clause == 'FROM':
-                tables.add(name)
+            if table_name:
+                # Qualified column (table.column)
+                available_columns = {f'{t.name}.{c.name}' for t in query.referenced_tables for c in t.columns}
             else:
-                columns.add(name)
+                # Unqualified column (column)
+                available_columns = {c.name for t in query.referenced_tables for c in t.columns}
 
-            parent_name = ident.get_parent_name()
-            if parent_name is not None:
-                parent_name = self._normalize(parent_name)
-                if clause == 'FROM':
-                    schemas.add(parent_name)
+            match = difflib.get_close_matches(column_name if not table_name else f'{table_name}.{column_name}', available_columns, n=1, cutoff=0.6)
+            if match:
+                if table_name:
+                    matched_table, matched_column = match[0].split('.')
+                    column.set('table', exp.to_identifier(matched_table, quoted=True))
+                    column.set('this', exp.to_identifier(matched_column, quoted=True))
                 else:
-                    tables.add(parent_name)
+                    column.set('this', exp.to_identifier(match[0], quoted=True))
                 
-
-        # First pass: try to match objects to their own type
-        matches = set()
-
-        # Match schemas to schemas
-        for schema in schemas:
-            if schema in available_schemas:
-                matches.add(schema)
-                continue
-            match = difflib.get_close_matches(schema, available_schemas, n=1, cutoff=0.6)
-            if match:
-                matches.add(schema)
-                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (schema, match[0])))
-
-        # Match tables to tables
-        for table in tables:
-            if table in available_tables:
-                matches.add(table)
-                continue
-            match = difflib.get_close_matches(table, available_tables, n=1, cutoff=0.6)
-            if match:
-                matches.add(table)
-                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table, match[0])))
-        
-        # Match columns to columns
-        for column in columns:
-            if column in available_columns:
-                matches.add(column)
-                continue
-            match = difflib.get_close_matches(column, available_columns, n=1, cutoff=0.6)
-            if match:
-                matches.add(column)
-                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (column, match[0])))
-
-        # Second pass: try to match remaining values to any type
-        unmatched = schemas.union(tables).union(columns) - matches
-        all_possible_values = available_schemas.union(available_tables).union(available_columns)
-
-        for string in unmatched:
-            match = difflib.get_close_matches(string, all_possible_values, n=1, cutoff=0.8)
-            if match:
-                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (string, match[0])))
+                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (column_str, column.sql())))
 
         return results
     
@@ -489,7 +497,7 @@ class SyntaxErrorDetector(BaseDetector):
     def syn_3_data_type_mismatch_failure_to_specify_column_name_twice(self) -> list[DetectedError]:
         return []
     
-    # TODO: refactor
+    # TODO: refactor, needs AST
     def syn_3_data_type_mismatch(self) -> list[DetectedError]:
         '''
         Checks for data type mismatches in comparisons within the query.
@@ -574,114 +582,183 @@ class SyntaxErrorDetector(BaseDetector):
     # endregion
 
     # region SYN-4
-    # TODO: refactor
-    def syn_4_illegal_aggregate_function_placement_using_aggregate_function_outside_select_or_having(self) -> list[DetectedError]:
+    def syn_4_aggregate_function_outside_select_or_having(self) -> list[DetectedError]:
         '''
         Flags use of aggregate functions (SUM, AVG, COUNT, MIN, MAX) outside SELECT or HAVING clauses,
         respecting subquery scopes.
         '''
-        results = []
-        aggregate_functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
-        allowed_clauses = {"SELECT", "HAVING"}
 
-        # A recursive helper is needed to handle nested scopes correctly.
-        def find_misplaced_aggregates(token_list, current_clause=""):
-            '''
-            Recursively checks a list of tokens, tracking the current clause context.
-            The context is reset upon entering a subquery.
-            '''
-            local_clause = current_clause
-            
-            # Ensure we are working with a list of tokens
-            tokens_to_process = getattr(token_list, 'tokens', [])
+        results: list[DetectedError] = []
 
-            for token in tokens_to_process:
-                # 1. If we see a keyword, it defines the clause for subsequent tokens at this level.
-                if token.ttype in sqlparse.tokens.Keyword:
-                    upper = token.value.upper()
-                    if upper in {"SELECT", "WHERE", "JOIN", "ON", "GROUP", "ORDER", "HAVING"}:
-                        local_clause = upper
-
-                # 2. If we encounter a subquery (a parenthesized SELECT), we recurse with a RESET context.
-                if isinstance(token, sqlparse.sql.Parenthesis):
-                    # Check if the parenthesis group contains a SELECT statement.
-                    inner_tokens = [t for t in token.tokens if not t.is_whitespace]
-                    if inner_tokens and inner_tokens[0].ttype is sqlparse.tokens.Keyword.DML and inner_tokens[0].value.upper() == 'SELECT':
-                        # This is a subquery. Recurse into it with a fresh clause context.
-                        find_misplaced_aggregates(token, current_clause="")
-                        continue  # Skip further processing of this subquery at the current level
-
-                # 3. If we find an aggregate function, check it against the current level's clause.
-                if isinstance(token, sqlparse.sql.Function):
-                    func_name = token.get_name().upper()
-                    if func_name in aggregate_functions:
-                        if local_clause not in allowed_clauses:
-                            results.append((
-                                SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_USING_AGGREGATE_FUNCTION_OUTSIDE_SELECT_OR_HAVING,
-                                f"Aggregate function '{func_name}' used in {local_clause or 'unknown'} clause"
-                            ))
-
-                # 4. If it's any other kind of group, recurse into it, passing down the current clause context.
-                if token.is_group:
-                    find_misplaced_aggregates(token, local_clause)
-
-        if self.parsed_qry:
-            find_misplaced_aggregates(self.parsed_qry)
-        
-        return list(set(results))
-    
-    # TODO: refactor
-    def syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested(self) -> list[DetectedError]:
-        '''Flags cases where aggregate functions are nested, which is not allowed in SQL.'''
-        results = []
-        aggregate_functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
-
-        if not self.parsed_qry:
-            return results
-
-        def contains_nested_agg(token_list, in_aggregate=False):
-            '''
-            Recursively check for nested aggregate functions, only flagging true nesting (e.g., SUM(AVG(x))).
-            '''
-            aggregate_functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
-
-            for token in token_list.tokens if hasattr(token_list, 'tokens') else []:
-
-                # Detect aggregate function by structure: Name followed by Parenthesis
-                if token.is_group and isinstance(token, sqlparse.sql.Function):
-                    func_name_token = token.get_name()
-                    if func_name_token and func_name_token.upper() in aggregate_functions:
-                        if in_aggregate:
-                            return (
-                                SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED,
-                                f"Nested aggregate function found: {func_name_token.upper()}"
-                            )
-                        # Dive into the content of the function with in_aggregate=True
-                        for subtoken in token.tokens:
-                            if subtoken.is_group:
-                                nested = contains_nested_agg(subtoken, in_aggregate=True)
-                                if nested:
-                                    return nested
-                        continue  # Don't scan this token again outside
-
-                # For any other group, scan recursively
-                if token.is_group:
-                    nested = contains_nested_agg(token, in_aggregate)
-                    if nested:
-                        return nested
-
-            return None
-
-
-
-        # Walk the whole parsed query
-        for token in self.parsed_qry.tokens:
-            if token.is_group:
-                nested_result = contains_nested_agg(token)
-                if nested_result:
-                    results.append(nested_result)
+        functions = self.query.functions
+        for function, clause in functions:
+            function_name = function.get_name()
+            if function_name and function_name.upper() in {'SUM', 'AVG', 'COUNT', 'MIN', 'MAX'}:
+                if clause not in {'SELECT', 'HAVING'}:
+                    results.append(DetectedError(SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_USING_AGGREGATE_FUNCTION_OUTSIDE_SELECT_OR_HAVING, (function_name, clause)))
 
         return results
+    
+    # TODO: refactor
+    # TODO: check
+    def syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested(self) -> list[DetectedError]:
+        '''
+        Flags cases where aggregate functions are nested within the *same query scope*,
+        which mainstream SQL dialects do not allow (e.g., SUM(MAX(x))).
+        Aggregates inside a subquery are NOT flagged.
+        '''
+        results: list[DetectedError] = []
+
+        # Consider making this configurable / DB-specific
+        AGG_FUNCS = {
+            'SUM','AVG','COUNT','MIN','MAX',
+            'STRING_AGG','ARRAY_AGG','BOOL_AND','BOOL_OR',
+            'BIT_AND','BIT_OR','EVERY',
+            'VARIANCE','VAR_POP','VAR_SAMP','STDDEV','STDDEV_POP','STDDEV_SAMP'
+        }
+
+        def _is_aggregate_function(name: str | None) -> bool:
+            if not name:
+                return False
+            return name.upper() in AGG_FUNCS
+
+        def _is_select_tokenlist(tl) -> bool:
+            # Heuristic: this TokenList contains a SELECT statement (subquery)
+            try:
+                from sqlparse import sql as sqlmod
+                if isinstance(tl, sqlmod.Statement):
+                    return True
+                text = tl.value.upper()
+                # Cheap but effective heuristic for subqueries in parentheses
+                return 'SELECT' in text and any(k in text for k in (' FROM ', '\nFROM '))
+            except Exception:
+                return False
+
+        def _contains_nested_agg(tokenlist, inside_agg_stack: list[str]) -> list[tuple[str, str]]:
+            '''
+            Walks tokenlist recursively. If we are already inside an aggregate (stack not empty)
+            and we encounter another aggregate function in the same scope (i.e., not under a subquery),
+            we record (outer_agg, inner_agg).
+            '''
+            pairs: list[tuple[str, str]] = []
+            from sqlparse import sql as sqlmod
+
+            # If we hit a subquery, stop recursion *within that branch* (different scope)
+            if _is_select_tokenlist(tokenlist):
+                return pairs
+
+            for tok in getattr(tokenlist, 'tokens', []):
+                # Recurse into groups while respecting subquery boundaries
+                if getattr(tok, 'is_group', False):
+                    # If this group *is* a subquery, skip into it entirely
+                    if _is_select_tokenlist(tok):
+                        continue
+
+                    # If this group is a function, handle specially
+                    if isinstance(tok, sqlmod.Function):
+                        fname = tok.get_name()
+                        if _is_aggregate_function(fname):
+                            # If already inside an aggregate, this is nested (same scope)
+                            if inside_agg_stack:
+                                pairs.append((inside_agg_stack[-1], fname))
+                            # Recurse deeper, now we are inside this aggregate too
+                            pairs.extend(_contains_nested_agg(tok, inside_agg_stack + [fname]))
+                            continue
+
+                    # Generic descent into other grouped nodes (COALESCE(...), CASE, arithmetic, etc.)
+                    pairs.extend(_contains_nested_agg(tok, inside_agg_stack))
+                # Non-group tokens: nothing to do
+            return pairs
+
+        from sqlparse import sql as sqlmod
+
+        # Walk each function found by your precomputed list, but do a full scan from there
+        for function, clause in self.query.functions:
+            fname = function.get_name()
+            if not _is_aggregate_function(fname):
+                continue
+
+            nested = _contains_nested_agg(function, [fname])
+            for outer_name, inner_name in nested:
+                # Build a compact display like SUM(MAX(...))
+                results.append(DetectedError(
+                    SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED,
+                    (f'{outer_name}({inner_name}(...))',)
+                ))
+
+        return results
+
+
+
+    # def syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested(self) -> list[DetectedError]:
+    #     '''Flags cases where aggregate functions are nested, which is not allowed in SQL.'''
+
+    #     results: list[DetectedError] = []
+
+    #     for function, clause in self.query.functions:
+    #         function_name = function.get_name()
+    #         if function_name and function_name.upper() in {'SUM', 'AVG', 'COUNT', 'MIN', 'MAX'}:
+    #             # Check if any argument is another aggregate function
+    #             for token in function.tokens:
+    #                 if token.is_group:
+    #                     for subtoken in token.tokens:
+    #                         if subtoken.is_group and isinstance(subtoken, sqlparse.sql.Function):
+    #                             sub_func_name = subtoken.get_name()
+    #                             if sub_func_name and sub_func_name.upper() in {'SUM', 'AVG', 'COUNT', 'MIN', 'MAX'}:
+    #                                 results.append(DetectedError(
+    #                                     SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED,
+    #                                     (f"{function_name}({sub_func_name}(...))",)
+    #                                 ))
+
+    #     results = []
+    #     aggregate_functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
+
+    #     if not self.parsed_qry:
+    #         return results
+
+    #     def contains_nested_agg(token_list, in_aggregate=False):
+    #         '''
+    #         Recursively check for nested aggregate functions, only flagging true nesting (e.g., SUM(AVG(x))).
+    #         '''
+    #         aggregate_functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
+
+    #         for token in token_list.tokens if hasattr(token_list, 'tokens') else []:
+
+    #             # Detect aggregate function by structure: Name followed by Parenthesis
+    #             if token.is_group and isinstance(token, sqlparse.sql.Function):
+    #                 func_name_token = token.get_name()
+    #                 if func_name_token and func_name_token.upper() in aggregate_functions:
+    #                     if in_aggregate:
+    #                         return (
+    #                             SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED,
+    #                             f"Nested aggregate function found: {func_name_token.upper()}"
+    #                         )
+    #                     # Dive into the content of the function with in_aggregate=True
+    #                     for subtoken in token.tokens:
+    #                         if subtoken.is_group:
+    #                             nested = contains_nested_agg(subtoken, in_aggregate=True)
+    #                             if nested:
+    #                                 return nested
+    #                     continue  # Don't scan this token again outside
+
+    #             # For any other group, scan recursively
+    #             if token.is_group:
+    #                 nested = contains_nested_agg(token, in_aggregate)
+    #                 if nested:
+    #                     return nested
+
+    #         return None
+
+
+
+    #     # Walk the whole parsed query
+    #     for token in self.parsed_qry.tokens:
+    #         if token.is_group:
+    #             nested_result = contains_nested_agg(token)
+    #             if nested_result:
+    #                 results.append(nested_result)
+
+    #     return results
     # endregion
 
     # region SYN-5

@@ -62,7 +62,6 @@ class Detector:
         detector = detector_cls(
             query=self.query,
             catalog=self.catalog,
-            search_path=self.search_path,
             query_map=self.parse_result.query_map,
             subquery_map=self.parse_result.subquery_map,
             cte_map=self.parse_result.cte_map,

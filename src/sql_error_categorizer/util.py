@@ -7,7 +7,37 @@ def normalize_identifier_name(identifier: str) -> str:
     
     return identifier.lower()
 
-def normalize_table_real_name(table: exp.Table) -> str:
+def normalize_ast_column_real_name(column: exp.Column) -> str:
+    '''Returns the column real name, in lowercase if unquoted.'''
+
+    quoted = column.this.quoted
+    name = column.this.name
+
+    return name if quoted else name.lower()
+
+def normalize_ast_column_name(column: exp.Column) -> str:
+    '''Returns the column name or alias, in lowercase if unquoted.'''
+    
+    if column.args.get('alias'):
+        quoted = column.args['alias'].args.get('quoted', False)
+        name = column.alias_or_name
+
+        return name if quoted else name.lower()
+
+    return normalize_ast_column_real_name(column)
+
+def normalize_ast_column_table(column: exp.Column) -> str | None:
+    '''Returns the table name or alias for the column, in lowercase if unquoted.'''
+    
+    if column.args.get('table'):
+        quoted = column.args['table'].quoted
+        name = column.table
+
+        return name if quoted else name.lower()
+    
+    return None
+
+def normalize_ast_table_real_name(table: exp.Table) -> str:
     '''Returns the table real name, in lowercase if unquoted.'''
 
     quoted = table.this.quoted
@@ -16,7 +46,7 @@ def normalize_table_real_name(table: exp.Table) -> str:
     return name if quoted else name.lower()
 
 
-def normalize_table_name(table: exp.Table) -> str:
+def normalize_ast_table_name(table: exp.Table) -> str:
     '''Returns the table name or alias, in lowercase if unquoted.'''
     
     if table.args.get('alias'):
@@ -25,11 +55,11 @@ def normalize_table_name(table: exp.Table) -> str:
 
         return name if quoted else name.lower()
 
-    return normalize_table_real_name(table)
+    return normalize_ast_table_real_name(table)
 
 
 
-def normalize_schema_name(table: exp.Table) -> str | None:
+def normalize_ast_schema_name(table: exp.Table) -> str | None:
     '''Returns the schema name, in lowercase if unquoted.'''
     
     if table.args.get('db'):
@@ -40,7 +70,7 @@ def normalize_schema_name(table: exp.Table) -> str | None:
     
     return None
 
-def normalize_subquery_name(subquery: exp.Subquery) -> str:
+def normalize_ast_subquery_name(subquery: exp.Subquery) -> str:
     '''Returns the subquery name or alias, in lowercase if unquoted.'''
     
     if subquery.args.get('alias'):

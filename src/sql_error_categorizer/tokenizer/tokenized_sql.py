@@ -60,7 +60,7 @@ class TokenizedSQL:
         # Extract CTEs
         self.ctes: list[tuple[str, TokenizedSQL]] = []
         for cte_name, cte_sql in extractors.extract_ctes(self.ast):
-            cte = TokenizedSQL(cte_sql, catalog=self.catalog)
+            cte = TokenizedSQL(cte_sql, catalog=self.catalog, search_path=self.search_path)
 
             self.ctes.append((cte_name, cte))
 
@@ -86,7 +86,7 @@ class TokenizedSQL:
             '''Recursively adds tables from an expression to the result catalog.'''
             # Subquery: get its output columns
             if isinstance(expr, exp.Subquery):
-                table_name_out = normalize_subquery_name(expr)
+                table_name_out = normalize_ast_subquery_name(expr)
 
                 subquery_sql = expr.this.sql()
                 subquery = TokenizedSQL(subquery_sql, catalog=self.catalog, search_path=self.search_path, is_subquery=True)
@@ -97,9 +97,9 @@ class TokenizedSQL:
             # Table: look it up in the IN catalog
             elif isinstance(expr, exp.Table):
                 # schema name
-                schema_name = normalize_schema_name(expr)
-                table_name_in = normalize_table_real_name(expr)
-                table_name_out = normalize_table_name(expr)
+                schema_name = normalize_ast_schema_name(expr)
+                table_name_in = normalize_ast_table_real_name(expr)
+                table_name_out = normalize_ast_table_name(expr)
 
                 if schema_name is None:
                     # If no schema is specified, try to find the table in the CTEs
@@ -154,7 +154,7 @@ class TokenizedSQL:
         if self._main_query is None:
             if self.ast:
                 main_sql = extractors.remove_ctes(self.ast)
-                self._main_query = TokenizedSQL(main_sql, catalog=self.catalog)
+                self._main_query = TokenizedSQL(main_sql, catalog=self.catalog, search_path=self.search_path)
             else:
                 self._main_query = self
         
