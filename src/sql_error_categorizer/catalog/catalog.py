@@ -172,7 +172,12 @@ class Schema:
         if not self.has_table(table_name):
             return False
         return self.__getitem__(table_name).has_column(column_name)
-    
+
+    @property
+    def table_names(self) -> set[str]:
+        '''Returns all table names in the schema.'''
+        return set(self._tables.keys())
+
     def __repr__(self, level: int = 0) -> str:
         indent = '  ' * level
         tables = '\n'.join([table.__repr__(level + 1) for table in self._tables.values()])
@@ -247,9 +252,18 @@ class Catalog:
                                                  fk_schema=fk_schema, fk_table=fk_table, fk_column=fk_column)
         
     @property
-    def schemas(self) -> set[str]:
+    def schema_names(self) -> set[str]:
         '''Returns all schema names in the catalog.'''
         return set(self._schemas.keys())
+
+    @property
+    def table_names(self) -> set[str]:
+        '''Returns all table names in the catalog, regardless of schema.'''
+
+        result = set()
+        for schema in self._schemas.values():
+            result.update(schema.table_names)
+        return result
 
     def copy(self) -> Self:
         '''Creates a deep copy of the catalog.'''

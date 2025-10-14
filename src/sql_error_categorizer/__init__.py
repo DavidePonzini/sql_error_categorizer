@@ -34,7 +34,7 @@ def get_errors2(query_str: str, correct_solutions: list[str] = [], dataset_str: 
 
     cat = build_catalog(dataset_str, hostname=db_host, port=db_port, user=db_user, password=db_password)
 
-    return get_errors(query_str, correct_solutions=correct_solutions, catalog=cat, search_path=cat.schemas.pop(), debug=debug)
+    return get_errors(query_str, correct_solutions=correct_solutions, catalog=cat, search_path=cat.schema_names.pop(), debug=debug)
 
 
 def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', catalog_file: str = 'tests/datasets/cat_miedema.json') -> _Detector:
@@ -47,7 +47,7 @@ def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', catalog_file:
 
     cat = load_catalog(catalog_file)
 
-    det = _Detector(query, correct_solutions=[solution], catalog=cat, search_path=cat.schemas.pop() or 'public', debug=True)
+    det = _Detector(query, correct_solutions=[solution], catalog=cat, search_path=cat.schema_names.pop() or 'public', debug=True)
     det.add_detector(SyntaxErrorDetector)
     det.add_detector(SemanticErrorDetector)
     det.add_detector(LogicalErrorDetector)
