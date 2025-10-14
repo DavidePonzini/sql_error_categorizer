@@ -161,6 +161,13 @@ class TokenizedSQL:
         return self._main_query
     
     @property
+    def distinct(self) -> bool:
+        '''Returns True if the main query has a DISTINCT clause.'''
+        if self.ast and self.ast.args.get('distinct', False):
+            return True
+        return False
+    
+    @property
     def tokens(self) -> list[tuple[sqlparse.tokens._TokenType, str]]:
         '''Returns a flattened list of tokens as (ttype, value) tuples, excluding whitespace and newlines.'''
         if not self._tokens:
