@@ -65,7 +65,9 @@ class TokenizedSQL:
             self.ctes.append((cte_name, cte))
 
             # Add CTE output columns to catalog
-            self.catalog[''][cte_name] = cte.get_output()
+            output = cte.get_output()
+            output.name = cte_name
+            self.catalog[''][cte_name] = output
 
         # Extract referenced tables
         self._referenced_tables = None
