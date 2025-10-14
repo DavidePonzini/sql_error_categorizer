@@ -284,7 +284,7 @@ class TokenizedSQL:
         return self.sql == value.sql
 
     def __repr__(self) -> str:
-        return f'TokenizedSQL("{self.sql!r}")'
+        return f'TokenizedSQL("{self.sql}")'
     
     def copy(self) -> 'TokenizedSQL':
         return deepcopy(self)
