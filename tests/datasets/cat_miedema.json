@@ -1,8 +1,8 @@
 {
   "version": 1,
   "schemas": {
-    "sql_error_categorizer_1760019578832753026": {
-      "name": "sql_error_categorizer_1760019578832753026",
+    "miedema": {
+      "name": "miedema",
       "tables": {
         "store": {
           "name": "store",
