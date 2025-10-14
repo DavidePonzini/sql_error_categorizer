@@ -38,3 +38,29 @@ def test_subquery_where():
     )
 
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function', 'SELECT'))
+
+def test_function_parameters1():
+    detected_errors = run_test(
+        query='SELECT * FROM table WHERE id = :id;',
+        detectors=[SyntaxErrorDetector]
+    )
+
+    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER, (':id',))
+
+
+def test_function_parameters2():
+    detected_errors = run_test(
+        query='SELECT * FROM table WHERE id = @id;',
+        detectors=[SyntaxErrorDetector]
+    )
+
+    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER, ('@id',))
+
+
+def test_function_parameters3():
+    detected_errors = run_test(
+        query='SELECT * FROM table WHERE id = ?;',
+        detectors=[SyntaxErrorDetector]
+    )
+
+    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER, ('?',))
