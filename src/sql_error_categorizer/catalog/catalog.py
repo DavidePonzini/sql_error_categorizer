@@ -48,7 +48,7 @@ class Column:
 
     def __repr__(self, level: int = 0) -> str:
         indent = '  ' * level
-        return f'{indent}Column(name=\'{self.name}\', type=\'{self.column_type}\', is_fk={self.is_fk})'
+        return f'{indent}Column(name=\'{self.name}\', type=\'{self.column_type}\', is_fk={self.is_fk}, is_nullable={self.is_nullable})'
 
     def to_dict(self) -> dict:
         return {
