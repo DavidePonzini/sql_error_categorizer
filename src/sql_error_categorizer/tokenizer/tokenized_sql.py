@@ -244,7 +244,10 @@ class TokenizedSQL:
         columns = self.ast.expressions if self.ast else []
         for col in columns:
             if isinstance(col, exp.Star):
-                ...
+                # Expand star to all columns from all referenced tables
+                for table in self.referenced_tables:
+                    for column in table.columns:
+                        result.add_column(name=column.name, column_type='TODO')
             elif isinstance(col, exp.Alias):
                 alias = col.args['alias']
                 quoted = alias.quoted

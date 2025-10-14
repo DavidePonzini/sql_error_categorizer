@@ -1,6 +1,7 @@
 from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error
 
 from sql_error_categorizer.tokenizer.tokenized_sql import TokenizedSQL
+from sql_error_categorizer import catalog
 
 def test_main_query_no_cte():
     query = 'SELECT cte.id, orders.amount FROM cte JOIN orders ON cte.id = orders.user_id WHERE orders.amount > 100'
@@ -48,3 +49,43 @@ def test_distinct_false():
     tokenized = TokenizedSQL(query)
 
     assert tokenized.distinct is False
+
+def test_select_star():
+
+    # setup
+    db = 'miedema'
+    catalog_db = catalog.load_json("tests/datasets/cat_miedema.json")
+    table = 'store'
+
+    query = f'SELECT * FROM {table}'
+
+    tokenized = TokenizedSQL(query=query, catalog=catalog_db, search_path=db)
+
+    assert len(tokenized.get_output().columns) == len(tokenized.catalog[db][table].columns)
+
+def test_select_multiple_stars():
+
+    # setup
+    db = 'miedema'
+    catalog_db = catalog.load_json("tests/datasets/cat_miedema.json")
+    table = 'store'
+
+    query = f'SELECT *,* FROM {table}'
+
+    tokenized = TokenizedSQL(query=query, catalog=catalog_db, search_path=db)
+
+    assert len(tokenized.get_output().columns) == len(tokenized.catalog[db][table].columns) * 2
+
+def test_select_star_on_a_cte():
+
+    # setup
+    db = 'miedema'
+    catalog_db = catalog.load_json("tests/datasets/cat_miedema.json")
+    table = 'store'
+    cte_name = 'cte_store'
+
+    query = f'WITH {cte_name} AS (SELECT sid, sname FROM {table}) SELECT sid,* FROM {cte_name}'
+
+    tokenized = TokenizedSQL(query=query, catalog=catalog_db, search_path=db)
+
+    assert len(tokenized.get_output().columns) == 3  # sid + all columns from cte_store (sid, sname)
