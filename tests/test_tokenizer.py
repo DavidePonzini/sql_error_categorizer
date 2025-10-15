@@ -1,4 +1,5 @@
 from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error
+import pytest
 
 from sql_error_categorizer.query import Query
 from sql_error_categorizer.query.set_operations import *
@@ -85,3 +86,33 @@ def test_select_star_on_a_cte():
     tokenized = Query(query, catalog=catalog_db, search_path=db)
 
     assert len(tokenized.main_query.output.columns) == 3  # sid + all columns from cte_store (sid, sname)
+
+# region set_operations
+
+@pytest.mark.skip(reason="Fix parenthesis parsing")
+def test_set_operation_order_by_limit_offset_left():
+
+    db = 'miedema'
+    catalog_db = catalog.load_json(f"tests/datasets/cat_{db}.json")
+    query = "(SELECT sid,sname FROM store WHERE city = 'Breda' ORDER BY sname LIMIT 3 OFFSET 1) EXCEPT SELECT sid, sname FROM store WHERE city = 'Amsterdam';"
+
+    tokenized = Query(query, catalog=catalog_db, search_path=db)
+
+    assert isinstance(tokenized.main_query, BinarySetOperation)
+    assert tokenized.main_query.left.limit == 3
+    assert tokenized.main_query.left.offset == 1
+    assert tokenized.main_query.left.order_by == [('sname', 'ASC')]
+
+@pytest.mark.skip(reason="Not implemented yet")
+def test_set_operation_order_by_limit_offset_right():
+
+    db = 'miedema'
+    catalog_db = catalog.load_json(f"tests/datasets/cat_{db}.json")
+    query = "SELECT sid,sname FROM store WHERE city = 'Breda' EXCEPT SELECT sid, sname FROM store WHERE city = 'Amsterdam' ORDER BY sname LIMIT 3 OFFSET 1;"
+
+    tokenized = Query(query, catalog=catalog_db, search_path=db)
+
+    assert isinstance(tokenized.main_query, BinarySetOperation)
+    assert tokenized.main_query.limit == 3
+    assert tokenized.main_query.offset == 1
+    assert tokenized.main_query.order_by == [('sname', 'ASC')]
