@@ -6,7 +6,7 @@ from typing import Any, Callable
 from copy import deepcopy
 
 from .base import BaseDetector, DetectedError
-from ..tokenizer import TokenizedSQL
+from ..query import Query
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
 from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
@@ -15,7 +15,7 @@ from .. import util
 
 class SyntaxErrorDetector(BaseDetector):
     def __init__(self, *,
-                 query: TokenizedSQL,
+                 query: Query,
                  catalog: Catalog,
                  query_map: QueryMap,
                  subquery_map: SubqueryMap,
@@ -55,7 +55,7 @@ class SyntaxErrorDetector(BaseDetector):
             self.syn_2_misspellings_schemas_tables,
             self.syn_2_misspellings_columns,
             # self.syn_2_synonyms,      # TODO: implement
-            self.syn_2_omitted_quotes,
+            # self.syn_2_omitted_quotes,
         ]
 
         # Apply corrections: replace misspelled strings in query and retokenize
@@ -139,7 +139,7 @@ class SyntaxErrorDetector(BaseDetector):
         return self._syn_2_undefined_tables_rec(self.query)
 
     @staticmethod
-    def _syn_2_undefined_tables_rec(query: TokenizedSQL) -> list[DetectedError]:
+    def _syn_2_undefined_tables_rec(query: Query) -> list[DetectedError]:
         results: list[DetectedError] = []
 
         for cte in query.ctes:
@@ -187,7 +187,7 @@ class SyntaxErrorDetector(BaseDetector):
 
     
     @staticmethod
-    def _syn_1_syn_2_undefined_columns_ambiguous_columns_rec(query: TokenizedSQL) -> list[DetectedError]:
+    def _syn_1_syn_2_undefined_columns_ambiguous_columns_rec(query: Query) -> list[DetectedError]:
         results: list[DetectedError] = []
 
         for cte in query.ctes:
@@ -379,7 +379,7 @@ class SyntaxErrorDetector(BaseDetector):
         return self._syn_2_misspellings_schemas_tables_rec(self.query)
 
     @staticmethod
-    def _syn_2_misspellings_schemas_tables_rec(query: TokenizedSQL) -> list[DetectedError]:
+    def _syn_2_misspellings_schemas_tables_rec(query: Query) -> list[DetectedError]:
         results: list[DetectedError] = []
 
         for cte in query.ctes:
@@ -441,7 +441,7 @@ class SyntaxErrorDetector(BaseDetector):
         return self._syn_2_misspellings_columns_rec(self.query)
 
     @staticmethod
-    def _syn_2_misspellings_columns_rec(query: TokenizedSQL) -> list[DetectedError]:
+    def _syn_2_misspellings_columns_rec(query: Query) -> list[DetectedError]:
         if query.ast is None:
             return []
 

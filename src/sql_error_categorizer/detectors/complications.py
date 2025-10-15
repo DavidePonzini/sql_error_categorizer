@@ -5,7 +5,7 @@ import sqlparse.keywords
 from typing import Callable
 
 from .base import BaseDetector, DetectedError
-from ..tokenizer import TokenizedSQL
+from ..query import Query
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
 from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog, get_ast
@@ -13,7 +13,7 @@ from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog, get_ast
 
 class ComplicationDetector(BaseDetector):
     def __init__(self, *,
-                 query: TokenizedSQL,
+                 query: Query,
                  catalog: Catalog,
                  query_map: QueryMap,
                  subquery_map: SubqueryMap,

@@ -1,32 +1,11 @@
 '''Extracts components from list of tokens using `sqlparse`.'''
 
-import sqlglot
-import sqlglot.errors
 from sqlglot import expressions as E
 
 import sqlparse
-from sqlparse.sql import IdentifierList, Identifier, Function
+from sqlparse.sql import Function
 
 import copy
-
-def extract_identifiers(tokens, current_clause: str = 'NONE') -> list[tuple[sqlparse.sql.Identifier, str]]:
-    result = []
-
-    for token in tokens:
-        if token.ttype is sqlparse.tokens.Keyword or token.ttype is sqlparse.tokens.DML or token.ttype is sqlparse.tokens.CTE:
-            if token.value.upper() in ('WITH', 'SELECT', 'FROM', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'LIMIT'):
-                current_clause = token.value.upper()
-            continue
-
-        if isinstance(token, IdentifierList):
-            for identifier in token.get_identifiers():
-                result.append((identifier, current_clause))
-        elif isinstance(token, Identifier):
-            result.append((token, current_clause))
-        elif token.is_group:
-            sub_identifiers = extract_identifiers(token.tokens, current_clause)
-            result.extend(sub_identifiers)
-    return result
 
 def extract_functions(tokens, current_clause: str = 'NONE') -> list[tuple[sqlparse.sql.Function, str]]:
     result: list[tuple[sqlparse.sql.Function, str]] = []
@@ -90,3 +69,11 @@ def remove_ctes(ast: E.Expression | None) -> str:
 
     ast_copy.set('with', None)
     return ast_copy.sql()
+
+def extract_subqueries(ast: E.Expression | None) -> list[E.Subquery]:
+    '''Extracts subqueries from the SQL query and returns them as a list of sqlglot Expression objects.'''
+
+    if ast is None:
+        return []
+
+    return list(ast.find_all(E.Subquery))

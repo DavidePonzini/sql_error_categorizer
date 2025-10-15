@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from ..sql_errors import SqlErrors
-from ..tokenizer import TokenizedSQL
+from ..query import Query
 from ..catalog import Catalog
 from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
 
@@ -22,7 +22,7 @@ class DetectedError:
 
 class BaseDetector(ABC):
     def __init__(self, *,
-                 query: TokenizedSQL,
+                 query: Query,
                  catalog: Catalog,
                  query_map: QueryMap,
                  subquery_map: SubqueryMap,
