@@ -231,18 +231,6 @@ class Select(SetOperation):
 
     # region Properties
     @property
-    def main_query(self) -> 'Select':
-        '''Returns the main query without CTEs as a TokenizedSQL object.'''
-        if self._main_query is None:
-            if self.ast:
-                main_sql = extractors.remove_ctes(self.ast)
-                self._main_query = Select(main_sql, catalog=self.catalog, search_path=self.search_path)
-            else:
-                self._main_query = self
-        
-        return self._main_query
-    
-    @property
     def subqueries(self) -> list['Select']:
         '''Returns a list of subqueries as TokenizedSQL objects.'''
         if self._subqueries is None:
@@ -309,7 +297,6 @@ class Select(SetOperation):
         for col in columns:
             if isinstance(col, exp.Star):
                 # Expand star to all columns from all referenced tables
-                # TODO: Handle table-specific stars (e.g. table.*)
                 for table in self.referenced_tables:
                     for column in table.columns:
                         result.add_column(name=column.name, column_type='TODO')
@@ -320,10 +307,20 @@ class Select(SetOperation):
 
                 result.add_column(name=col_name if quoted else col_name.lower(), column_type='TODO')
             elif isinstance(col, exp.Column):
-                col_name = col.alias_or_name
-                quoted =  col.this.quoted
 
-                result.add_column(name=col_name if quoted else col_name.lower(), column_type='TODO')
+                # Handle table.* case
+                if isinstance(col.this, exp.Star):
+                    table_name = normalize_ast_column_table(col)
+                    table = next((t for t in self.referenced_tables if t.name == table_name), None)
+                    if table:
+                        for column in table.columns:
+                            result.add_column(name=column.name, column_type='TODO')
+                else:
+                    col_name = col.alias_or_name
+                    name = col_name if col.this.quoted else col_name.lower()
+
+                    result.add_column(name=name, column_type='TODO')
+
             else:
                 # mostly unrecognized expressions (e.g. functions, literals, operations), that result in a column without a specific name
                 result.add_column(name='', column_type='TODO')

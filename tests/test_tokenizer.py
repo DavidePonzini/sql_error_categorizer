@@ -87,6 +87,18 @@ def test_select_star_on_a_cte():
 
     assert len(tokenized.main_query.output.columns) == 3  # sid + all columns from cte_store (sid, sname)
 
+def test_select_star_on_a_table():
+    db = 'miedema'
+    catalog_db = catalog.load_json("tests/datasets/cat_miedema.json")
+    table = 'store'
+    join = 'transaction'
+
+    query = f"SELECT {table}.*, {join}.date FROM {table} JOIN {join} ON {table}.sid = {join}.sid;"
+
+    tokenized = Query(query, catalog=catalog_db, search_path=db)
+
+    assert len(tokenized.main_query.output.columns) == len(catalog_db[db][table].columns) + 1  # sid + all columns from store
+
 # region set_operations
 
 @pytest.mark.skip(reason="Fix parenthesis parsing")
