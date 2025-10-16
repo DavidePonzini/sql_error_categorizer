@@ -39,6 +39,9 @@ documentation:
 test: install
 	$(VENV_BIN)/python -m pytest
 
+coverage: install
+	$(VENV_BIN)/python -m pytest --cov=$(NAME) --cov-report=html:tests/htmlcov
+
 upload: test documentation
 	$(VENV_BIN)/python -m pip install --upgrade twine
 	$(VENV_BIN)/python -m twine upload --verbose dist/*
@@ -48,6 +51,6 @@ download: uninstall
 
 clean:
 	find . -type d -name '__pycache__' -print0 | xargs -0 rm -r || true
-	rm -rf dist docs/_build .pytest_cache
+	rm -rf dist docs/_build .pytest_cache .coverage tests/htmlcov
 
 ########## Makefile end ##########
