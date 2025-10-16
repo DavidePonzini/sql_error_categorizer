@@ -4,10 +4,10 @@ import sqlparse.tokens
 
 from .set_operations import SetOperation, Select, create_set_operation_tree
 from ..catalog import Catalog
-from . import extractors
-from ..catalog import Table
 
-class Query:
+from .tokenized_sql import TokenizedSQL
+
+class Query(TokenizedSQL):
     def __init__(self,
                 sql: str,
                 *,
@@ -18,22 +18,13 @@ class Query:
         Represents a full SQL query, potentially with multiple statements (i.e., CTEs and set operations).
         '''
 
-        self.sql = sql
-        '''The full SQL query string.'''
+        super().__init__(sql)
 
         self.catalog = catalog.copy()
         '''Catalog representing tables that can be referenced in this query.'''
         
         self.search_path = search_path
         '''The search path for resolving unqualified table names.'''
-
-        parsed_statements = sqlparse.parse(self.sql)
-        if not parsed_statements:
-            self.all_statements: list[sqlparse.sql.Statement] = []
-            self.parsed = sqlparse.sql.Statement()
-        else:
-            self.all_statements = list(parsed_statements)
-            self.parsed = parsed_statements[0]
 
         # Extract CTEs and main query
         self.ctes: list[SetOperation] = []
@@ -94,16 +85,20 @@ class Query:
         #     self.catalog[''][cte_name] = output
 
     # region Properties
-    # TODO: Implement
     @property
     def selects(self) -> list[Select]:
-        return []
-        
+        result: list[Select] = []
+
+        for cte in self.ctes:
+            result.extend(cte.selects)
+
+        result.extend(self.main_query.selects)
+
+        return result
+    
     # endregion   
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}({self.sql})'
     
-    def print_tree(self) -> None:
-        for stmt in self.all_statements:
-            stmt._pprint_tree()
+    

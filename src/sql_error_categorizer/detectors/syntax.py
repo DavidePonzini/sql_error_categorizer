@@ -6,7 +6,7 @@ from typing import Any, Callable
 from copy import deepcopy
 
 from .base import BaseDetector, DetectedError
-from ..query import Query
+from ..query import Query, Select
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
 from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
@@ -135,46 +135,37 @@ class SyntaxErrorDetector(BaseDetector):
         '''
         Checks for undefined tables in the FROM clause
         '''
-
-        return self._syn_2_undefined_tables_rec(self.query)
-
-    @staticmethod
-    def _syn_2_undefined_tables_rec(query: Query) -> list[DetectedError]:
+        
         results: list[DetectedError] = []
 
-        for cte in query.ctes:
-            results.extend(SyntaxErrorDetector._syn_2_undefined_tables_rec(cte[1]))
+        for select in self.query.selects:
+            if select.ast is None:
+                continue
 
-        # run only on main query, CTEs are processed recursively
-        query = query.main_query
+            for table in select.ast.find_all(exp.Table):
+                table_name = util.normalize_ast_table_real_name(table)
+                schema_name = util.normalize_ast_schema_name(table)
 
-        if query.ast is None:
-            return []
+                if schema_name:
+                    # Fully qualified table (schema.table)
+                    if not select.catalog.has_schema(schema_name):
+                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_INVALID_SCHEMA_NAME, (table.sql(),)))
+                        continue
 
-        for table in query.ast.find_all(exp.Table):
-            table_name = util.normalize_ast_table_real_name(table)
-            schema_name = util.normalize_ast_schema_name(table)
+                    if not select.catalog.has_table(schema_name, table_name):
+                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (table.sql(),)))
+                        continue
+                else:
+                    # Unqualified table (table)
+                    # Check if table is a CTE
+                    if select.catalog.has_table('', table_name):
+                        continue
 
-            if schema_name:
-                # Fully qualified table (schema.table)
-                if not query.catalog.has_schema(schema_name):
-                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_INVALID_SCHEMA_NAME, (table.sql(),)))
-                    continue
+                    # Check if table is in the current schema
+                    if select.catalog.has_table(select.search_path, table_name):
+                        continue
 
-                if not query.catalog.has_table(schema_name, table_name):
                     results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (table.sql(),)))
-                    continue
-            else:
-                # Unqualified table (table)
-                # Check if table is a CTE
-                if query.catalog.has_table('', table_name):
-                    continue
-
-                # Check if table is in the current schema
-                if query.catalog.has_table(query.search_path, table_name):
-                    continue
-
-                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, (table.sql(),)))
 
         return results
 
@@ -183,48 +174,38 @@ class SyntaxErrorDetector(BaseDetector):
         Checks for undefined and ambiguous columns.
         '''
 
-        return self._syn_1_syn_2_undefined_columns_ambiguous_columns_rec(self.query)
-
-    
-    @staticmethod
-    def _syn_1_syn_2_undefined_columns_ambiguous_columns_rec(query: Query) -> list[DetectedError]:
         results: list[DetectedError] = []
 
-        for cte in query.ctes:
-            results.extend(SyntaxErrorDetector._syn_2_undefined_tables_rec(cte[1]))
+        for select in self.query.selects:
+            if select.ast is None:
+                continue
 
-        # run only on main query, CTEs are processed recursively
-        query = query.main_query
+            for column in select.ast.find_all(exp.Column):
+                column_name = util.normalize_ast_column_name(column)
+                table_name = util.normalize_ast_column_table(column)
 
-        if query.ast is None:
-            return []
+                possible_matches = []
 
-        for column in query.ast.find_all(exp.Column):
-            column_name = util.normalize_ast_column_name(column)
-            table_name = util.normalize_ast_column_table(column)
+                if table_name:
+                    # Qualified column (table.column)
+                    for table in select.referenced_tables:
+                        if table.name != table_name:
+                            continue
 
-            possible_matches = []
+                        for possible_match in table.columns:
+                            if possible_match.name == column_name:
+                                possible_matches.append(f'{table_name}.{column_name}')
+                else:
+                    # Unqualified column (column)
+                    for table in select.referenced_tables:
+                        for possible_match in table.columns:
+                            if possible_match.name == column_name:
+                                possible_matches.append(f'{table.name}.{column_name}')
 
-            if table_name:
-                # Qualified column (table.column)
-                for table in query.referenced_tables:
-                    if table.name != table_name:
-                        continue
-
-                    for possible_match in table.columns:
-                        if possible_match.name == column_name:
-                            possible_matches.append(f'{table_name}.{column_name}')
-            else:
-                # Unqualified column (column)
-                for table in query.referenced_tables:
-                    for possible_match in table.columns:
-                        if possible_match.name == column_name:
-                            possible_matches.append(f'{table.name}.{column_name}')
-
-            if len(possible_matches) == 0:
-                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, (column.sql(),)))
-            elif len(possible_matches) > 1:
-                results.append(DetectedError(SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, (column.sql(), possible_matches)))
+                if len(possible_matches) == 0:
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, (column.sql(),)))
+                elif len(possible_matches) > 1:
+                    results.append(DetectedError(SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, (column.sql(), possible_matches)))
 
         return results
 
@@ -376,59 +357,50 @@ class SyntaxErrorDetector(BaseDetector):
         Check for misspellings in table names.
         '''
 
-        return self._syn_2_misspellings_schemas_tables_rec(self.query)
-
-    @staticmethod
-    def _syn_2_misspellings_schemas_tables_rec(query: Query) -> list[DetectedError]:
         results: list[DetectedError] = []
 
-        for cte in query.ctes:
-            results.extend(SyntaxErrorDetector._syn_2_misspellings_schemas_tables_rec(cte[1]))
-
-        # run only on main query, CTEs are processed recursively
-        query = query.main_query
-
-        if query.ast is None:
-            return []
-
-        for table in query.ast.find_all(exp.Table):
-            table = deepcopy(table)  # avoid modifying the original AST until we are sure we want to apply the correction
-            table_str = table.sql()
-            table_name = util.normalize_ast_table_real_name(table)
-            schema_name = util.normalize_ast_schema_name(table)
-
-            if schema_name:
-                # Fully qualified table (schema.table)
-                if query.catalog.has_table(schema_name, table_name):
-                    continue
-
-                # check "schema.table" for more accurate matches in edge cases (i.e. can't determine if the misspelled part is schema or table)
-                available_tables = {f'{s}.{t}' for s in query.catalog.schema_names for t in query.catalog[s].table_names}
-                match = difflib.get_close_matches(f'{schema_name}.{table_name}', available_tables, n=1, cutoff=0.6)
-                if match:
-                    s, t = match[0].split('.')
-
-                    table.set('db', exp.TableAlias(this=exp.to_identifier(s, quoted=True)))
-                    table.set('this', exp.to_identifier(t, quoted=True))
-                    
-                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
+        for select in self.query.selects:
+            if select.ast is None:
                 continue
-            
-            else:
-                # Unqualified table (table)
-                # Check if table is a CTE
-                if query.catalog.has_table('', table_name):
-                    continue
 
-                # Check if table is in the current schema
-                if query.catalog.has_table(query.search_path, table_name):
-                    continue
+            for table in select.ast.find_all(exp.Table):
+                table = deepcopy(table)  # avoid modifying the original AST until we are sure we want to apply the correction
+                table_str = table.sql()
+                table_name = util.normalize_ast_table_real_name(table)
+                schema_name = util.normalize_ast_schema_name(table)
 
-                available_tables = {t for s in query.catalog.schema_names for t in query.catalog[s].table_names}
-                match = difflib.get_close_matches(table_name, available_tables, n=1, cutoff=0.6)
-                if match:
-                    table.set('this', exp.to_identifier(match[0], quoted=True))
-                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
+                if schema_name:
+                    # Fully qualified table (schema.table)
+                    if select.catalog.has_table(schema_name, table_name):
+                        continue
+
+                    # check "schema.table" for more accurate matches in edge cases (i.e. can't determine if the misspelled part is schema or table)
+                    available_tables = {f'{s}.{t}' for s in select.catalog.schema_names for t in select.catalog[s].table_names}
+                    match = difflib.get_close_matches(f'{schema_name}.{table_name}', available_tables, n=1, cutoff=0.6)
+                    if match:
+                        s, t = match[0].split('.')
+
+                        table.set('db', exp.TableAlias(this=exp.to_identifier(s, quoted=True)))
+                        table.set('this', exp.to_identifier(t, quoted=True))
+                        
+                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
+                    continue
+                
+                else:
+                    # Unqualified table (table)
+                    # Check if table is a CTE
+                    if select.catalog.has_table('', table_name):
+                        continue
+
+                    # Check if table is in the current schema
+                    if select.catalog.has_table(select.search_path, table_name):
+                        continue
+
+                    available_tables = {t for s in select.catalog.schema_names for t in select.catalog[s].table_names}
+                    match = difflib.get_close_matches(table_name, available_tables, n=1, cutoff=0.6)
+                    if match:
+                        table.set('this', exp.to_identifier(match[0], quoted=True))
+                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
 
         return results
             
@@ -438,52 +410,49 @@ class SyntaxErrorDetector(BaseDetector):
             Check for misspellings in table and column names.
             Performs two passes: first try to match objects to their own type, then try to match to any type.
         '''
-        return self._syn_2_misspellings_columns_rec(self.query)
-
-    @staticmethod
-    def _syn_2_misspellings_columns_rec(query: Query) -> list[DetectedError]:
-        if query.ast is None:
-            return []
-
         results: list[DetectedError] = []
 
-        for column in query.ast.find_all(exp.Column):
-            column = deepcopy(column)  # avoid modifying the original AST until we are sure we want to apply the correction
-            column_str = column.sql()
-            column_name = util.normalize_ast_column_name(column)
-            table_name = util.normalize_ast_column_table(column)
-
-            found = False
-
-            for table in query.referenced_tables:
-                if table_name and table.name != table_name:
-                    # Qualified column (table.column)
-                    # check if column exists only in the specified table
-                    continue
-                if table.has_column(column_name):
-                    found = True
-                    break
-
-            if found:
+        for select in self.query.selects:
+            if select.ast is None:
                 continue
 
-            if table_name:
-                # Qualified column (table.column)
-                available_columns = {f'{t.name}.{c.name}' for t in query.referenced_tables for c in t.columns}
-            else:
-                # Unqualified column (column)
-                available_columns = {c.name for t in query.referenced_tables for c in t.columns}
+            for column in select.ast.find_all(exp.Column):
+                column = deepcopy(column)  # avoid modifying the original AST until we are sure we want to apply the correction
+                column_str = column.sql()
+                column_name = util.normalize_ast_column_name(column)
+                table_name = util.normalize_ast_column_table(column)
 
-            match = difflib.get_close_matches(column_name if not table_name else f'{table_name}.{column_name}', available_columns, n=1, cutoff=0.6)
-            if match:
+                found = False
+
+                for table in select.referenced_tables:
+                    if table_name and table.name != table_name:
+                        # Qualified column (table.column)
+                        # check if column exists only in the specified table
+                        continue
+                    if table.has_column(column_name):
+                        found = True
+                        break
+
+                if found:
+                    continue
+
                 if table_name:
-                    matched_table, matched_column = match[0].split('.')
-                    column.set('table', exp.to_identifier(matched_table, quoted=True))
-                    column.set('this', exp.to_identifier(matched_column, quoted=True))
+                    # Qualified column (table.column)
+                    available_columns = {f'{t.name}.{c.name}' for t in select.referenced_tables for c in t.columns}
                 else:
-                    column.set('this', exp.to_identifier(match[0], quoted=True))
-                
-                results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (column_str, column.sql())))
+                    # Unqualified column (column)
+                    available_columns = {c.name for t in select.referenced_tables for c in t.columns}
+
+                match = difflib.get_close_matches(column_name if not table_name else f'{table_name}.{column_name}', available_columns, n=1, cutoff=0.6)
+                if match:
+                    if table_name:
+                        matched_table, matched_column = match[0].split('.')
+                        column.set('table', exp.to_identifier(matched_table, quoted=True))
+                        column.set('this', exp.to_identifier(matched_column, quoted=True))
+                    else:
+                        column.set('this', exp.to_identifier(match[0], quoted=True))
+                    
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (column_str, column.sql())))
 
         return results
     

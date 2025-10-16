@@ -1,115 +1,20 @@
-from . import extractors
-from ..catalog import Catalog, Table, Column
-from ..util import *
+from .set_operation import SetOperation
+from ..tokenized_sql import TokenizedSQL
+from .. import extractors
+from ...catalog import Catalog, Table, Column
+from ...util import *
 
-from abc import ABC, abstractmethod
 from copy import deepcopy
 
 import sqlparse
-from sqlparse.sql import TokenList
-from sqlparse.tokens import Whitespace, Newline, Keyword
+from sqlparse.tokens import Whitespace, Newline
 
 import sqlglot
 import sqlglot.errors
 from sqlglot import exp
 
 
-class SetOperation(ABC):
-    def __init__(self, sql: str, subquery_level: int = 0):
-        self.sql = sql
-        '''The SQL string representing the operation.'''
-        
-        self.subquery_level = subquery_level
-        '''The level of subquery nesting.'''
-
-    @property
-    @abstractmethod
-    def output(self) -> Table:
-        '''Returns the output table schema of the set operation.'''
-        return Table('')
-    
-    def __repr__(self, pre: str = '') -> str:
-        return f'{pre}{self.__class__.__name__}'
-
-    
-    @abstractmethod
-    def print_tree(self, pre: str = '') -> None:
-        pass
-
-    @property
-    @abstractmethod
-    def limit(self) -> int | None:
-        return None
-    
-    @property
-    @abstractmethod
-    def offset(self) -> int | None:
-        return None
-    
-    @property
-    @abstractmethod
-    def order_by(self) -> list[Column]:
-        return []
-
-class BinarySetOperation(SetOperation, ABC):
-    '''Represents a binary set operation (e.g., UNION, INTERSECT, EXCEPT).'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False):
-        super().__init__(sql)
-        self.left = left
-        self.right = right
-        self.all = all
-        '''Indicates whether the operation is ALL (duplicates allowed) or DISTINCT (duplicates removed).'''
-
-    def __repr__(self, pre: str = '') -> str:
-        result = f'{pre}{self.__class__.__name__}(ALL={self.all})\n'
-        result +=  self.left.__repr__(pre + '|- ') + '\n'
-        result += self.right.__repr__(pre + '`- ')
-
-        return result
-
-    @property
-    def output(self) -> Table:
-        # Assuming both sides have the same schema for simplicity
-        return self.left.output
-    
-    def print_tree(self, pre: str = '') -> None:
-        print(f'{pre}{self.__class__.__name__} (ALL={self.all})')
-        print(                      f'{pre}|- Left:')
-        self.left.print_tree(pre=   f'{pre}|  ')
-        print(                      f'{pre}`- Right:')
-        self.right.print_tree(pre=  f'{pre}   ')
-
-    # TODO: Implement
-    @property
-    def limit(self) -> int | None:
-        return None
-    
-    # TODO: Implement
-    @property
-    def offset(self) -> int | None:
-        return None
-
-    # TODO: Implement
-    @property
-    def order_by(self) -> list[Column]:
-        return []
-
-class Union(BinarySetOperation):
-    '''Represents a SQL UNION operation.'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False):
-        super().__init__(sql, left, right, all=all)
-
-class Intersect(BinarySetOperation):
-    '''Represents a SQL INTERSECT operation.'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False):
-        super().__init__(sql, left, right, all=all)
-
-class Except(BinarySetOperation):
-    '''Represents a SQL EXCEPT operation.'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False):
-        super().__init__(sql, left, right, all=all)
-
-class Select(SetOperation):
+class Select(TokenizedSQL, SetOperation):
     '''Represents a single SQL SELECT statement.'''
 
     def __init__(self,
@@ -128,25 +33,16 @@ class Select(SetOperation):
             search_path (str): The search path for schema resolution.
             parent (TokenizedSQL | None): The parent TokenizedSQL object if this is a subquery.
         '''
-        self.sql = query
+
+        super(SetOperation, self).__init__()
+        super(TokenizedSQL, self).__init__(query)
+
 
         self.catalog = catalog
         '''Catalog representing tables that can be referenced in this query.'''
         
         self.search_path = search_path
 
-        parsed_statements = sqlparse.parse(self.sql)
-        if not parsed_statements:
-            self.all_statements: list[sqlparse.sql.Statement] = []
-            self.parsed = sqlparse.sql.Statement()
-        else:
-            self.all_statements = list(parsed_statements)
-            self.parsed = parsed_statements[0]
-
-        # Lazy properties
-        self._tokens = None
-        self._functions = None
-        self._comparisons = None
         self._subqueries = None
         self._referenced_tables = None
         '''Catalog representing tables that are read by this query.'''
@@ -215,18 +111,6 @@ class Select(SetOperation):
 
         return result
 
-    def _flatten(self) -> list[tuple[sqlparse.tokens._TokenType, str]]:
-        '''Flattens the parsed SQL statement into a list of (ttype, value) tuples. Ignores whitespace and newlines.'''
-
-        if not self.parsed:
-            return []
-
-        # Flatten tokens into (ttype, value)
-        return [
-            (tok.ttype, tok.value) for tok in self.parsed.flatten()
-            if tok.ttype not in (Whitespace, Newline)
-        ]
-    
     # endregion
 
     # region Properties
@@ -250,28 +134,6 @@ class Select(SetOperation):
         if self.ast and self.ast.args.get('distinct', False):
             return True
         return False
-    
-    @property
-    def tokens(self) -> list[tuple[sqlparse.tokens._TokenType, str]]:
-        '''Returns a flattened list of tokens as (ttype, value) tuples, excluding whitespace and newlines.'''
-        if not self._tokens:
-            self._tokens = self._flatten()
-        return self._tokens
-
-    @property
-    def functions(self) -> list[tuple[sqlparse.sql.Function, str]]:
-        '''Returns a list of (function, clause) tuples found in the SQL query.'''
-
-        if self._functions is None:
-            self._functions = extractors.extract_functions(self.parsed.tokens)
-        return self._functions
-    
-    @property
-    def comparisons(self) -> list[tuple[sqlparse.sql.Comparison, str]]:
-        '''Returns a list of (comparison, clause) tuples found in the SQL query.'''
-        if self._comparisons is None:
-            self._comparisons = extractors.extract_comparisons(self.parsed.tokens)
-        return self._comparisons    
     
     @property
     def referenced_tables(self) -> list[Table]:
@@ -376,67 +238,10 @@ class Select(SetOperation):
             self.parsed._pprint_tree(_pre=pre)
 
     def __repr__(self, pre: str = '') -> str:
-        return f'{pre}{self.__class__.__name__}(SQL="{self.sql.splitlines()[0]}...")'
+        return f'{pre}{self.__class__.__name__}(SQL="{self.sql.splitlines()[0]}{"..." if len(self.sql.splitlines()) > 1 else ""}")'
     
-def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_path: str = 'public') -> SetOperation:
-    '''
-    Parses a SQL string and constructs a tree of SetOperation objects representing the query structure using sqlparse.
-
-    Args:
-        sql (str): The SQL query string to parse.
-        catalog (Catalog): The database catalog for resolving table and column names.
-        search_path (str): The search path for schema resolution.
-
-    Returns:
-        SetOperation: The root of the SetOperation tree representing the query.
-    '''
-
-    def find_set_operation(tokens):
-        # Returns (operation, left_sql, right_sql, all) or None
-        op_keywords = {'UNION', 'INTERSECT', 'EXCEPT'}
-        all = False
-        op = None
-        left_tokens = []
-        right_tokens = []
-        found_op = False
-        for i, tok in enumerate(tokens):
-            if tok.ttype is Keyword and tok.value.upper() in op_keywords:
-                op = tok.value.upper()
-                found_op = True
-                # Check for ALL/DISTINCT
-                next_tok = tokens[i+1] if i+1 < len(tokens) else None
-                if next_tok and next_tok.ttype is Keyword and next_tok.value.upper() == 'ALL':
-                    all = True
-                elif next_tok and next_tok.ttype is Keyword and next_tok.value.upper() == 'DISTINCT':
-                    all = False
-                left_tokens = tokens[:i]
-                right_tokens = tokens[i+1:]
-                break
-        if not found_op:
-            return None
-        # Remove ALL/DISTINCT from right_tokens if present
-        if right_tokens and right_tokens[0].ttype is Keyword and right_tokens[0].value.upper() in ('ALL', 'DISTINCT'):
-            right_tokens = right_tokens[1:]
-        left_sql = TokenList(left_tokens).value.strip()
-        right_sql = TokenList(right_tokens).value.strip()
-        return (op, left_sql, right_sql, all)
-
-    parsed = sqlparse.parse(sql)
-    if not parsed:
-        return Select(sql, catalog=catalog, search_path=search_path)
-    statement = parsed[0]
-
-    result = find_set_operation(statement.tokens)
-    if result:
-        op, left_sql, right_sql, all = result
-        left_op = create_set_operation_tree(left_sql, catalog=catalog, search_path=search_path)
-        right_op = create_set_operation_tree(right_sql, catalog=catalog, search_path=search_path)
-        if op == 'UNION':
-            return Union(sql, left_op, right_op, all=all)
-        elif op == 'INTERSECT':
-            return Intersect(sql, left_op, right_op, all=all)
-        elif op == 'EXCEPT':
-            return Except(sql, left_op, right_op, all=all)
-    # Not a set operation; return as a Select
-    return Select(sql, catalog=catalog, search_path=search_path)
+    @property
+    def selects(self) -> list['Select']:
+        return [self] 
+    
 
