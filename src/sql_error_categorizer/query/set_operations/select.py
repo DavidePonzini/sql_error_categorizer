@@ -1,3 +1,4 @@
+from sql_error_categorizer.query.util import remove_parentheses
 from .set_operation import SetOperation
 from ..tokenized_sql import TokenizedSQL
 from .. import extractors
@@ -120,7 +121,7 @@ class Select(SetOperation, TokenizedSQL):
             if self.ast:
                 subquery_asts = extractors.extract_subqueries(self.ast)
                 for subquery_ast in subquery_asts:
-                    subquery_sql = subquery_ast.sql()
+                    subquery_sql = remove_parentheses(subquery_ast.sql())
                     subquery = Select(subquery_sql, catalog=self.catalog, search_path=self.search_path)
                     self._subqueries.append(subquery)
         
@@ -255,6 +256,5 @@ class Select(SetOperation, TokenizedSQL):
     
     @property
     def selects(self) -> list['Select']:
-        return [self] 
-    
+        return self.subqueries + [self]
 
