@@ -8,6 +8,10 @@ if TYPE_CHECKING:
 
 
 class SetOperation(ABC):
+    '''
+    Abstract base class for SQL set operations (i.e., SELECT, UNION, INTERSECT, EXCEPT).
+    '''
+
     def __init__(self, sql: str, subquery_level: int = 0):
         self.sql = sql
         '''The SQL string representing the operation.'''
@@ -29,21 +33,6 @@ class SetOperation(ABC):
     def print_tree(self, pre: str = '') -> None:
         pass
 
-    @property
-    @abstractmethod
-    def limit(self) -> int | None:
-        return None
-    
-    @property
-    @abstractmethod
-    def offset(self) -> int | None:
-        return None
-    
-    @property
-    @abstractmethod
-    def order_by(self) -> list[Column]:
-        return []
-    
     @property
     @abstractmethod
     def selects(self) -> list['Select']:

@@ -7,6 +7,8 @@ from ..catalog import Catalog
 
 from .tokenized_sql import TokenizedSQL
 
+from ..util import OrderByColumn
+
 class Query(TokenizedSQL):
     def __init__(self,
                 sql: str,
@@ -72,17 +74,9 @@ class Query(TokenizedSQL):
         main_query_sql = ''.join(str(token) for token in main_query_tokens).strip()
         self.main_query = create_set_operation_tree(main_query_sql, catalog=self.catalog, search_path=self.search_path)
 
-                
-
-        # for cte_name, cte_sql in extractors.extract_ctes(self.parsed):
-        #     cte = Select(cte_sql, catalog=self.catalog, search_path=self.search_path)
-
-        #     self.ctes.append(cte)
-
-        #     # Add CTE output columns to catalog
-        #     output = cte.output
-        #     output.name = cte_name
-        #     self.catalog[''][cte_name] = output
+        self.set_operations_order_by: list[OrderByColumn] = []
+        self.set_operations_limit: int | None = None
+        self.set_operations_offset: int | None = None
 
     # region Properties
     @property

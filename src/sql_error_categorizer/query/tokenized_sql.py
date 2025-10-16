@@ -4,9 +4,7 @@ from sqlparse.tokens import Whitespace, Newline
 
 from . import extractors
 
-from abc import ABC
-
-class TokenizedSQL(ABC):
+class TokenizedSQL:
     '''Base class for tokenizing SQL queries.'''
 
     def __init__(self, sql: str) -> None:

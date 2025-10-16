@@ -1,4 +1,16 @@
+from dataclasses import dataclass
 from sqlglot import exp
+
+@dataclass
+class OrderByColumn:
+    '''Represents a single column in an ORDER BY clause, with its sorting direction.'''
+    column: str
+    '''The name of the column to order by.'''
+    table: str
+    '''The table the column belongs to. Its name matches `referenced_tables` in the query it belongs to.'''
+    ascending: bool = True
+    '''The sorting direction, either True for ascending or False for descending. Defaults to True.'''
+
 
 def normalize_identifier_name(identifier: str) -> str:
     '''Normalize an SQL identifier by stripping quotes and converting to lowercase if unquoted.'''

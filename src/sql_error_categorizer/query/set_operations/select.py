@@ -1,27 +1,26 @@
 from .set_operation import SetOperation
 from ..tokenized_sql import TokenizedSQL
 from .. import extractors
-from ...catalog import Catalog, Table, Column
+from ...catalog import Catalog, Table
 from ...util import *
 
 from copy import deepcopy
 
-import sqlparse
-from sqlparse.tokens import Whitespace, Newline
 
 import sqlglot
 import sqlglot.errors
 from sqlglot import exp
 
 
-class Select(TokenizedSQL, SetOperation):
+class Select(SetOperation, TokenizedSQL):
     '''Represents a single SQL SELECT statement.'''
 
     def __init__(self,
                  query: str,
                  *,
                  catalog: Catalog = Catalog(),
-                 search_path: str = 'public'
+                 search_path: str = 'public',
+                 subquery_level: int = 0,
         ) -> None:
         '''
         Initializes a SelectStatement object.
@@ -34,9 +33,8 @@ class Select(TokenizedSQL, SetOperation):
             parent (TokenizedSQL | None): The parent TokenizedSQL object if this is a subquery.
         '''
 
-        super(SetOperation, self).__init__()
-        super(TokenizedSQL, self).__init__(query)
-
+        SetOperation.__init__(self, query, subquery_level=subquery_level)
+        TokenizedSQL.__init__(self, query)
 
         self.catalog = catalog
         '''Catalog representing tables that can be referenced in this query.'''
@@ -189,10 +187,25 @@ class Select(TokenizedSQL, SetOperation):
 
         return result
     
-    # TODO: Implement
     @property
-    def order_by(self) -> list[Column]:
-        return []
+    def order_by(self) -> list[OrderByColumn]:
+        if not self.ast:
+            return []
+        order = self.ast.args.get('order')
+        if not order:
+            return []
+        
+        # TODO: handle table.col and indexes
+        result: list[OrderByColumn] = []
+        for order_exp in order.expressions:
+            if isinstance(order_exp, exp.Ordered):
+                col_exp = order_exp.this
+                if isinstance(col_exp, exp.Column):
+                    name = normalize_ast_column_name(col_exp)
+                    descending = order_exp.args.get('desc', False)
+                    result.append(OrderByColumn(column=name, table=col_exp.table, ascending=not descending))
+
+        return result
     
     @property
     def limit(self) -> int | None:

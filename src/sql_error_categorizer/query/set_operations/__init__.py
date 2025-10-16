@@ -93,19 +93,19 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
                     ops.append((i, op, all_flag))
         return ops
 
-    def strip_trailing_clauses(tokens) -> tuple[list, str | None]:
-        '''Separate trailing ORDER BY / LIMIT / OFFSET so they can be attached to the root
+    # def strip_trailing_clauses(tokens) -> tuple[list, str | None]:
+    #     '''Separate trailing ORDER BY / LIMIT / OFFSET so they can be attached to the root
         
-        Returns (main_tokens, trailing_sql)'''
-        order_clause = []
-        limit_clause = []
-        offset_clause = []
+    #     Returns (main_tokens, trailing_sql)'''
+    #     order_clause = []
+    #     limit_clause = []
+    #     offset_clause = []
 
-        kws = {'ORDER', 'BY', 'LIMIT', 'OFFSET'}
-        for i, tok in enumerate(tokens):
-            if tok.ttype is Keyword and tok.value.upper().split()[0] in kws:
-                return tokens[:i], TokenList(tokens[i:]).value.strip()
-        return tokens, None
+    #     kws = {'ORDER', 'BY', 'LIMIT', 'OFFSET'}
+    #     for i, tok in enumerate(tokens):
+    #         if tok.ttype is Keyword and tok.value.upper().split()[0] in kws:
+    #             return tokens[:i], TokenList(tokens[i:]).value.strip()
+    #     return tokens, None
 
     parsed = sqlparse.parse(sql)
     if not parsed:
@@ -115,13 +115,14 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
     tokens = statement.tokens
 
     # Strip trailing ORDER BY / LIMIT / OFFSET
-    main_tokens, trailing = strip_trailing_clauses(tokens)
+    main_tokens = tokens
+    # main_tokens, trailing = strip_trailing_clauses(tokens)
 
     top_ops = find_top_level_ops(main_tokens)
     if not top_ops:
         node = Select(TokenList(main_tokens).value.strip(), catalog=catalog, search_path=search_path)
-        if trailing:
-            node.trailing_sql = trailing  # optional attribute for ORDER/LIMIT
+        # if trailing:
+        #     node.trailing_sql = trailing  # optional attribute for ORDER/LIMIT
         return node
 
     # Precedence: split lowest-precedence first (UNION/EXCEPT) so INTERSECT stays grouped
@@ -143,7 +144,7 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
     else:  # INTERSECT
         node = Intersect(sql, left_node, right_node, all=(all_kw is True))
 
-    if trailing:
-        node.trailing_sql = trailing  # apply ORDER BY / LIMIT / OFFSET at top level
+    # if trailing:
+    #     node.trailing_sql = trailing  # apply ORDER BY / LIMIT / OFFSET at top level
 
     return node
