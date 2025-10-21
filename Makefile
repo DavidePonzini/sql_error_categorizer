@@ -41,6 +41,7 @@ test: install
 
 coverage: install
 	$(VENV_BIN)/python -m pytest --cov=$(NAME) --cov-report=html:tests/htmlcov
+	open tests/htmlcov/index.html
 
 upload: test documentation
 	$(VENV_BIN)/python -m pip install --upgrade twine
