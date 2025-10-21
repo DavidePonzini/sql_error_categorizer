@@ -16,7 +16,7 @@ class SyntaxErrorDetector(BaseDetector):
     def __init__(self,
                  *,
                  query: Query,
-                 update_query: Callable[[str], None],
+                 update_query: Callable[[str, str | None], None],
                  solutions: list[Query] = [],
                 ):
         super().__init__(
@@ -30,7 +30,14 @@ class SyntaxErrorDetector(BaseDetector):
         '''Run the detector and return a list of detected errors with their descriptions'''
         results: list[DetectedError] = []
 
-        # First, detect unexisting objects (before misspellings, to avoid false positives)
+        # 1) fix stray semicolons (to allow ast building for subsequent checks)
+        check_result, fixed_query_str = self.syn_6_additional_omitted_semicolons()
+        results.extend(check_result)
+
+        if fixed_query_str != self.query.sql:
+            self.update_query(fixed_query_str, 'semicolons')
+
+        # 2) detect unexisting objects (before misspellings, to avoid false positives)
         unexisting_checks = [
             self.syn_2_undefined_tables,
             self.syn_1_syn_2_undefined_columns_ambiguous_columns,
@@ -39,9 +46,10 @@ class SyntaxErrorDetector(BaseDetector):
         ]
 
         for check in unexisting_checks:
-            results.extend(check())
+            check_result = check()
+            results.extend(check_result)
 
-        # Second, detect object misspellings and missing quotes and apply corrections for improved subsequent checks
+        # 3.1) detect object misspellings and missing quotes and apply corrections for improved subsequent checks
         misspelling_checks = [
             self.syn_2_misspellings_schemas_tables,
             self.syn_2_misspellings_columns,
@@ -49,7 +57,7 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_2_omitted_quotes,
         ]
 
-        # Apply corrections: replace misspelled strings in query and retokenize
+        # 3.2) apply corrections: replace misspelled strings in query and retokenize
         corrected_sql = self.query.sql
         for check in misspelling_checks:
             for error in check():
@@ -62,9 +70,9 @@ class SyntaxErrorDetector(BaseDetector):
                     # flags=re.IGNORECASE
                 )
 
-            # Use the corrected query from here on (across all detectors)
-            if corrected_sql != self.query.sql:
-                self.update_query(corrected_sql)
+                # Use the corrected query from here on (across all detectors)
+                if corrected_sql != self.query.sql:
+                    self.update_query(corrected_sql, f'misspellings - {check.__name__}')
             
         # Proceed with all other checks
         checks = [
@@ -76,7 +84,6 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_6_common_syntax_error_using_where_twice, # TODO: refactor
             # self.syn_6_common_syntax_error_omitting_the_from_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_comparison_with_null,  # TODO: refactor
-            self.syn_6_additional_omitted_semicolons,
             # self.syn_6_common_syntax_error_restriction_in_select_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_projection_in_where_clause,    # TODO: refactor
             # self.syn_6_common_syntax_error_confusing_the_order_of_keywords,   # TODO: refactor
@@ -346,7 +353,7 @@ class SyntaxErrorDetector(BaseDetector):
         Check for misspellings in table names.
         '''
 
-        results: list[DetectedError] = []
+        results: set[DetectedError] = set()     # use a set to avoid applying the same correction multiple times
 
         for select in self.query.selects:
             if select.ast is None:
@@ -372,7 +379,7 @@ class SyntaxErrorDetector(BaseDetector):
                         table.set('db', exp.TableAlias(this=exp.to_identifier(s, quoted=True)))
                         table.set('this', exp.to_identifier(t, quoted=True))
                         
-                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
+                        results.add(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
                     continue
                 
                 else:
@@ -388,17 +395,20 @@ class SyntaxErrorDetector(BaseDetector):
                     available_tables = {t for s in select.catalog.schema_names for t in select.catalog[s].table_names}
                     match = difflib.get_close_matches(table_name, available_tables, n=1, cutoff=0.6)
                     if match:
+                        db = next(s for s in select.catalog.schema_names if select.catalog.has_table(s, match[0]))
                         table.set('this', exp.to_identifier(match[0], quoted=True))
-                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
+                        if db != select.search_path:
+                            table.set('db', exp.TableAlias(this=exp.to_identifier(db, quoted=True)))
+                        results.add(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
 
-        return results      
+        return [*results]     
 
     def syn_2_misspellings_columns(self) -> list[DetectedError]:
         '''
             Check for misspellings in table and column names.
             Performs two passes: first try to match objects to their own type, then try to match to any type.
         '''
-        results: list[DetectedError] = []
+        results: set[DetectedError] = set()    # use a set to avoid applying the same correction multiple times
 
         for select in self.query.selects:
             if select.ast is None:
@@ -440,9 +450,9 @@ class SyntaxErrorDetector(BaseDetector):
                     else:
                         column.set('this', exp.to_identifier(match[0], quoted=True))
                     
-                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (column_str, column.sql())))
+                    results.add(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (column_str, column.sql())))
 
-        return results
+        return [*results]
     
     # TODO: implement
     def syn_2_synonyms(self) -> list[DetectedError]:
@@ -955,9 +965,13 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
     
-    def syn_6_additional_omitted_semicolons(self) -> list[DetectedError]:
+    def syn_6_additional_omitted_semicolons(self) -> tuple[list[DetectedError], str]:
         '''
         Flags queries that omit the semicolon at the end or have multiple semicolons.
+
+        Returns:
+        - List of DetectedError instances for semicolon issues.
+        - The cleaned query string with extra semicolons removed.
         '''
 
         results: list[DetectedError] = []
@@ -969,15 +983,18 @@ class SyntaxErrorDetector(BaseDetector):
         
         # Check for multiple semicolons inside the query
         tokens_to_check = self.query.tokens[:-1] if has_semicolon_at_end else self.query.tokens
+        good_tokens = []
         for token, val in tokens_to_check:
             if token == sqlparse.tokens.Punctuation and val == ';':
-                results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON)) 
-
+                results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
+                continue
+            good_tokens.append(val)
+        
         # Check for multiple semicolons at the end of the query (resulting in multiple statements)
         for _ in self.query.all_statements[1:]:     # skip the actual query
             results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
         
-        return results
+        return (results, ' '.join(good_tokens))
 
 
     

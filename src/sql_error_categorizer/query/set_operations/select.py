@@ -121,8 +121,9 @@ class Select(SetOperation, TokenizedSQL):
             if self.ast:
                 subquery_asts = extractors.extract_subqueries(self.ast)
                 for subquery_ast in subquery_asts:
-                    subquery_sql = remove_parentheses(subquery_ast.sql())
-                    subquery = Select(subquery_sql, catalog=self.catalog, search_path=self.search_path)
+                    while not isinstance(subquery_ast, exp.Select):
+                        subquery_ast = subquery_ast.this
+                    subquery = Select(subquery_ast.sql(), catalog=self.catalog, search_path=self.search_path)
                     self._subqueries.append(subquery)
         
         return self._subqueries

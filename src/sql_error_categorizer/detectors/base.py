@@ -18,12 +18,15 @@ class DetectedError:
         if self.data:
             return f'[{self.error.value:3}] {self.error.name}: {self.data}'
         return f'[{self.error.value:3}] {self.error.name}'
+    
+    def __hash__(self) -> int:
+        return hash((self.error, self.data))
 
 class BaseDetector(ABC):
     def __init__(self, *,
                  query: Query,
                  solutions: list[Query] = [],
-                 update_query: Callable[[str], None],
+                 update_query: Callable[[str, str | None], None],
         ):        
         self.query = query
         self.solutions = solutions

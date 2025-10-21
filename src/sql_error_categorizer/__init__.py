@@ -55,7 +55,10 @@ def get_errors2(query_str: str,
                       debug=debug)
 
 
-def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', catalog_file: str = 'tests/datasets/cat_miedema.json') -> _Detector:
+def t(query_file: str = 'q_q.sql',
+      solution_file: str = 'q_s.sql',
+      catalog_file: str = 'tests/datasets/cat_miedema.json',
+      search_path: str | None = None) -> _Detector:
     '''Test function, remove before production'''
 
     with open(query_file) as f:
@@ -65,7 +68,8 @@ def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', catalog_file:
 
     cat = load_catalog(catalog_file)
 
-    search_path = cat.schema_names.pop() or 'public'
+    if search_path is None:
+        search_path = cat.schema_names.pop() or 'public'
 
     det = _Detector(query, solutions=[solution], catalog=cat, search_path=search_path, solution_search_path=search_path, debug=True)
     det.add_detector(SyntaxErrorDetector)

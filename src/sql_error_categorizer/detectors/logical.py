@@ -14,7 +14,7 @@ class LogicalErrorDetector(BaseDetector):
     def __init__(self,
                  *,
                  query: Query,
-                 update_query: Callable[[str], None],
+                 update_query: Callable[[str, str | None], None],
                  solutions: list[Query] = [],
                 ):
         super().__init__(

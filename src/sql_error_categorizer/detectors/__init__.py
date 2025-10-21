@@ -32,12 +32,15 @@ class Detector:
         for detector_cls in detectors:
             self.add_detector(detector_cls)
 
-    def set_query(self, query: str) -> None:
+    def set_query(self, query: str, reason: str | None = None) -> None:
         '''Set a new query, re-parse it, and update all detectors. Doesn't affect detected errors.'''
         
         if self.debug:
             print('=' * 20)
-            print(f'Updating query:\n{query}')
+            if reason:
+                print(f'Updating query ({reason}):\n{query}')
+            else:
+                print(f'Updating query:\n{query}')
             print('=' * 20)
 
         self.query = Query(query, catalog=self.catalog, search_path=self.search_path)
@@ -45,7 +48,7 @@ class Detector:
         # Update all detectors with the new query and parse results
         for detector in self.detectors:
             detector.query = self.query
-            detector.update_query = lambda new_query: self.set_query(new_query)
+            detector.update_query = lambda new_query, reason=None: self.set_query(new_query, reason)
 
     def add_detector(self, detector_cls: type[BaseDetector]) -> None:
         '''Add a detector instance to the list of detectors'''
@@ -55,7 +58,7 @@ class Detector:
         detector = detector_cls(
             query=self.query,
             solutions=self.solutions,
-            update_query=lambda new_query: self.set_query(new_query),
+            update_query=lambda new_query, reason=None: self.set_query(new_query, reason),
         )
 
         self.detectors.append(detector)

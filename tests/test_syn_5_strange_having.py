@@ -1,4 +1,3 @@
-import pytest
 from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error
 
 def test_having_no_group_by():
@@ -19,7 +18,6 @@ def test_having_with_group_by():
 
     assert not has_error(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY)
 
-@pytest.mark.skip(reason="subquery handling not yet implemented")
 def test_having_no_group_by_subquery():
     detected_errors = run_test(
         query='''
@@ -30,7 +28,8 @@ def test_having_no_group_by_subquery():
         ) AS sub
         ''',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json'
+        catalog_filename='cat_miedema.json',
+        debug=True
     )
 
     assert has_error(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY)
