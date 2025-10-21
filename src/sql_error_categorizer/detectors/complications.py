@@ -31,17 +31,17 @@ class ComplicationDetector(BaseDetector):
         results: list[DetectedError] = []
 
         # If correct_solutions are not provided, return an empty list
-        if not self.correct_solutions:
-            print("Missing correct solutions to analyze logical errors.")
-            return results
+        # if not self.solutions:
+        #     print("Missing correct solutions to analyze logical errors.")
+        #     return results
         
         # AST parsing for proposed and correct solutions
-        self.q_ast = get_ast(self.query.sql)
-        self.s_ast = [get_ast(sol) for sol in self.correct_solutions]
-        self.s_ast = self.s_ast[0] # TODO: for now we only support one correct solution
+        # self.q_ast = get_ast(self.query.sql)
+        # self.s_ast = [get_ast(sol) for sol in self.correct_solutions]
+        # self.s_ast = self.s_ast[0] # TODO: for now we only support one correct solution
         
-        if not self.q_ast or not self.s_ast:
-            return results
+        # if not self.q_ast or not self.s_ast:
+        #     return results
         
         checks = [
                     # self.com_1_like_without_wildcards,    # TODO: refactor
