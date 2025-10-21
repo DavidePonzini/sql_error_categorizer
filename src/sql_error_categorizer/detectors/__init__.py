@@ -1,4 +1,4 @@
-from .. import parser, catalog
+from .. import catalog
 from ..query import Query
 from ..sql_errors import SqlErrors
 from .base import BaseDetector, DetectedError
@@ -8,17 +8,21 @@ from .logical import LogicalErrorDetector
 from .complications import ComplicationDetector
 
 class Detector:
-    def __init__(self, query: str, *,
-                 search_path: str = '',
-                 correct_solutions: list = [],
+    def __init__(self,
+                 query: str,
+                 *,
+                 search_path: str = 'public',
+                 solution_search_path: str = 'public',
+                 solutions: list[str] = [],
                  catalog: catalog.Catalog = catalog.Catalog(),
                  detectors: list[type[BaseDetector]] = [],
                  debug: bool = False):
         
         # Context data: they don't need to be parsed again if the query changes
         self.search_path = search_path
-        self.correct_solutions = correct_solutions
+        self.solution_search_path = solution_search_path
         self.catalog = catalog
+        self.solutions = [Query(sol, catalog=self.catalog, search_path=self.solution_search_path) for sol in solutions]
         self.detectors: list[BaseDetector] = []
         self.debug = debug
 
@@ -37,23 +41,11 @@ class Detector:
             print('=' * 20)
 
         self.query = Query(query, catalog=self.catalog, search_path=self.search_path)
-        try:
-            self.parse_result = parser.parse(self.query.sql)
-            self.cte_catalog = parser.create_cte_catalog(self.parse_result.cte_map)
-        except Exception:
-            self.parse_result = parser.ParseResult()
-            self.cte_catalog = parser.CTECatalog()
 
         # Update all detectors with the new query and parse results
         for detector in self.detectors:
             detector.query = self.query
-            detector.catalog = self.catalog
-            detector.query_map = self.parse_result.query_map
-            detector.subquery_map = self.parse_result.subquery_map
-            detector.cte_map = self.parse_result.cte_map
-            detector.cte_catalog = self.cte_catalog
             detector.update_query = lambda new_query: self.set_query(new_query)
-            detector.correct_solutions = self.correct_solutions
 
     def add_detector(self, detector_cls: type[BaseDetector]) -> None:
         '''Add a detector instance to the list of detectors'''
@@ -62,13 +54,8 @@ class Detector:
         # TODO: check if it's needed
         detector = detector_cls(
             query=self.query,
-            catalog=self.catalog,
-            query_map=self.parse_result.query_map,
-            subquery_map=self.parse_result.subquery_map,
-            cte_map=self.parse_result.cte_map,
-            cte_catalog=self.cte_catalog,
+            solutions=self.solutions,
             update_query=lambda new_query: self.set_query(new_query),
-            correct_solutions=self.correct_solutions,
         )
 
         self.detectors.append(detector)

@@ -9,28 +9,19 @@ from .base import BaseDetector, DetectedError
 from ..query import Query, Select
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
-from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
 from .. import util
 
 
 class SyntaxErrorDetector(BaseDetector):
-    def __init__(self, *,
+    def __init__(self,
+                 *,
                  query: Query,
-                 catalog: Catalog,
-                 query_map: QueryMap,
-                 subquery_map: SubqueryMap,
-                 cte_map: CTEMap,
-                 cte_catalog: CTECatalog,
                  update_query: Callable[[str], None],
-                 **kwargs,  # we don't need correct solutions for syntax errors, but we may still receive it during initialization
+                 solutions: list[Query] = [],
                 ):
         super().__init__(
             query=query,
-            catalog=catalog,
-            query_map=query_map,
-            subquery_map=subquery_map,
-            cte_map=cte_map,
-            cte_catalog=cte_catalog,
+            solutions=solutions,
             update_query=update_query,
         )
 
@@ -208,8 +199,6 @@ class SyntaxErrorDetector(BaseDetector):
                     results.append(DetectedError(SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, (column.sql(), possible_matches)))
 
         return results
-
-
 
     # region SYN-2
     # TODO: refactor, needs AST
@@ -402,8 +391,7 @@ class SyntaxErrorDetector(BaseDetector):
                         table.set('this', exp.to_identifier(match[0], quoted=True))
                         results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_MISSPELLINGS, (table_str, table.sql())))
 
-        return results
-            
+        return results      
 
     def syn_2_misspellings_columns(self) -> list[DetectedError]:
         '''
@@ -737,7 +725,7 @@ class SyntaxErrorDetector(BaseDetector):
         Enforces the SQL "single-value rule":
         All selected columns must be either included in the GROUP BY clause or aggregated.
         '''
-        results = []
+        results: list[DetectedError] = []
         aggregate_funcs = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
 
         def is_aggregate(expr: str) -> bool:
@@ -791,20 +779,9 @@ class SyntaxErrorDetector(BaseDetector):
         '''
         results: list[DetectedError] = []
 
-        def check_having_without_group_by(query_map: QueryMap, data: tuple[Any, ...]):
-            if query_map.having and not query_map.group_by_values:
-                results.append(DetectedError(SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY, data))
-
-        # Check main query
-        check_having_without_group_by(self.query_map, ('Main',))
-
-        # Check CTEs
-        for name, cte in self.cte_map.items():
-            check_having_without_group_by(cte, ('CTE', name))
-
-        # Check subqueries
-        for cond, subq in self.subquery_map.items():
-            check_having_without_group_by(subq, ('Subquery', cond))
+        for select in self.query.selects:
+            if select.having and not select.group_by:
+                results.append(DetectedError(SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY))
 
         return results
     # endregion

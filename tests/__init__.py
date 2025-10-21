@@ -18,7 +18,7 @@ def run_test(query: str, *,
 
     detector = Detector(
         query=query,
-        correct_solutions=expected_solutions,
+        solutions=expected_solutions,
         catalog=catalog,
         search_path=search_path,
         detectors=detectors

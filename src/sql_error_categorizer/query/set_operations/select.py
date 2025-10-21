@@ -187,27 +187,48 @@ class Select(SetOperation, TokenizedSQL):
                 result.add_column(name='', column_type='TODO')
 
         return result
+
+    @property
+    def where(self) -> exp.Expression | None:
+        if not self.ast:
+            return None
+        where = self.ast.args.get('where')
+        if not where:
+            return None
+        
+        return where.this
+
+    @property
+    def group_by(self) -> list[exp.Expression]:
+        if not self.ast:
+            return []
+        group = self.ast.args.get('group')
+        if not group:
+            return []
+        
+        return group.expressions
+
+    @property
+    def having(self) -> exp.Expression | None:
+        if not self.ast:
+            return None
+        having = self.ast.args.get('having')
+        if not having:
+            return None
+        
+        return having.this
     
     @property
-    def order_by(self) -> list[OrderByColumn]:
+    def order_by(self) -> list[exp.Expression]:
         if not self.ast:
             return []
         order = self.ast.args.get('order')
         if not order:
             return []
-        
-        # TODO: handle table.col and indexes
-        result: list[OrderByColumn] = []
-        for order_exp in order.expressions:
-            if isinstance(order_exp, exp.Ordered):
-                col_exp = order_exp.this
-                if isinstance(col_exp, exp.Column):
-                    name = normalize_ast_column_name(col_exp)
-                    descending = order_exp.args.get('desc', False)
-                    result.append(OrderByColumn(column=name, table=col_exp.table, ascending=not descending))
 
-        return result
-    
+        return order.expressions
+
+
     @property
     def limit(self) -> int | None:
         if not self.ast:

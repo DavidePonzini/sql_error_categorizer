@@ -8,29 +8,19 @@ from .base import BaseDetector, DetectedError
 from ..query import Query
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
-from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog, get_ast
 
 
 class ComplicationDetector(BaseDetector):
-    def __init__(self, *,
+    def __init__(self,
+                 *,
                  query: Query,
-                 catalog: Catalog,
-                 query_map: QueryMap,
-                 subquery_map: SubqueryMap,
-                 cte_map: CTEMap,
-                 cte_catalog: CTECatalog,
                  update_query: Callable[[str], None],
-                 correct_solutions: list[str] = [],
+                 solutions: list[Query] = [],
                 ):
         super().__init__(
             query=query,
-            catalog=catalog,
-            query_map=query_map,
-            subquery_map=subquery_map,
-            cte_map=cte_map,
-            cte_catalog=cte_catalog,
+            solutions=solutions,
             update_query=update_query,
-            correct_solutions=correct_solutions,
         )
     
     def run(self) -> list[DetectedError]:
