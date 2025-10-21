@@ -19,16 +19,23 @@ def normalize_identifier_name(identifier: str) -> str:
     
     return identifier.lower()
 
-def normalize_ast_column_real_name(column: exp.Column) -> str:
+def normalize_ast_column_real_name(column: exp.Column | exp.Alias) -> str:
     '''Returns the column real name, in lowercase if unquoted.'''
 
-    quoted = column.this.quoted
-    name = column.this.name
+    col = column.find(exp.Column)
+    if col is None:
+        return column.alias_or_name
+
+    quoted = col.this.quoted
+    name = col.this.name
 
     return name if quoted else name.lower()
 
-def normalize_ast_column_name(column: exp.Column) -> str:
+def normalize_ast_column_name(column: exp.Column | exp.Alias) -> str:
     '''Returns the column name or alias, in lowercase if unquoted.'''
+
+    while isinstance(column.this, exp.Alias):
+        column = column.this
     
     if column.args.get('alias'):
         quoted = column.args['alias'].args.get('quoted', False)

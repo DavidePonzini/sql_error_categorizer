@@ -79,7 +79,7 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_3_data_type_mismatch,    # TODO: refactor
             self.syn_4_aggregate_function_outside_select_or_having,
             # self.syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested,  # TODO: refactor
-            # self.syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column, # TODO: refactor
+            self.syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column,
             self.syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by,   # TODO: refactor
             # self.syn_6_common_syntax_error_using_where_twice, # TODO: refactor
             # self.syn_6_common_syntax_error_omitting_the_from_clause,  # TODO: refactor
@@ -729,60 +729,74 @@ class SyntaxErrorDetector(BaseDetector):
     # endregion
 
     # region SYN-5
-    # TODO: refactor
     def syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column(self) -> list[DetectedError]:
         '''
         Enforces the SQL "single-value rule":
         All selected columns must be either included in the GROUP BY clause or aggregated.
         '''
+
         results: list[DetectedError] = []
-        aggregate_funcs = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
 
-        def is_aggregate(expr: str) -> bool:
-            '''Returns True if the select expression is an aggregate function.'''
-            expr_upper = expr.upper().strip()
-            return any(expr_upper.startswith(func + '(') for func in aggregate_funcs)
+        for select in self.query.selects:
+            if select.ast is None:
+                continue
 
-        def extract_columns(expr: str) -> list:
-            '''Extracts raw column names from a select expression like 't.col' or 'SUM(t.col)'.'''
-            expr = expr.strip()
-            if '(' in expr:
-                inner = expr[expr.find('(') + 1 : expr.rfind(')')]
-                return [inner.strip()]
-            return [expr]
+            select_columns: list[tuple[str, str]] = [] # we need a list for positional GROUP BY handling
 
-        def check_single_value_rule(map_name: str, query_map: dict):
-            group_by = set(col.lower() for col in query_map.get("group_by_values", []))
-            select_values = query_map.get("select_value", [])
+            def get_column_name(col: exp.Column | exp.Alias) -> tuple[str, str]:
+                '''Return normalized column name and alias. If no alias, both are the same.'''
+                col_name = util.normalize_ast_column_real_name(col)
+                col_alias = util.normalize_ast_column_name(col)
+                return col_name, col_alias
 
-            if not group_by: return
+            for col in select.ast.expressions:
+                if isinstance(col, exp.Star):
+                    # SELECT * case: expand to all columns from all referenced tables
+                    for table in select.referenced_tables:
+                        for table_col in table.columns:
+                            select_columns.append((table_col.name, table_col.name))
+                if isinstance(col, exp.Column) or isinstance(col, exp.Alias):
+                    col_name = get_column_name(col)
+                    select_columns.append(col_name)
+                elif isinstance(col, exp.Func):
+                    continue  # aggregated, skip
+                else:
+                    # Complex expression: try to extract columns
+                    for c in col.find_all(exp.Column):
+                        col_name = get_column_name(c)
+                        select_columns.append(col_name)
 
-            for expr in select_values:
-                expr = expr.strip()
-                if not expr or is_aggregate(expr):
-                    continue  # valid: aggregated
+            group_by_columns = set()
+            for gb in select.group_by:
+                if isinstance(gb, exp.Column):
+                    gb_name = get_column_name(gb)
+                    group_by_columns.add(gb_name)
+                elif isinstance(gb, exp.Literal):
+                    try:
+                        val = int(gb.this)
+                        # Positional GROUP BY: map to selected columns
+                        if 1 <= val <= len(select_columns):
+                            group_by_columns.add(select_columns[val - 1])
+                    except ValueError:
+                        continue
+                else:
+                    # Complex expression in GROUP BY: try to extract columns
+                    for c in gb.find_all(exp.Column):
+                        gb_name = get_column_name(c)
+                        group_by_columns.add(gb_name)
 
-                cols = extract_columns(expr)
-                for col in cols:
-                    if col.lower() not in group_by:
-                        results.append((
-                            SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
-                            f"Column '{col}' must be grouped or aggregated."
-                        ))
+            for sel_col, sel_alias in set(select_columns):  # convert to set to avoid outputting the same error multiple times
+                if any(sel_col == group_col or sel_alias == group_alias for group_col, group_alias in group_by_columns):
+                    continue    # valid: in GROUP BY
+                results.append(DetectedError(SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,(sel_col, 'ONLY IN SELECT')))
 
-        # Check main query
-        check_single_value_rule("main query", self.query_map)
-
-        # Check CTEs
-        for name, cte in self.cte_map.items():
-            check_single_value_rule(f"CTE '{name}'", cte)
-
-        # Check subqueries
-        for cond, subq in self.subquery_map.items():
-            check_single_value_rule(f"subquery in '{cond}'", subq)
+            for group_col, group_alias in group_by_columns:
+                if any(group_col == select_col or group_alias == select_alias for select_col, select_alias in select_columns):
+                    continue # valid: in SELECT
+                results.append(DetectedError(SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,(group_col, 'ONLY IN GROUP BY')))
 
         return results
-     
+
     def syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by(self) -> list[DetectedError]:
         '''
         Flags queries where HAVING is used without a GROUP BY clause.
