@@ -81,7 +81,7 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested,  # TODO: refactor
             self.syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column,
             self.syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by,
-            # self.syn_6_common_syntax_error_using_where_twice, # TODO: refactor
+            self.syn_6_common_syntax_error_using_where_twice,
             # self.syn_6_common_syntax_error_omitting_the_from_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_comparison_with_null,  # TODO: refactor
             # self.syn_6_common_syntax_error_restriction_in_select_clause,  # TODO: refactor
@@ -813,12 +813,30 @@ class SyntaxErrorDetector(BaseDetector):
     # region SYN-6
     #TODO def syn_6_common_syntax_error_confusing_function_with_function_parameter(self):
     
-    # TODO: refactor
     def syn_6_common_syntax_error_using_where_twice(self) -> list[DetectedError]:
         '''
         Flags multiple WHERE clauses in a single query block (main query, CTEs, subqueries).
         '''
-        results = []
+
+        results: list[DetectedError] = []
+
+        for select in self.query.selects:
+
+            # By removing subqueries, we can check only the top-level WHERE clauses in this select.
+            stripped = select.strip_subqueries()
+
+            where_count = 0
+            for ttype, val in stripped.tokens:
+                if ttype == sqlparse.tokens.Keyword and val.upper() == 'WHERE':
+                    where_count += 1
+
+            if where_count > 1:
+                results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE, (select.sql, where_count)))
+
+        return results
+
+        ##########################################################################################
+
 
         def count_where_clauses(query: str) -> int:
             # Remove strings and comments to avoid counting 'WHERE' inside them

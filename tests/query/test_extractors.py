@@ -50,5 +50,5 @@ def test_extract_ctes(sql, expected):
 ])
 def test_extract_subqueries(sql, expected):
     ast = parse_one(sql)
-    subqueries = extract_subqueries(ast)
+    subqueries = extract_subqueries_ast(ast)
     assert all(subquery.sql() in expected for subquery in subqueries)

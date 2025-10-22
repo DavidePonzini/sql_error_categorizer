@@ -11,6 +11,7 @@ from copy import deepcopy
 import sqlglot
 import sqlglot.errors
 from sqlglot import exp
+import re
 
 
 class Select(SetOperation, TokenizedSQL):
@@ -112,18 +113,61 @@ class Select(SetOperation, TokenizedSQL):
 
     # endregion
 
+    def strip_subqueries(self) -> 'Select':
+        '''Returns the SQL query with all subqueries removed (replaced by ).'''
+
+        stripped_sql = self.sql
+
+        subquery_sqls = extractors.extract_subqueries_tokens(self.sql)
+
+        counter = 1
+        for subquery_sql, clause in subquery_sqls:
+            replacement = 'NULL'  # default safe fallback
+
+            clause_upper = (clause or '').upper()
+
+            if clause_upper in ('FROM', 'JOIN'):
+                replacement = f'__subq{counter}'
+                counter += 1
+            elif clause_upper in ('WHERE', 'HAVING', 'ON', 'SELECT'):
+                replacement = 'NULL'
+            elif clause_upper == 'EXISTS':
+                replacement = 'TRUE'
+            elif clause_upper == 'IN':
+                replacement = '(NULL)'
+
+            escaped = re.escape(subquery_sql)
+            pattern = rf'\(\s*{escaped}\s*\)'
+
+            # Replace the parentheses and enclosed subquery entirely
+            stripped_sql, n = re.subn(pattern, replacement, stripped_sql, count=1)
+
+            # Fallback: if not found with parentheses, remove raw subquery text
+            if n == 0:
+                stripped_sql = re.sub(escaped, replacement, stripped_sql, count=1)
+
+        return Select(stripped_sql, catalog=self.catalog, search_path=self.search_path)
+
     # region Properties
     @property
     def subqueries(self) -> list['Select']:
         '''Returns a list of subqueries as TokenizedSQL objects.'''
         if self._subqueries is None:
             self._subqueries = []
+            # try to find subqueries via sqlglot AST, since it's more reliable
             if self.ast:
-                subquery_asts = extractors.extract_subqueries(self.ast)
+                subquery_asts = extractors.extract_subqueries_ast(self.ast)
                 for subquery_ast in subquery_asts:
                     while not isinstance(subquery_ast, exp.Select):
                         subquery_ast = subquery_ast.this
                     subquery = Select(subquery_ast.sql(), catalog=self.catalog, search_path=self.search_path)
+                    self._subqueries.append(subquery)
+            else:
+                # fallback: AST cannot be constructed, try to find subqueries via sqlparse
+                subquery_sqls = extractors.extract_subqueries_tokens(self.sql)
+
+                for subquery_sql, clause in subquery_sqls:
+                    subquery = Select(subquery_sql, catalog=self.catalog, search_path=self.search_path)
                     self._subqueries.append(subquery)
         
         return self._subqueries
