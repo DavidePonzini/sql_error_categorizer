@@ -99,7 +99,7 @@ class SyntaxErrorDetector(BaseDetector):
         return results
 
     # region Utils
-    
+    # TODO: remove
     @staticmethod
     def _are_types_compatible(type1: str, type2: str) -> bool:
         '''
@@ -678,7 +678,9 @@ class SyntaxErrorDetector(BaseDetector):
     # endregion
 
     # region SYN-6
-    #TODO def syn_6_common_syntax_error_confusing_function_with_function_parameter(self):
+    #TODO: implement
+    def syn_6_common_syntax_error_confusing_function_with_function_parameter(self) -> list[DetectedError]:
+        return []
     
     def syn_6_common_syntax_error_using_where_twice(self) -> list[DetectedError]:
         '''
@@ -840,11 +842,18 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-
-    # TODO def syn_6_common_syntax_error_using_an_undefined_correlation_name(self):
-    # TODO def syn_6_common_syntax_error_too_many_columns_in_subquery(self) -> list:
-    # TODO def syn_6_common_syntax_error_confusing_table_names_with_column_names(self):
+    # TODO: implement
+    def syn_6_common_syntax_error_using_an_undefined_correlation_name(self) -> list[DetectedError]:
+        return []
     
+    # TODO: implement, requires AST
+    def syn_6_common_syntax_error_too_many_columns_in_subquery(self) -> list[DetectedError]:
+        return []
+
+    # TODO: implement
+    def syn_6_common_syntax_error_confusing_table_names_with_column_names(self) -> list[DetectedError]:
+        return []
+
     # TODO: refactor
     def syn_6_common_syntax_error_restriction_in_select_clause(self) -> list[DetectedError]:
         '''
@@ -987,7 +996,6 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-
     def syn_6_common_syntax_error_confusing_the_order_of_keywords(self) -> list[DetectedError]:
         '''
         Flags queries where the standard order of SQL clauses is not respected.
@@ -1037,9 +1045,11 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
         
-    #TODO def syn_6_common_syntax_error_confusing_the_logic_of_keywords(self):
+    #TODO: implement
+    def syn_6_common_syntax_error_confusing_the_logic_of_keywords(self) -> list[DetectedError]:
+        return []
     
-    # TODO: refactor
+    # TODO: check and refactor
     # NOTE: is this implementation actually coherent with the error description?
     def syn_6_common_syntax_error_confusing_the_syntax_of_keywords(self) -> list[DetectedError]:
         '''
