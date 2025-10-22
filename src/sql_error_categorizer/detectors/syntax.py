@@ -54,7 +54,7 @@ class SyntaxErrorDetector(BaseDetector):
             self.syn_2_misspellings_schemas_tables,
             self.syn_2_misspellings_columns,
             # self.syn_2_synonyms,      # TODO: implement
-            # self.syn_2_omitted_quotes,
+            # self.syn_2_omitted_quotes,    # TODO: refactor
         ]
 
         # 3.2) apply corrections: replace misspelled strings in query and retokenize
@@ -78,7 +78,7 @@ class SyntaxErrorDetector(BaseDetector):
         checks = [
             # self.syn_3_data_type_mismatch,    # TODO: refactor
             self.syn_4_aggregate_function_outside_select_or_having,
-            # self.syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested,  # TODO: refactor
+            self.syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested,  # TODO: refactor
             self.syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column,
             self.syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by,
             self.syn_6_common_syntax_error_using_where_twice,
@@ -566,167 +566,30 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
     
-    # TODO: refactor
-    # TODO: check
     def syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested(self) -> list[DetectedError]:
         '''
         Flags cases where aggregate functions are nested within the *same query scope*,
         which mainstream SQL dialects do not allow (e.g., SUM(MAX(x))).
-        Aggregates inside a subquery are NOT flagged.
         '''
         results: list[DetectedError] = []
 
-        # Consider making this configurable / DB-specific
-        AGG_FUNCS = {
-            'SUM','AVG','COUNT','MIN','MAX',
-            'STRING_AGG','ARRAY_AGG','BOOL_AND','BOOL_OR',
-            'BIT_AND','BIT_OR','EVERY',
-            'VARIANCE','VAR_POP','VAR_SAMP','STDDEV','STDDEV_POP','STDDEV_SAMP'
-        }
+        for select in self.query.selects:
+            stripped = select.strip_subqueries()
 
-        def _is_aggregate_function(name: str | None) -> bool:
-            if not name:
-                return False
-            return name.upper() in AGG_FUNCS
-
-        def _is_select_tokenlist(tl) -> bool:
-            # Heuristic: this TokenList contains a SELECT statement (subquery)
-            try:
-                from sqlparse import sql as sqlmod
-                if isinstance(tl, sqlmod.Statement):
-                    return True
-                text = tl.value.upper()
-                # Cheap but effective heuristic for subqueries in parentheses
-                return 'SELECT' in text and any(k in text for k in (' FROM ', '\nFROM '))
-            except Exception:
-                return False
-
-        def _contains_nested_agg(tokenlist, inside_agg_stack: list[str]) -> list[tuple[str, str]]:
-            '''
-            Walks tokenlist recursively. If we are already inside an aggregate (stack not empty)
-            and we encounter another aggregate function in the same scope (i.e., not under a subquery),
-            we record (outer_agg, inner_agg).
-            '''
-            pairs: list[tuple[str, str]] = []
-            from sqlparse import sql as sqlmod
-
-            # If we hit a subquery, stop recursion *within that branch* (different scope)
-            if _is_select_tokenlist(tokenlist):
-                return pairs
-
-            for tok in getattr(tokenlist, 'tokens', []):
-                # Recurse into groups while respecting subquery boundaries
-                if getattr(tok, 'is_group', False):
-                    # If this group *is* a subquery, skip into it entirely
-                    if _is_select_tokenlist(tok):
-                        continue
-
-                    # If this group is a function, handle specially
-                    if isinstance(tok, sqlmod.Function):
-                        fname = tok.get_name()
-                        if _is_aggregate_function(fname):
-                            # If already inside an aggregate, this is nested (same scope)
-                            if inside_agg_stack:
-                                pairs.append((inside_agg_stack[-1], fname))
-                            # Recurse deeper, now we are inside this aggregate too
-                            pairs.extend(_contains_nested_agg(tok, inside_agg_stack + [fname]))
-                            continue
-
-                    # Generic descent into other grouped nodes (COALESCE(...), CASE, arithmetic, etc.)
-                    pairs.extend(_contains_nested_agg(tok, inside_agg_stack))
-                # Non-group tokens: nothing to do
-            return pairs
-
-        from sqlparse import sql as sqlmod
-
-        # Walk each function found by your precomputed list, but do a full scan from there
-        for function, clause in self.query.functions:
-            fname = function.get_name()
-            if not _is_aggregate_function(fname):
+            if stripped.ast is None:
                 continue
 
-            nested = _contains_nested_agg(function, [fname])
-            for outer_name, inner_name in nested:
-                # Build a compact display like SUM(MAX(...))
-                results.append(DetectedError(
-                    SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED,
-                    (f'{outer_name}({inner_name}(...))',)
-                ))
+            aggregate_functions = stripped.ast.find_all(exp.AggFunc)
+
+            for outer_agg in aggregate_functions:
+                inner = outer_agg.this
+                for inner_agg in inner.find_all(exp.AggFunc):
+                    results.append(DetectedError(
+                        SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED,
+                        (outer_agg.sql(),)
+                    ))
 
         return results
-
-
-
-    # def syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested(self) -> list[DetectedError]:
-    #     '''Flags cases where aggregate functions are nested, which is not allowed in SQL.'''
-
-    #     results: list[DetectedError] = []
-
-    #     for function, clause in self.query.functions:
-    #         function_name = function.get_name()
-    #         if function_name and function_name.upper() in {'SUM', 'AVG', 'COUNT', 'MIN', 'MAX'}:
-    #             # Check if any argument is another aggregate function
-    #             for token in function.tokens:
-    #                 if token.is_group:
-    #                     for subtoken in token.tokens:
-    #                         if subtoken.is_group and isinstance(subtoken, sqlparse.sql.Function):
-    #                             sub_func_name = subtoken.get_name()
-    #                             if sub_func_name and sub_func_name.upper() in {'SUM', 'AVG', 'COUNT', 'MIN', 'MAX'}:
-    #                                 results.append(DetectedError(
-    #                                     SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED,
-    #                                     (f"{function_name}({sub_func_name}(...))",)
-    #                                 ))
-
-    #     results = []
-    #     aggregate_functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
-
-    #     if not self.parsed_qry:
-    #         return results
-
-    #     def contains_nested_agg(token_list, in_aggregate=False):
-    #         '''
-    #         Recursively check for nested aggregate functions, only flagging true nesting (e.g., SUM(AVG(x))).
-    #         '''
-    #         aggregate_functions = {"SUM", "AVG", "COUNT", "MIN", "MAX"}
-
-    #         for token in token_list.tokens if hasattr(token_list, 'tokens') else []:
-
-    #             # Detect aggregate function by structure: Name followed by Parenthesis
-    #             if token.is_group and isinstance(token, sqlparse.sql.Function):
-    #                 func_name_token = token.get_name()
-    #                 if func_name_token and func_name_token.upper() in aggregate_functions:
-    #                     if in_aggregate:
-    #                         return (
-    #                             SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED,
-    #                             f"Nested aggregate function found: {func_name_token.upper()}"
-    #                         )
-    #                     # Dive into the content of the function with in_aggregate=True
-    #                     for subtoken in token.tokens:
-    #                         if subtoken.is_group:
-    #                             nested = contains_nested_agg(subtoken, in_aggregate=True)
-    #                             if nested:
-    #                                 return nested
-    #                     continue  # Don't scan this token again outside
-
-    #             # For any other group, scan recursively
-    #             if token.is_group:
-    #                 nested = contains_nested_agg(token, in_aggregate)
-    #                 if nested:
-    #                     return nested
-
-    #         return None
-
-
-
-    #     # Walk the whole parsed query
-    #     for token in self.parsed_qry.tokens:
-    #         if token.is_group:
-    #             nested_result = contains_nested_agg(token)
-    #             if nested_result:
-    #                 results.append(nested_result)
-
-    #     return results
-    # endregion
 
     # region SYN-5
     def syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column(self) -> list[DetectedError]:
