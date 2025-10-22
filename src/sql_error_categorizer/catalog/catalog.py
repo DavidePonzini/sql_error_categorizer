@@ -38,6 +38,7 @@ class Column:
     numeric_precision: int | None = None
     numeric_scale: int | None = None
     is_nullable: bool = True
+    is_constant: bool = False
     fk_schema: str | None = None
     fk_table: str | None = None
     fk_column: str | None = None

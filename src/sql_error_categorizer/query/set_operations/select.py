@@ -131,9 +131,7 @@ class Select(SetOperation, TokenizedSQL):
                 counter += 1
             elif clause_upper in ('WHERE', 'HAVING', 'ON', 'SELECT'):
                 replacement = 'NULL'
-            elif clause_upper == 'EXISTS':
-                replacement = 'TRUE'
-            elif clause_upper == 'IN':
+            elif clause_upper in ('IN', 'EXISTS'):
                 replacement = '(NULL)'
 
             escaped = re.escape(subquery_sql)

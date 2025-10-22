@@ -82,7 +82,7 @@ class SyntaxErrorDetector(BaseDetector):
             self.syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column,
             self.syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by,
             self.syn_6_common_syntax_error_using_where_twice,
-            # self.syn_6_common_syntax_error_omitting_the_from_clause,  # TODO: refactor
+            self.syn_6_common_syntax_error_omitting_the_from_clause,
             # self.syn_6_common_syntax_error_comparison_with_null,  # TODO: refactor
             # self.syn_6_common_syntax_error_restriction_in_select_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_projection_in_where_clause,    # TODO: refactor
@@ -835,90 +835,6 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-        ##########################################################################################
-
-
-        def count_where_clauses(query: str) -> int:
-            # Remove strings and comments to avoid counting 'WHERE' inside them
-            cleaned = re.sub(r"'(?:''|[^'])*'", '', query)
-            cleaned = re.sub(r"--.*?$", '', cleaned, flags=re.MULTILINE)
-            cleaned = re.sub(r"/\*.*?\*/", '', cleaned, flags=re.DOTALL)
-            return len(re.findall(r'\bWHERE\b', cleaned, flags=re.IGNORECASE))
-
-        # --- Step 1: Extract CTEs and check each one ---
-        cte_blocks = []
-        query = QueryParser.normalize_query(self.query)
-
-        if query.strip().upper().startswith("WITH"):
-            cte_part_match = re.search(r'\bWITH\b(.*?)(?=SELECT\b)', query, re.IGNORECASE | re.DOTALL)
-            if cte_part_match:
-                cte_part = cte_part_match.group(1)
-                # Simple split on 'AS (' to get individual CTE bodies
-                cte_bodies = re.findall(r'AS\s*\((.*?)\)', cte_part, re.IGNORECASE | re.DOTALL)
-                for body in cte_bodies:
-                    if count_where_clauses(body) > 1:
-                        results.append((
-                            SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE,
-                            "Multiple WHERE clauses detected in CTE"
-                        ))
-
-        # --- Step 2: Isolate and check subqueries ---
-        _, query_without_cte = QueryParser.extract_ctes(self.query)
-        subq_map, cleaned_main_query = QueryParser.extract_subqueries(query_without_cte)
-
-        # The `cond` (key of subq_map) contains the context, including the outer `WHERE`.
-        # The bug is checking this whole string. We must check only the subquery body.
-        for cond in subq_map.keys():
-            # Isolate the subquery body from its context by finding the parenthesized expression.
-            subquery_body = ""
-            start_pos = cond.find('(')
-            if start_pos != -1:
-                depth = 0
-                for i in range(start_pos, len(cond)):
-                    char = cond[i]
-                    if char == '(':
-                        depth += 1
-                    elif char == ')':
-                        depth -= 1
-                    if depth == 0:
-                        subquery_body = cond[start_pos + 1:i]
-                        break
-            
-            # Only check the isolated subquery for multiple WHERE clauses.
-            if subquery_body and count_where_clauses(subquery_body) > 1:
-                results.append((
-                    SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE,
-                    "Multiple WHERE clauses detected in a subquery"
-                ))
-
-        # --- Step 3: Check the main query (with subqueries conceptually removed) ---
-        def count_top_level_where(query_str: str) -> int:
-            '''Counts WHERE clauses at the top level, ignoring those inside parentheses.'''
-            depth = 0
-            count = 0
-            in_string = False
-            for match in re.finditer(r"\bWHERE\b|\(|\)|'", query_str, re.IGNORECASE):
-                token = match.group(0)
-                if token == "'":
-                    in_string = not in_string
-                if not in_string:
-                    if token == '(':
-                        depth += 1
-                    elif token == ')':
-                        depth = max(0, depth - 1)
-                    elif token.upper() == 'WHERE' and depth == 0:
-                        count += 1
-            return count
-
-        if count_top_level_where(cleaned_main_query) > 1:
-            results.append((
-                SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE,
-                "Multiple WHERE clauses detected in main query"
-            ))
-
-        return list(set(results))
-
-    # TODO: refactor
     def syn_6_common_syntax_error_omitting_the_from_clause(self) -> list[DetectedError]:
         '''
         Flags queries that omit the FROM clause entirely when it's required.
@@ -926,48 +842,25 @@ class SyntaxErrorDetector(BaseDetector):
         - The query selects only constants/literals
         - The query uses CTEs and references them implicitly
         '''
-        results = []
+        results: list[DetectedError] = []
 
-        def check_from_clause(map_name: str, query_map: dict):
-            from_val = query_map.get("from_value", "")
-            if not from_val or str(from_val).strip() == "":
-                                
-                # Check if selecting only constants/literals
-                select_values = query_map.get("select_value", [])
-                if select_values:
-                    # Check if all select values are constants/literals
-                    all_constants = True
-                    for val in select_values:
-                        val_clean = val.strip()
-                        # Check if it's a number, string literal, or simple expression
-                        if not (val_clean.isdigit() or 
-                               (val_clean.startswith("'") and val_clean.endswith("'")) or
-                               (val_clean.startswith('"') and val_clean.endswith('"')) or
-                               val_clean.upper() in {'NULL', 'TRUE', 'FALSE'} or
-                               val_clean.startswith('CAST(') or
-                               val_clean.startswith('CONVERT(')):
-                            all_constants = False
-                            break
-                    
-                    if all_constants:
-                        # Selecting only constants is valid without FROM clause
-                        return
-                
-                results.append((
-                    SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE,
-                    f"Missing FROM clause in {map_name}"
-                ))
+        for select in self.query.selects:
+            stripped = select.strip_subqueries()
 
-        # Main query
-        check_from_clause("main query", self.query_map)
+            from_found = False
+            for ttype, val in stripped.tokens:
+                if ttype == sqlparse.tokens.Keyword and val.upper() == 'FROM':
+                    from_found = True
+                    break
 
-        # CTEs
-        for name, cte in self.cte_map.items():
-            check_from_clause(f"CTE '{name}'", cte)
+            if from_found:
+                continue    # valid, has FROM clause
 
-        # Subqueries
-        for cond, subq in self.subquery_map.items():
-            check_from_clause(f"subquery in '{cond}'", subq)
+            # Check if selecting only constants/literals
+            for col in stripped.output.columns:
+                if not col.is_constant:
+                    results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (select.sql,)))
+                    break
 
         return results
 
@@ -1014,19 +907,19 @@ class SyntaxErrorDetector(BaseDetector):
             results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_SEMICOLON))
         
         # Check for multiple semicolons inside the query
-        tokens_to_check = self.query.tokens[:-1] if has_semicolon_at_end else self.query.tokens
+        tokens_to_check = list(self.query.parsed.flatten())[:-1] if has_semicolon_at_end else self.query.parsed.flatten()
         good_tokens = []
-        for token, val in tokens_to_check:
-            if token == sqlparse.tokens.Punctuation and val == ';':
+        for token in tokens_to_check:
+            if token.ttype == sqlparse.tokens.Punctuation and token.value == ';':
                 results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
                 continue
-            good_tokens.append(val)
-        
+            good_tokens.append(token.value)
+
         # Check for multiple semicolons at the end of the query (resulting in multiple statements)
         for _ in self.query.all_statements[1:]:     # skip the actual query
             results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
         
-        return (results, ' '.join(good_tokens))
+        return (results, ''.join(good_tokens))
 
 
     
