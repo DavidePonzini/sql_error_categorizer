@@ -1,4 +1,4 @@
-from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error
+from tests import *
 
 def test_simple():
     detected_errors = run_test(
@@ -6,6 +6,7 @@ def test_simple():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION) == 1
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function', 'SELECT'))
 
 def test_standard_function():
@@ -14,6 +15,7 @@ def test_standard_function():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION) == 0
     assert not has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('COUNT', 'SELECT'))
 
 def test_subquery_from():
@@ -25,6 +27,7 @@ def test_subquery_from():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION) == 1
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function', 'SELECT'))
 
 def test_subquery_where():
@@ -37,6 +40,7 @@ def test_subquery_where():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION) == 1
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_FUNCTION, ('not_a_function', 'SELECT'))
 
 def test_function_parameters1():
@@ -45,6 +49,7 @@ def test_function_parameters1():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER) == 1
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER, (':id',))
 
 
@@ -54,6 +59,7 @@ def test_function_parameters2():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER) == 1
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER, ('@id',))
 
 
@@ -63,4 +69,5 @@ def test_function_parameters3():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER) == 1
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER, ('?',))

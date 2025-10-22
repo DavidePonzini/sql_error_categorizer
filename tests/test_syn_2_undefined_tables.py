@@ -1,4 +1,4 @@
-from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error
+from tests import *
 
 def test_undefined_table():
     detected_errors = run_test(
@@ -7,6 +7,7 @@ def test_undefined_table():
         catalog_filename='cat_miedema.json'
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT) == 1
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, ('store',))
 
 def test_defined_table():
@@ -17,6 +18,7 @@ def test_defined_table():
         search_path='miedema'
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT) == 0
     assert not has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, ('store',))
 
 
@@ -29,6 +31,7 @@ def test_undefined_table_cte_name_found():
         detectors=[SyntaxErrorDetector],
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT) == 0
     assert not has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, ('cte',))
 
 
@@ -41,6 +44,7 @@ def test_undefined_table_cte_name_not_found():
         detectors=[SyntaxErrorDetector],
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT) == 1
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, ('cte2',))
 
 def test_undefined_table_cte():
@@ -52,4 +56,6 @@ def test_undefined_table_cte():
         detectors=[SyntaxErrorDetector],
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT) == 2
     assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, ('not_a_table',))
+    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_OBJECT, ('store',))

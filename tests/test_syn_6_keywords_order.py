@@ -1,5 +1,5 @@
 import pytest
-from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error, has_any_error
+from tests import *
 
 def test_correct_order():
     query = 'SELECT col1 FROM table1 WHERE col2 = 10 GROUP BY col1 HAVING COUNT(col2) > 5 ORDER BY col1 LIMIT 10 OFFSET 5'
@@ -9,7 +9,7 @@ def test_correct_order():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert not has_any_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS)
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS) == 0
 
 
 def test_incorrect_order():
@@ -20,6 +20,7 @@ def test_incorrect_order():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS) == 1
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS, (['SELECT', 'WHERE', 'FROM'],))
 
 
@@ -29,7 +30,8 @@ def test_incorrect_order_with_subquery():
 
     detected_errors = run_test(
         query=query,
-        detectors=[SyntaxErrorDetector], debug=True
+        detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS) == 1
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS, (['SELECT', 'GROUP BY', 'FROM', 'ORDER BY', 'LIMIT', 'OFFSET', 'WHERE'],))

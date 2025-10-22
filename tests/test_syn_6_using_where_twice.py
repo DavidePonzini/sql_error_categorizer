@@ -1,5 +1,5 @@
 import pytest
-from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error, has_any_error
+from tests import *
 
 def test_single_where():
     query = 'SELECT col1 WHERE col2 = 1'
@@ -9,7 +9,7 @@ def test_single_where():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert not has_any_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE)
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE) == 0
 
 def test_double_where_main():
     query = 'SELECT col1 WHERE col2 = 1 WHERE col3 = 2'
@@ -19,6 +19,7 @@ def test_double_where_main():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE) == 1
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE, (query, 2))
 
 def test_double_where_subquery():
@@ -35,8 +36,8 @@ def test_double_where_subquery():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE) == 1
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE, (subquery, 2))
-    assert not has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE, (query, 1))
 
 def test_multiple_double_where():
     subquery1 = 'SELECT col2 WHERE col3 = 1 WHERE col4 = 2'
@@ -53,6 +54,7 @@ def test_multiple_double_where():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE) == 3
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE, (subquery1, 2))
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE, (subquery2, 3))
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_USING_WHERE_TWICE, (query.strip(), 2))

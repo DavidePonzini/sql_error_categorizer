@@ -1,5 +1,5 @@
 import pytest
-from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error, has_any_error
+from tests import *
 
 def test_no_from_simple():
     query = 'SELECT col1'
@@ -9,6 +9,7 @@ def test_no_from_simple():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 1
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (query,))
 
 @pytest.mark.skip(reason="is_constant not yet implemented")
@@ -20,7 +21,7 @@ def test_no_from_with_constant_expression():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert not has_any_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE)
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 0
 
 def test_no_from_with_cte():
     query = '''
@@ -35,6 +36,7 @@ def test_no_from_with_cte():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 1
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, ('SELECT no_col',))
 
 def test_no_from_with_subquery_both():
@@ -46,6 +48,7 @@ def test_no_from_with_subquery_both():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 2
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (query,))
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (subquery,))
 
@@ -58,8 +61,8 @@ def test_no_from_with_subquery_only_sub():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 1
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (subquery,))
-    assert not has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (query,))
 
 def test_no_from_with_subquery_only_main():
     subquery = 'SELECT col3 FROM table2'
@@ -70,5 +73,5 @@ def test_no_from_with_subquery_only_main():
         detectors=[SyntaxErrorDetector]
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 1
     assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (query,))
-    assert not has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (subquery,))

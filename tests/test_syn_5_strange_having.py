@@ -1,4 +1,4 @@
-from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error
+from tests import *
 
 def test_having_no_group_by():
     detected_errors = run_test(
@@ -7,7 +7,7 @@ def test_having_no_group_by():
         catalog_filename='cat_miedema.json'
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY)
+    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY) == 1
 
 def test_having_with_group_by():
     detected_errors = run_test(
@@ -16,7 +16,7 @@ def test_having_with_group_by():
         catalog_filename='cat_miedema.json'
     )
 
-    assert not has_error(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY)
+    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY) == 0
 
 def test_having_no_group_by_subquery():
     detected_errors = run_test(
@@ -32,7 +32,7 @@ def test_having_no_group_by_subquery():
         debug=True
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY)
+    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY) == 1
 
 def test_having_with_group_by_subquery():
     detected_errors = run_test(
@@ -48,7 +48,7 @@ def test_having_with_group_by_subquery():
         catalog_filename='cat_miedema.json'
     )
 
-    assert not has_error(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY)
+    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY) == 0
 
 def test_having_no_group_by_cte():
     detected_errors = run_test(
@@ -63,7 +63,7 @@ def test_having_no_group_by_cte():
         catalog_filename='cat_miedema.json'
     )
 
-    assert has_error(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY)
+    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY) == 1
 
 def test_having_with_group_by_cte():
     detected_errors = run_test(
@@ -78,4 +78,4 @@ def test_having_with_group_by_cte():
         catalog_filename='cat_miedema.json'
     )
 
-    assert not has_error(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY)
+    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY) == 0

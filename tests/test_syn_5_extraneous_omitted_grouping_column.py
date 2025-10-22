@@ -1,4 +1,4 @@
-from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error, has_any_error
+from tests import *
 
 def test_grouping_columns_ok():
     detected_errors = run_test(
@@ -6,7 +6,7 @@ def test_grouping_columns_ok():
         detectors=[SyntaxErrorDetector],
     )
 
-    assert not has_any_error(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN)
+    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 0
 
 def test_extraneous_grouping_column():
     detected_errors = run_test(
@@ -14,6 +14,7 @@ def test_extraneous_grouping_column():
         detectors=[SyntaxErrorDetector],
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 1
     assert has_error(
         detected_errors,
         SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
@@ -26,6 +27,7 @@ def test_omitted_grouping_column():
         detectors=[SyntaxErrorDetector],
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 1
     assert has_error(
         detected_errors,
         SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
@@ -38,6 +40,8 @@ def test_extraneous_and_omitted_grouping_columns():
         detectors=[SyntaxErrorDetector],
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 2
+    
     assert has_error(
         detected_errors,
         SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,

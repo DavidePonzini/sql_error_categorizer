@@ -1,4 +1,4 @@
-from tests import run_test, SyntaxErrorDetector, SqlErrors, has_error, has_any_error
+from tests import *
 
 def test_nested_aggregate_functions():
     agg1 = 'SUM(MAX(price))'
@@ -12,9 +12,9 @@ def test_nested_aggregate_functions():
         detectors=[SyntaxErrorDetector],
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == 2
     assert has_error(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (agg1,))
     assert has_error(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (agg2,))
-    assert not has_error(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (no_agg,))
 
 def test_no_nested_aggregate_functions_subquery():
     agg_in_subquery = 'MAX(price)'
@@ -34,7 +34,7 @@ def test_no_nested_aggregate_functions_subquery():
         detectors=[SyntaxErrorDetector],
     )
 
-    assert not has_any_error(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED)
+    assert count_errors(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == 0
 
 def test_aggregate_functions_subquery():
     agg_in_subquery = 'COUNT(SUM(price))'
@@ -54,6 +54,7 @@ def test_aggregate_functions_subquery():
         detectors=[SyntaxErrorDetector],
     )
 
+    assert count_errors(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == 2
     assert has_error(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (agg_in_subquery,))
     assert has_error(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (outer_agg,))
 
