@@ -114,7 +114,7 @@ class Select(SetOperation, TokenizedSQL):
     # endregion
 
     def strip_subqueries(self) -> 'Select':
-        '''Returns the SQL query with all subqueries removed (replaced by ).'''
+        '''Returns the SQL query with all subqueries removed (replaced by a context-aware placeholder).'''
 
         stripped_sql = self.sql
 
