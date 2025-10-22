@@ -767,26 +767,48 @@ class SyntaxErrorDetector(BaseDetector):
 
         results: list[DetectedError] = []
 
-        has_semicolon_at_end = self.query.tokens and self.query.tokens[-1][1].strip() == ';'
-        # Check if the last token is a semicolon
-        if not has_semicolon_at_end:
-            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_SEMICOLON))
+        all_tokens = []
+        for statement in self.query.all_statements:
+            all_tokens.extend(list(statement.flatten()))
         
-        # Check for multiple semicolons inside the query
-        tokens_to_check = list(self.query.parsed.flatten())[:-1] if has_semicolon_at_end else self.query.parsed.flatten()
         good_tokens = []
-        for token in tokens_to_check:
+        trailing_semicolon_found = False
+        non_whitespace_found = False
+        
+        for token in reversed(all_tokens):  # start from end to preserve only the last semicolon
+            # check for whitespace/newline
+            if token.ttype in (sqlparse.tokens.Whitespace, sqlparse.tokens.Newline):
+                # keep as is and continue
+                good_tokens.append(token.value)
+                continue
+            
+            # check for semicolons: the first one before any non-whitespace is kept, others are flagged
             if token.ttype == sqlparse.tokens.Punctuation and token.value == ';':
+                if non_whitespace_found:
+                    # we encountered a semicolon in the middle of the query!
+                    # we don't care if this is the first one we encounter, it's surely not supposed to be here
+                    results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
+                    continue
+                
+                if not trailing_semicolon_found:
+                    # we encountered the trailing semicolon for the first time
+                    # it's good, keep it
+                    good_tokens.append(token.value)
+                    trailing_semicolon_found = True
+                    continue
+
+                # else, we have already found the trailing semicolon, so this is an extra one at the end
                 results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
                 continue
+            
+            # any other token
+            non_whitespace_found = True
             good_tokens.append(token.value)
+                
+        if not trailing_semicolon_found:
+            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_SEMICOLON))
 
-        # Check for multiple semicolons at the end of the query (resulting in multiple statements)
-        for _ in self.query.all_statements[1:]:     # skip the actual query
-            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
-        
-        return (results, ''.join(good_tokens))
-
+        return (results, ''.join(reversed(good_tokens)))
 
     
     #TODO def syn_6_common_syntax_error_date_time_field_overflow(self):
