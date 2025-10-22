@@ -83,6 +83,7 @@ class SyntaxErrorDetector(BaseDetector):
             self.syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by,
             self.syn_6_common_syntax_error_using_where_twice,
             self.syn_6_common_syntax_error_omitting_the_from_clause,
+            self.syn_6_common_syntax_error_duplicate_clause,
             # self.syn_6_common_syntax_error_comparison_with_null,  # TODO: refactor
             # self.syn_6_common_syntax_error_restriction_in_select_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_projection_in_where_clause,    # TODO: refactor
@@ -809,13 +810,40 @@ class SyntaxErrorDetector(BaseDetector):
             results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_SEMICOLON))
 
         return (results, ''.join(reversed(good_tokens)))
-
     
-    #TODO def syn_6_common_syntax_error_date_time_field_overflow(self):
-    #TODO def syn_6_common_syntax_error_duplicate_clause(self):
-    #TODO def syn_6_common_syntax_error_using_an_undefined_correlation_name(self):
-    #TODO def syn_6_common_syntax_error_too_many_columns_in_subquery(self) -> list:
-    #TODO def syn_6_common_syntax_error_confusing_table_names_with_column_names(self):
+    # TODO: implement
+    def syn_6_common_syntax_error_date_time_field_overflow(self) -> list[DetectedError]:
+        return []
+
+    def syn_6_common_syntax_error_duplicate_clause(self) -> list[DetectedError]:
+        '''
+        Flags queries that contain duplicate clauses (e.g., two WHERE clauses).
+        '''
+        results: list[DetectedError] = []
+
+        clause_keywords = {'SELECT', 'FROM', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT', 'JOIN', 'ON'}
+        
+        for select in self.query.selects:
+            stripped = select.strip_subqueries()
+
+            clause_count = {}
+            for ttype, val in stripped.tokens:
+                val_upper = val.upper()
+                if ttype == sqlparse.tokens.DML and val_upper == 'SELECT':
+                    clause_count[val_upper] = clause_count.get(val_upper, 0) + 1
+                if ttype == sqlparse.tokens.Keyword and val_upper in clause_keywords:
+                    clause_count[val_upper] = clause_count.get(val_upper, 0) + 1
+
+            for clause, count in clause_count.items():
+                if count > 1:
+                    results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_DUPLICATE_CLAUSE, (clause, count)))
+
+        return results
+
+
+    # TODO def syn_6_common_syntax_error_using_an_undefined_correlation_name(self):
+    # TODO def syn_6_common_syntax_error_too_many_columns_in_subquery(self) -> list:
+    # TODO def syn_6_common_syntax_error_confusing_table_names_with_column_names(self):
     
     # TODO: refactor
     def syn_6_common_syntax_error_restriction_in_select_clause(self) -> list[DetectedError]:
@@ -995,12 +1023,6 @@ class SyntaxErrorDetector(BaseDetector):
                         actual_order.append('OFFSET')
 
             # Check the order of clauses
-            from dav_tools import messages
-
-            messages.debug(f'query: {stripped.sql}')
-            messages.debug(f"DEBUG: Actual clause order: {actual_order}")
-
-
             last_index = -1
             for clause in actual_order:
                 if clause in expected_order:
@@ -1018,6 +1040,7 @@ class SyntaxErrorDetector(BaseDetector):
     #TODO def syn_6_common_syntax_error_confusing_the_logic_of_keywords(self):
     
     # TODO: refactor
+    # NOTE: is this implementation actually coherent with the error description?
     def syn_6_common_syntax_error_confusing_the_syntax_of_keywords(self) -> list[DetectedError]:
         '''
         Flags use of SQL keywords like LIKE, IN, BETWEEN, etc. with incorrect function-like syntax (e.g., LIKE(...)).
