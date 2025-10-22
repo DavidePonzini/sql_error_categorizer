@@ -153,21 +153,21 @@ class Select(SetOperation, TokenizedSQL):
         if self._subqueries is None:
             self._subqueries = []
             # try to find subqueries via sqlglot AST, since it's more reliable
-            if self.ast:
-                subquery_asts = extractors.extract_subqueries_ast(self.ast)
-                for subquery_ast in subquery_asts:
-                    while not isinstance(subquery_ast, exp.Select):
-                        subquery_ast = subquery_ast.this
-                    subquery = Select(subquery_ast.sql(), catalog=self.catalog, search_path=self.search_path)
-                    self._subqueries.append(subquery)
-            else:
+            # if self.ast:
+            #     subquery_asts = extractors.extract_subqueries_ast(self.ast)
+            #     for subquery_ast in subquery_asts:
+            #         while not isinstance(subquery_ast, exp.Select):
+            #             subquery_ast = subquery_ast.this
+            #         subquery = Select(subquery_ast.sql(), catalog=self.catalog, search_path=self.search_path)
+            #         self._subqueries.append(subquery)
+            # else:
                 # fallback: AST cannot be constructed, try to find subqueries via sqlparse
-                subquery_sqls = extractors.extract_subqueries_tokens(self.sql)
+            subquery_sqls = extractors.extract_subqueries_tokens(self.sql)
 
-                for subquery_sql, clause in subquery_sqls:
-                    subquery = Select(subquery_sql, catalog=self.catalog, search_path=self.search_path)
-                    self._subqueries.append(subquery)
-        
+            for subquery_sql, clause in subquery_sqls:
+                subquery = Select(subquery_sql, catalog=self.catalog, search_path=self.search_path)
+                self._subqueries.append(subquery)
+    
         return self._subqueries
 
     @property

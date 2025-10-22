@@ -78,7 +78,7 @@ class SyntaxErrorDetector(BaseDetector):
         checks = [
             # self.syn_3_data_type_mismatch,    # TODO: refactor
             self.syn_4_aggregate_function_outside_select_or_having,
-            self.syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested,  # TODO: refactor
+            self.syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested,
             self.syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column,
             self.syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by,
             self.syn_6_common_syntax_error_using_where_twice,
@@ -86,7 +86,7 @@ class SyntaxErrorDetector(BaseDetector):
             # self.syn_6_common_syntax_error_comparison_with_null,  # TODO: refactor
             # self.syn_6_common_syntax_error_restriction_in_select_clause,  # TODO: refactor
             # self.syn_6_common_syntax_error_projection_in_where_clause,    # TODO: refactor
-            # self.syn_6_common_syntax_error_confusing_the_order_of_keywords,   # TODO: refactor
+            self.syn_6_common_syntax_error_confusing_the_order_of_keywords,
             # self.syn_6_common_syntax_error_confusing_the_syntax_of_keywords,  # TODO: refactor
             # self.syn_6_common_syntax_error_omitting_commas,   # TODO: refactor
             self.syn_6_common_syntax_error_curly_square_or_unmatched_brackets,
@@ -604,6 +604,9 @@ class SyntaxErrorDetector(BaseDetector):
             if select.ast is None:
                 continue
 
+            if not select.group_by:
+                continue    # no GROUP BY, skip
+
             select_columns: list[tuple[str, str]] = [] # we need a list for positional GROUP BY handling
 
             def get_column_name(col: exp.Column | exp.Alias) -> tuple[str, str]:
@@ -935,60 +938,58 @@ class SyntaxErrorDetector(BaseDetector):
         return results
 
 
-    # TODO: refactor
     def syn_6_common_syntax_error_confusing_the_order_of_keywords(self) -> list[DetectedError]:
         '''
         Flags queries where the standard order of SQL clauses is not respected.
         Expected order:
-        SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY → LIMIT
+        SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY → LIMIT → OFFSET
         '''
-        results = []
+        results: list[DetectedError] = []
 
-        clause_order = {
-            "SELECT": 1,
-            "FROM": 2,
-            "WHERE": 3,
-            "GROUP BY": 4,
-            "HAVING": 5,
-            "ORDER BY": 6,
-            "LIMIT": 7
-        }
+        for select in self.query.selects:
+            stripped = select.strip_subqueries()
 
-        # Record the position where each clause appears
-        clause_positions = {}
+            expected_order = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT', 'OFFSET']
+            actual_order: list[str] = []
 
-        tokens = self.tokens
-        i = 0
-        while i < len(tokens):
-            _, val = tokens[i]
-            val_upper = val.upper().strip()
+            for ttype, val in stripped.tokens:
+                if ttype == sqlparse.tokens.DML:
+                    actual_order.append('SELECT')
+                elif ttype == sqlparse.tokens.Keyword:
+                    val_upper = val.upper()
+                    if val_upper == 'FROM':
+                        actual_order.append('FROM')
+                    elif val_upper == 'WHERE':
+                        actual_order.append('WHERE')
+                    elif val_upper == 'GROUP BY':
+                        actual_order.append('GROUP BY')
+                    elif val_upper == 'HAVING':
+                        actual_order.append('HAVING')
+                    elif val_upper == 'ORDER BY':
+                        actual_order.append('ORDER BY')
+                    elif val_upper == 'LIMIT':
+                        actual_order.append('LIMIT')
+                    elif val_upper == 'OFFSET':
+                        actual_order.append('OFFSET')
 
-            if val_upper == "GROUP" and i + 1 < len(tokens) and tokens[i + 1][1].upper() == "BY":
-                clause_positions["GROUP BY"] = i
-                i += 2
-                continue
-            elif val_upper == "ORDER" and i + 1 < len(tokens) and tokens[i + 1][1].upper() == "BY":
-                clause_positions["ORDER BY"] = i
-                i += 2
-                continue
-            elif val_upper in clause_order:
-                if val_upper not in clause_positions:
-                    clause_positions[val_upper] = i
-            i += 1
+            # Check the order of clauses
+            from dav_tools import messages
 
-        # Check order
-        sorted_clauses = sorted(clause_positions.items(), key=lambda kv: kv[1])
-        found_order = [clause for clause, _ in sorted_clauses]
-        expected_order = list(clause_order.keys())
+            messages.debug(f'query: {stripped.sql}')
+            messages.debug(f"DEBUG: Actual clause order: {actual_order}")
 
-        # Reduce expected to only the ones that appear in this query
-        expected_sequence = [cl for cl in expected_order if cl in clause_positions]
 
-        if found_order != expected_sequence:
-            results.append((
-                SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS,
-                f"Incorrect clause order: found {found_order}, expected {expected_sequence}"
-            ))
+            last_index = -1
+            for clause in actual_order:
+                if clause in expected_order:
+                    current_index = expected_order.index(clause)
+                    if current_index < last_index:
+                        results.append(DetectedError(
+                            SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS,
+                            (actual_order,)
+                        ))
+                        break
+                    last_index = current_index
 
         return results
         
