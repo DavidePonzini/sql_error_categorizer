@@ -5,6 +5,8 @@ sqlglot
 
 ipython
 
+python-dateutil
+
 build
 autoapi
 pytest
