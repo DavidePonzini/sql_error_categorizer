@@ -5,51 +5,39 @@ import sqlparse.keywords
 from typing import Callable
 
 from .base import BaseDetector, DetectedError
-from ..tokenizer import TokenizedSQL
+from ..query import Query
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
-from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog, get_ast
 
 
 class LogicalErrorDetector(BaseDetector):
-    def __init__(self, *,
-                 query: TokenizedSQL,
-                 catalog: Catalog,
-                 search_path: str,
-                 query_map: QueryMap,
-                 subquery_map: SubqueryMap,
-                 cte_map: CTEMap,
-                 cte_catalog: CTECatalog,
-                 update_query: Callable[[str], None],
-                 correct_solutions: list[str] = [],
+    def __init__(self,
+                 *,
+                 query: Query,
+                 update_query: Callable[[str, str | None], None],
+                 solutions: list[Query] = [],
                 ):
         super().__init__(
             query=query,
-            catalog=catalog,
-            search_path=search_path,
-            query_map=query_map,
-            subquery_map=subquery_map,
-            cte_map=cte_map,
-            cte_catalog=cte_catalog,
+            solutions=solutions,
             update_query=update_query,
-            correct_solutions=correct_solutions,
         )
 
     def run(self) -> list[DetectedError]:    
         results = super().run()
 
         # If correct_solutions are not provided, return an empty list
-        if not self.correct_solutions:
+        if not self.solutions:
             print("Missing correct solutions to analyze logical errors.")
             return results
         
         # AST parsing for proposed and correct solutions
-        self.q_ast = get_ast(self.query.sql)
-        self.s_ast = [get_ast(sol) for sol in self.correct_solutions]
-        self.s_ast = self.s_ast[0] # TODO: for now we only support one correct solution
+        # self.q_ast = get_ast(self.query.sql)
+        # self.s_ast = [get_ast(sol) for sol in self.correct_solutions]
+        # self.s_ast = self.s_ast[0] # TODO: for now we only support one correct solution
 
-        if not self.q_ast or not self.s_ast:
-            return results
+        # if not self.q_ast or not self.s_ast:
+        #     return results
         
         checks = [
             # self.log_1_operator_error_or_instead_of_and,  # TODO: refactor

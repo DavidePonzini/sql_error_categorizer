@@ -7,9 +7,10 @@ from .catalog import Catalog, build_catalog, load_json as load_catalog
 from .detectors import SyntaxErrorDetector, SemanticErrorDetector, LogicalErrorDetector, ComplicationDetector
 
 def get_errors(query_str: str,
-               correct_solutions: list[str] = [],
-               catalog: catalog.Catalog = catalog.Catalog(),
+               solutions: list[str] = [],
+               catalog: Catalog = Catalog(),
                search_path: str = 'public',
+               solution_search_path: str = 'public',
                detectors: list[type[_BaseDetector]] = [
                    SyntaxErrorDetector,
                    SemanticErrorDetector,
@@ -18,7 +19,12 @@ def get_errors(query_str: str,
                 ],
                debug: bool = False) -> set[SqlErrors]:
     '''Detect SQL errors in the given query string.'''
-    det = _Detector(query_str, correct_solutions=correct_solutions, catalog=catalog, search_path=search_path, debug=debug)
+    det = _Detector(query_str,
+                    solutions=solutions,
+                    catalog=catalog,
+                    search_path=search_path,
+                    solution_search_path=solution_search_path,
+                    debug=debug)
 
     for detector in detectors:
         det.add_detector(detector)
@@ -27,17 +33,32 @@ def get_errors(query_str: str,
 
 
 # TODO: rename
-def get_errors2(query_str: str, correct_solutions: list[str] = [], dataset_str: str = '',
-               db_host: str = 'localhost', db_port: int = 5432, db_user: str = 'postgres', db_password: str = 'password',
-               debug: bool = False) -> set[SqlErrors]:
+def get_errors2(query_str: str,
+                correct_solutions: list[str] = [],
+                dataset_str: str = '',
+                db_host: str = 'localhost',
+                db_port: int = 5432,
+                db_user: str = 'postgres',
+                db_password: str = 'password',
+                debug: bool = False) -> set[SqlErrors]:
     '''Detect SQL errors in the given query string.'''
 
     cat = build_catalog(dataset_str, hostname=db_host, port=db_port, user=db_user, password=db_password)
 
-    return get_errors(query_str, correct_solutions=correct_solutions, catalog=cat, search_path=cat.schemas.pop(), debug=debug)
+    search_path = cat.schema_names.pop() or 'public'
+
+    return get_errors(query_str,
+                      solutions=correct_solutions,
+                      catalog=cat,
+                      search_path=search_path,
+                      solution_search_path=search_path,
+                      debug=debug)
 
 
-def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', catalog_file: str = 'tests/datasets/cat_miedema.json') -> _Detector:
+def t(query_file: str = 'q_q.sql',
+      solution_file: str = 'q_s.sql',
+      catalog_file: str = 'tests/datasets/cat_miedema.json',
+      search_path: str | None = None) -> _Detector:
     '''Test function, remove before production'''
 
     with open(query_file) as f:
@@ -47,7 +68,10 @@ def t(query_file: str = 'q_q.sql', solution_file: str = 'q_s.sql', catalog_file:
 
     cat = load_catalog(catalog_file)
 
-    det = _Detector(query, correct_solutions=[solution], catalog=cat, search_path=cat.schemas.pop() or 'public', debug=True)
+    if search_path is None:
+        search_path = cat.schema_names.pop() or 'public'
+
+    det = _Detector(query, solutions=[solution], catalog=cat, search_path=search_path, solution_search_path=search_path, debug=True)
     det.add_detector(SyntaxErrorDetector)
     det.add_detector(SemanticErrorDetector)
     det.add_detector(LogicalErrorDetector)

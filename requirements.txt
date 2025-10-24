@@ -5,7 +5,10 @@ sqlglot
 
 ipython
 
+python-dateutil
+
 build
 autoapi
 pytest
+pytest-cov
 sphinx-autoapi

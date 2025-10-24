@@ -5,34 +5,22 @@ import sqlparse.keywords
 from typing import Callable
 
 from .base import BaseDetector, DetectedError
-from ..tokenizer import TokenizedSQL
+from ..query import Query
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
-from ..parser import QueryMap, SubqueryMap, CTEMap, CTECatalog
 
 
 class SemanticErrorDetector(BaseDetector):
-    def __init__(self, *,
-                 query: TokenizedSQL,
-                 catalog: Catalog,
-                 search_path: str,
-                 query_map: QueryMap,
-                 subquery_map: SubqueryMap,
-                 cte_map: CTEMap,
-                 cte_catalog: CTECatalog,
-                 update_query: Callable[[str], None],
-                 correct_solutions: list[str] = [],
+    def __init__(self,
+                 *,
+                 query: Query,
+                 update_query: Callable[[str, str | None], None],
+                 solutions: list[Query] = [],
                 ):
         super().__init__(
             query=query,
-            catalog=catalog,
-            search_path=search_path,
-            query_map=query_map,
-            subquery_map=subquery_map,
-            cte_map=cte_map,
-            cte_catalog=cte_catalog,
+            solutions=solutions,
             update_query=update_query,
-            correct_solutions=correct_solutions,
         )
 
     # def _prepare(self):
