@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from functools import singledispatch
 from enum import Enum
+from typing import Any
 from sqlglot import exp
 from sql_error_categorizer.catalog.catalog import Table
 from dateutil.parser import parse
@@ -16,7 +17,7 @@ class Type(Enum):
 @dataclass
 class ResultType:
     type: Type
-    value: any = None
+    value: Any = None
     nullable: bool = True
     constant: bool = False
 
@@ -51,7 +52,8 @@ def _(expression: exp.Cast, referenced_tables: list[Table]) -> list[ResultType]:
     original_types = get_type(expression.this, referenced_tables)
     # the casting is valid if the original type is a date or a string that can be converted to date
     if len(original_types) == 1 and (original_types[0].type == Type.DATE or to_date(original_types[0])):
-        if expression.args.get("to").sql().upper() in ["DATE", "TIMESTAMP"]:
+        to = expression.args.get("to")
+        if to is not None and to.sql().upper() in ["DATE", "TIMESTAMP"]:
             return [ResultType(Type.DATE, constant=True, value=original_types[0].value, nullable=False)]
     return [ResultType(Type.NONE)]
     
