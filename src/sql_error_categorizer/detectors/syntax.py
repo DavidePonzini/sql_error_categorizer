@@ -25,20 +25,23 @@ class SyntaxErrorDetector(BaseDetector):
             update_query=update_query,
         )
 
-    # TODO: refactor
     def run(self) -> list[DetectedError]:
         '''Run the detector and return a list of detected errors with their descriptions'''
         results: list[DetectedError] = []
 
         # 1) fix stray semicolons (to allow ast building for subsequent checks)
-        check_result, fixed_query_str = self.syn_6_additional_omitted_semicolons()
-        results.extend(check_result)
+        checks = [self.syn_6_additional_omitted_semicolons]
 
-        if fixed_query_str != self.query.sql:
-            self.update_query(fixed_query_str, 'semicolons')
+        for check in checks:
+            check_result, fixed_query_str = check()
+            results.extend(check_result)
 
-        # 2) detect unexisting objects (before misspellings, to avoid false positives)
+            if fixed_query_str != self.query.sql:
+                self.update_query(fixed_query_str, check.__name__)
+
+        # 2) detect unexisting objects (before corrections, to avoid false positives)
         unexisting_checks = [
+            self.syn_1_ambiguous_database_object_ambiguous_function,
             self.syn_2_undefined_tables,
             self.syn_1_syn_2_undefined_columns_ambiguous_columns,
             self.syn_2_undefined_functions,
@@ -49,15 +52,18 @@ class SyntaxErrorDetector(BaseDetector):
             check_result = check()
             results.extend(check_result)
 
-        # 3.1) detect object misspellings and missing quotes and apply corrections for improved subsequent checks
+        # 3.1) detect fixable errors and apply corrections for improved subsequent checks
         misspelling_checks = [
+            # self.syn_6_common_syntax_error_omitting_commas,
+            self.syn_6_common_syntax_error_confusing_table_names_with_column_names,
+            self.syn_6_common_syntax_error_nonstandard_operators,
             self.syn_2_misspellings_schemas_tables,
             self.syn_2_misspellings_columns,
-            # self.syn_2_synonyms,      # TODO: implement
-            # self.syn_2_omitted_quotes,    # TODO: refactor
+            self.syn_2_synonyms,
+            self.syn_2_omitted_quotes,
         ]
 
-        # 3.2) apply corrections: replace misspelled strings in query and retokenize
+        # 3.2) apply corrections and re-parse query
         corrected_sql = self.query.sql
         for check in misspelling_checks:
             for error in check():
@@ -72,26 +78,30 @@ class SyntaxErrorDetector(BaseDetector):
 
                 # Use the corrected query from here on (across all detectors)
                 if corrected_sql != self.query.sql:
-                    self.update_query(corrected_sql, f'misspellings - {check.__name__}')
+                    self.update_query(corrected_sql, check.__name__)
             
         # Proceed with all other checks
         checks = [
-            # self.syn_3_data_type_mismatch,    # TODO: refactor
+            # self.syn_3_data_type_mismatch,
             self.syn_4_aggregate_function_outside_select_or_having,
             self.syn_4_illegal_aggregate_function_placement_grouping_error_aggregate_functions_cannot_be_nested,
             self.syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column,
             self.syn_5_illegal_or_insufficient_grouping_strange_having_having_without_group_by,
+            self.syn_6_common_syntax_error_confusing_function_with_function_parameter,
             self.syn_6_common_syntax_error_using_where_twice,
             self.syn_6_common_syntax_error_omitting_the_from_clause,
+            # self.syn_6_common_syntax_error_comparison_with_null,
+            self.syn_6_common_syntax_error_date_time_field_overflow,
             self.syn_6_common_syntax_error_duplicate_clause,
-            # self.syn_6_common_syntax_error_comparison_with_null,  # TODO: refactor
-            # self.syn_6_common_syntax_error_restriction_in_select_clause,  # TODO: refactor
-            # self.syn_6_common_syntax_error_projection_in_where_clause,    # TODO: refactor
+            self.syn_6_common_syntax_error_too_many_columns_in_subquery,
+            # self.syn_6_common_syntax_error_restriction_in_select_clause,
+            # self.syn_6_common_syntax_error_projection_in_where_clause,
             self.syn_6_common_syntax_error_confusing_the_order_of_keywords,
-            # self.syn_6_common_syntax_error_confusing_the_syntax_of_keywords,  # TODO: refactor
-            # self.syn_6_common_syntax_error_omitting_commas,   # TODO: refactor
+            self.syn_6_common_syntax_error_confusing_the_logic_of_keywords,
+            # self.syn_6_common_syntax_error_confusing_the_syntax_of_keywords,
             self.syn_6_common_syntax_error_curly_square_or_unmatched_brackets,
-            self.syn_6_common_syntax_error_nonstandard_operators,
+            self.syn_6_common_syntax_error_is_where_not_applicable,
+            self.syn_6_common_syntax_error_nonstandard_keywords_or_standard_keywords_in_wrong_context,
         ]
     
         for check in checks:
@@ -125,10 +135,66 @@ class SyntaxErrorDetector(BaseDetector):
         return False
     # endregion
 
-    #TODO: implement
+    # region 1) Semicolons
+    def syn_6_additional_omitted_semicolons(self) -> tuple[list[DetectedError], str]:
+        '''
+        Flags queries that omit the semicolon at the end or have multiple semicolons.
+
+        Returns:
+        - List of DetectedError instances for semicolon issues.
+        - The cleaned query string with extra semicolons removed.
+        '''
+
+        results: list[DetectedError] = []
+
+        all_tokens = []
+        for statement in self.query.all_statements:
+            all_tokens.extend(list(statement.flatten()))
+        
+        good_tokens = []
+        trailing_semicolon_found = False
+        non_whitespace_found = False
+        
+        for token in reversed(all_tokens):  # start from end to preserve only the last semicolon
+            # check for whitespace/newline
+            if token.ttype in (sqlparse.tokens.Whitespace, sqlparse.tokens.Newline):
+                # keep as is and continue
+                good_tokens.append(token.value)
+                continue
+            
+            # check for semicolons: the first one before any non-whitespace is kept, others are flagged
+            if token.ttype == sqlparse.tokens.Punctuation and token.value == ';':
+                if non_whitespace_found:
+                    # we encountered a semicolon in the middle of the query!
+                    # we don't care if this is the first one we encounter, it's surely not supposed to be here
+                    results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
+                    continue
+                
+                if not trailing_semicolon_found:
+                    # we encountered the trailing semicolon for the first time
+                    # it's good, keep it
+                    good_tokens.append(token.value)
+                    trailing_semicolon_found = True
+                    continue
+
+                # else, we have already found the trailing semicolon, so this is an extra one at the end
+                results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
+                continue
+            
+            # any other token
+            non_whitespace_found = True
+            good_tokens.append(token.value)
+                
+        if not trailing_semicolon_found:
+            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_SEMICOLON))
+
+        return (results, ''.join(reversed(good_tokens)))
+    # endregion
+
+    # region 2) Pre-fixing
+    # TODO: implement
     def syn_1_ambiguous_database_object_ambiguous_function(self) -> list[DetectedError]:
         return []
-    # endregion
 
     def syn_2_undefined_tables(self) -> list[DetectedError]:
         '''
@@ -208,114 +274,6 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-    # region SYN-2
-    # TODO: refactor, needs AST
-    def syn_2_omitted_quotes(self) -> list[DetectedError]:
-        '''
-        Checks for potential omitting of quotes around character data in WHERE/HAVING clauses.
-        
-        Returns:
-        A list of DetectedErrors. data=(offending_value,corrected_value)
-        '''
-        results: list[DetectedError] = []
-
-        comparisons = self.query.comparisons
-
-
-        # for comparison in comparisons:
-
-
-        return results
-
-        # # 3. Build sets of ALL known identifiers for the entire query (main + subqueries + CTEs)
-        # valid_source_identifiers = set()
-        # all_known_columns_lower = set()
-        # db_tables = self.catalog.get('table_columns', {})
-
-        # # -- Main Query --
-        # main_query_sources = self._get_referenced_tables()
-        # main_alias_map = self.query_map.alias_mapping
-        # valid_source_identifiers.update(s.lower() for s in main_query_sources)
-        # valid_source_identifiers.update(a.lower() for a in main_alias_map.keys())
-        # for source in main_query_sources:
-        #     actual_base_name = next((k for k in db_tables if k.lower() == source.lower()), None)
-        #     if actual_base_name:
-        #         all_known_columns_lower.update(c.lower() for c in db_tables[actual_base_name])
-
-        # # -- Subqueries --
-        # for subq_map in self.subquery_map.values():
-        #     sub_sources = []
-        #     sub_from = subq_map.from_value
-        #     if sub_from:
-        #         sub_sources.append(sub_from)
-        #     sub_joins = subq_map.join_value
-        #     sub_sources.extend(sub_joins)
-        #     sub_aliases = subq_map.alias_mapping
-        #     valid_source_identifiers.update(s.lower() for s in sub_sources)
-        #     valid_source_identifiers.update(a.lower() for a in sub_aliases.keys())
-        #     for source in sub_sources:
-        #         actual_base_name = next((k for k in db_tables if k.lower() == source.lower()), None)
-        #         if actual_base_name:
-        #             all_known_columns_lower.update(c.lower() for c in db_tables[actual_base_name])
-        
-        # # -- CTEs --
-        # if self.cte_map:
-        #     valid_source_identifiers.update(name.lower() for name in self.cte_map.keys())
-        #     for cte_name, cte_columns in self.cte_catalog.cte_tables.items():
-        #         all_known_columns_lower.update(c.lower() for c in cte_columns)
-
-
-                # 4. Main Token-based Check
-        is_where_or_having = False
-        is_rhs_of_comparison = False    #   nothing prevents an expression to have its sides inverted, although it's unlikely to happen
-        comparison_operators = {'=', '<>', '!=', '<', '>', '<=', '>=', 'LIKE', 'NOT LIKE'}
-        known_keywords = {'SELECT', 'FROM', 'WHERE', 'JOIN', 'ON', 'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT', 'AS', 'DISTINCT'}
-
-        for i, (tt, val) in enumerate(self.query.tokens):
-            if tt == sqlparse.tokens.Keyword and val.upper() in {'WHERE', 'HAVING'}:
-                is_where_or_having = True
-            if tt == sqlparse.tokens.Error:
-                continue
-            if val in comparison_operators:
-                is_rhs_of_comparison = True
-                continue
-            if tt in sqlparse.tokens.Literal or tt in (sqlparse.tokens.String.Single, sqlparse.tokens.String.Symbol):
-                if is_where_or_having and is_rhs_of_comparison:
-                    stripped_val = val.strip()
-                    if stripped_val.startswith('"') and stripped_val.endswith('"'):
-                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_OMITTING_QUOTES_AROUND_CHARACTER_DATA, (val,)))
-                is_rhs_of_comparison = False
-                continue
-            if tt is not sqlparse.tokens.Name:
-                is_rhs_of_comparison = False
-                continue
-            if val.upper() in known_keywords:
-                is_rhs_of_comparison = False
-                continue
-            if val.lower() in valid_source_identifiers:
-                is_rhs_of_comparison = False
-                continue
-            if val.lower() in output_aliases_lower:
-                continue
-
-            clean_val = val
-
-
-            # if string OP notcol -> error
-            # if date OP notcol2 -> error
-            # if extract(notstring FROM ...) -> error
-            # like notstring -> error
-            
-            # is this the correct approach? col OP notColumn
-            # TODO: literal or string.single/string.symbol in RHS of WHERE/HAVING
-            if is_where_or_having and is_rhs_of_comparison:
-                if clean_val.isalpha() and clean_val.lower() not in all_known_columns_lower:
-                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_OMITTING_QUOTES_AROUND_CHARACTER_DATA, (val,)))
-                    is_rhs_of_comparison = False
-                    continue
-            
-        return results
-
     def syn_2_undefined_functions(self) -> list[DetectedError]:
         '''Checks for undefined functions (i.e. invalid names followed by parentheses).'''
 
@@ -348,7 +306,13 @@ class SyntaxErrorDetector(BaseDetector):
                 results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_PARAMETER, (val,)))
 
         return results
+    
+    # TODO: implement
+    def syn_6_common_syntax_error_using_an_undefined_correlation_name(self) -> list[DetectedError]:
+        return []
+    # endregion
 
+    # region 3) Fixable errors
     def syn_2_misspellings_schemas_tables(self) -> list[DetectedError]:
         '''
         Check for misspellings in table names.
@@ -458,9 +422,212 @@ class SyntaxErrorDetector(BaseDetector):
     # TODO: implement
     def syn_2_synonyms(self) -> list[DetectedError]:
         return []
+
+    def syn_2_omitted_quotes(self) -> list[DetectedError]:
+        '''
+        Checks for potential omitting of quotes around character data in WHERE/HAVING clauses.
+        
+        Returns:
+        A list of DetectedErrors. data=(offending_value,corrected_value)
+        '''
+        results: list[DetectedError] = []
+
+        comparisons = self.query.comparisons
+
+
+        # for comparison in comparisons:
+
+
+        return results
+
+        # # 3. Build sets of ALL known identifiers for the entire query (main + subqueries + CTEs)
+        # valid_source_identifiers = set()
+        # all_known_columns_lower = set()
+        # db_tables = self.catalog.get('table_columns', {})
+
+        # # -- Main Query --
+        # main_query_sources = self._get_referenced_tables()
+        # main_alias_map = self.query_map.alias_mapping
+        # valid_source_identifiers.update(s.lower() for s in main_query_sources)
+        # valid_source_identifiers.update(a.lower() for a in main_alias_map.keys())
+        # for source in main_query_sources:
+        #     actual_base_name = next((k for k in db_tables if k.lower() == source.lower()), None)
+        #     if actual_base_name:
+        #         all_known_columns_lower.update(c.lower() for c in db_tables[actual_base_name])
+
+        # # -- Subqueries --
+        # for subq_map in self.subquery_map.values():
+        #     sub_sources = []
+        #     sub_from = subq_map.from_value
+        #     if sub_from:
+        #         sub_sources.append(sub_from)
+        #     sub_joins = subq_map.join_value
+        #     sub_sources.extend(sub_joins)
+        #     sub_aliases = subq_map.alias_mapping
+        #     valid_source_identifiers.update(s.lower() for s in sub_sources)
+        #     valid_source_identifiers.update(a.lower() for a in sub_aliases.keys())
+        #     for source in sub_sources:
+        #         actual_base_name = next((k for k in db_tables if k.lower() == source.lower()), None)
+        #         if actual_base_name:
+        #             all_known_columns_lower.update(c.lower() for c in db_tables[actual_base_name])
+        
+        # # -- CTEs --
+        # if self.cte_map:
+        #     valid_source_identifiers.update(name.lower() for name in self.cte_map.keys())
+        #     for cte_name, cte_columns in self.cte_catalog.cte_tables.items():
+        #         all_known_columns_lower.update(c.lower() for c in cte_columns)
+
+
+                # 4. Main Token-based Check
+        is_where_or_having = False
+        is_rhs_of_comparison = False    #   nothing prevents an expression to have its sides inverted, although it's unlikely to happen
+        comparison_operators = {'=', '<>', '!=', '<', '>', '<=', '>=', 'LIKE', 'NOT LIKE'}
+        known_keywords = {'SELECT', 'FROM', 'WHERE', 'JOIN', 'ON', 'GROUP', 'BY', 'ORDER', 'HAVING', 'LIMIT', 'AS', 'DISTINCT'}
+
+        for i, (tt, val) in enumerate(self.query.tokens):
+            if tt == sqlparse.tokens.Keyword and val.upper() in {'WHERE', 'HAVING'}:
+                is_where_or_having = True
+            if tt == sqlparse.tokens.Error:
+                continue
+            if val in comparison_operators:
+                is_rhs_of_comparison = True
+                continue
+            if tt in sqlparse.tokens.Literal or tt in (sqlparse.tokens.String.Single, sqlparse.tokens.String.Symbol):
+                if is_where_or_having and is_rhs_of_comparison:
+                    stripped_val = val.strip()
+                    if stripped_val.startswith('"') and stripped_val.endswith('"'):
+                        results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_OMITTING_QUOTES_AROUND_CHARACTER_DATA, (val,)))
+                is_rhs_of_comparison = False
+                continue
+            if tt is not sqlparse.tokens.Name:
+                is_rhs_of_comparison = False
+                continue
+            if val.upper() in known_keywords:
+                is_rhs_of_comparison = False
+                continue
+            if val.lower() in valid_source_identifiers:
+                is_rhs_of_comparison = False
+                continue
+            if val.lower() in output_aliases_lower:
+                continue
+
+            clean_val = val
+
+
+            # if string OP notcol -> error
+            # if date OP notcol2 -> error
+            # if extract(notstring FROM ...) -> error
+            # like notstring -> error
+            
+            # is this the correct approach? col OP notColumn
+            # TODO: literal or string.single/string.symbol in RHS of WHERE/HAVING
+            if is_where_or_having and is_rhs_of_comparison:
+                if clean_val.isalpha() and clean_val.lower() not in all_known_columns_lower:
+                    results.append(DetectedError(SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_OMITTING_QUOTES_AROUND_CHARACTER_DATA, (val,)))
+                    is_rhs_of_comparison = False
+                    continue
+            
+        return results
+    
+    # TODO: implement
+    def syn_6_common_syntax_error_confusing_table_names_with_column_names(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: refactor
+    def syn_6_common_syntax_error_omitting_commas(self) -> list[DetectedError]:
+        '''
+        Flags queries where commas are likely missing between column expressions 
+        (e.g., SELECT name age FROM ..., GROUP BY x y).
+        '''
+        results = []
+
+        clause_starters = {
+            "SELECT", "FROM", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT", "JOIN", "ON"
+        }
+        comma_required_clauses = {"SELECT", "GROUP BY", "ORDER BY", "VALUES"}
+        current_clause = None
+        in_clause_block = False
+
+        tokens = self.tokens
+        i = 0
+        while i < len(tokens):
+            tt, val = tokens[i]
+            val_upper = val.upper().strip()
+
+            # Detect clause start
+            if val_upper in {"SELECT", "GROUP BY", "ORDER BY", "VALUES"}:
+                current_clause = val_upper
+                in_clause_block = True
+            elif val_upper in clause_starters:
+                current_clause = None
+                in_clause_block = False
+
+            # Check for missing commas inside comma-required clauses
+            if in_clause_block and current_clause in comma_required_clauses:
+                is_valid_column = (
+                    tt in sqlparse.tokens.Name or
+                    (tt is None and val.replace('.', '').isalnum())
+                )
+                if is_valid_column and val_upper not in clause_starters:
+                    # Look ahead to the next non-whitespace token
+                    j = i + 1
+                    while j < len(tokens) and tokens[j][0] in sqlparse.tokens.Whitespace:
+                        j += 1
+                    if j < len(tokens):
+                        next_tt, next_val = tokens[j]
+                        next_val_upper = next_val.upper().strip()
+                        is_next_valid_column = (
+                            next_tt in sqlparse.tokens.Name or
+                            (next_tt is None and next_val.replace('.', '').isalnum())
+                        )
+                        if (
+                            is_next_valid_column and
+                            next_val_upper not in clause_starters and
+                            next_val != ','
+                        ):
+                            results.append((
+                                SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_COMMAS,
+                                f"Possible missing comma between '{val}' and '{next_val}' in {current_clause} clause"
+                            ))
+            i += 1
+
+        return results
+
+    def syn_6_common_syntax_error_nonstandard_operators(self) -> list[DetectedError]:
+        '''
+        Flags usage of non-standard or language-specific operators like &&, ||, ==, etc.
+        '''
+
+        results: list[DetectedError] = []
+        
+        # dict {error: correction}
+        nonstandard_ops = {
+            '=='    : '=',
+            '==='   : '=',
+            '!=='   : '<>',
+            '&&'    : ' AND ',
+            '||'    : ' OR ',
+            '!'     : ' NOT ',
+            # '^'     : '',
+            # '~'     : '',
+            '>>'    : None,
+            '<<'    : None,
+            '≠'     : '<>',
+            '≥'     : '>=',
+            '≤'     : '<=',
+        }
+
+        for ttype, val in self.query.tokens:
+            val_stripped = val.strip()
+            if ttype in sqlparse.tokens.Operator or ttype in sqlparse.tokens.Operator.Comparison:
+                if val_stripped in nonstandard_ops:
+                    correction = nonstandard_ops[val_stripped]
+                    results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_NONSTANDARD_OPERATORS, (val_stripped, correction)))
+
+        return results
     # endregion
 
-    # region SYN-3
+    # region 4) Other checks
     # TODO: implement
     def syn_3_data_type_mismatch_failure_to_specify_column_name_twice(self) -> list[DetectedError]:
         return []
@@ -547,9 +714,7 @@ class SyntaxErrorDetector(BaseDetector):
             i += 1
 
         return results    
-    # endregion
-
-    # region SYN-4
+    
     def syn_4_aggregate_function_outside_select_or_having(self) -> list[DetectedError]:
         '''
         Flags use of aggregate functions (SUM, AVG, COUNT, MIN, MAX) outside SELECT or HAVING clauses,
@@ -591,8 +756,7 @@ class SyntaxErrorDetector(BaseDetector):
                     ))
 
         return results
-
-    # region SYN-5
+    
     def syn_5_illegal_or_insufficient_grouping_grouping_error_extraneous_or_omitted_grouping_column(self) -> list[DetectedError]:
         '''
         Enforces the SQL "single-value rule":
@@ -675,9 +839,7 @@ class SyntaxErrorDetector(BaseDetector):
                 results.append(DetectedError(SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_STRANGE_HAVING_HAVING_WITHOUT_GROUP_BY))
 
         return results
-    # endregion
-
-    # region SYN-6
+    
     #TODO: implement
     def syn_6_common_syntax_error_confusing_function_with_function_parameter(self) -> list[DetectedError]:
         return []
@@ -733,7 +895,7 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-    # TODO: refactor
+    # TODO: refactor, needs AST
     def syn_6_common_syntax_error_comparison_with_null(self) -> list[DetectedError]:
         '''
         Flags SQL comparisons using = NULL, <> NULL, etc. instead of IS NULL / IS NOT NULL.
@@ -758,62 +920,8 @@ class SyntaxErrorDetector(BaseDetector):
                     ))
 
         return results
-    
-    def syn_6_additional_omitted_semicolons(self) -> tuple[list[DetectedError], str]:
-        '''
-        Flags queries that omit the semicolon at the end or have multiple semicolons.
 
-        Returns:
-        - List of DetectedError instances for semicolon issues.
-        - The cleaned query string with extra semicolons removed.
-        '''
-
-        results: list[DetectedError] = []
-
-        all_tokens = []
-        for statement in self.query.all_statements:
-            all_tokens.extend(list(statement.flatten()))
-        
-        good_tokens = []
-        trailing_semicolon_found = False
-        non_whitespace_found = False
-        
-        for token in reversed(all_tokens):  # start from end to preserve only the last semicolon
-            # check for whitespace/newline
-            if token.ttype in (sqlparse.tokens.Whitespace, sqlparse.tokens.Newline):
-                # keep as is and continue
-                good_tokens.append(token.value)
-                continue
-            
-            # check for semicolons: the first one before any non-whitespace is kept, others are flagged
-            if token.ttype == sqlparse.tokens.Punctuation and token.value == ';':
-                if non_whitespace_found:
-                    # we encountered a semicolon in the middle of the query!
-                    # we don't care if this is the first one we encounter, it's surely not supposed to be here
-                    results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
-                    continue
-                
-                if not trailing_semicolon_found:
-                    # we encountered the trailing semicolon for the first time
-                    # it's good, keep it
-                    good_tokens.append(token.value)
-                    trailing_semicolon_found = True
-                    continue
-
-                # else, we have already found the trailing semicolon, so this is an extra one at the end
-                results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_ADDITIONAL_SEMICOLON))
-                continue
-            
-            # any other token
-            non_whitespace_found = True
-            good_tokens.append(token.value)
-                
-        if not trailing_semicolon_found:
-            results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_SEMICOLON))
-
-        return (results, ''.join(reversed(good_tokens)))
-    
-    # TODO: implement
+    # TODO: implement, needs AST
     def syn_6_common_syntax_error_date_time_field_overflow(self) -> list[DetectedError]:
         return []
 
@@ -842,18 +950,27 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-    # TODO: implement
-    def syn_6_common_syntax_error_using_an_undefined_correlation_name(self) -> list[DetectedError]:
-        return []
-    
-    # TODO: implement, requires AST
     def syn_6_common_syntax_error_too_many_columns_in_subquery(self) -> list[DetectedError]:
-        return []
+        '''
+        Flags subqueries that return more columns than expected in contexts like WHERE IN (subquery).
+        '''
 
-    # TODO: implement
-    def syn_6_common_syntax_error_confusing_table_names_with_column_names(self) -> list[DetectedError]:
-        return []
+        results: list[DetectedError] = []
 
+        for select in self.query.selects:
+            for subquery, clause in select.subqueries:
+                if clause in ('FROM', 'EXISTS'):
+                    continue    # FROM/EXISTS subqueries can have any number of columns
+                
+                output_columns = len(subquery.output.columns)
+                expected_columns = 1  # Default expected columns for most contexts
+                
+                col_difference = output_columns - expected_columns
+                if col_difference != 0:
+                    results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_TOO_MANY_COLUMNS_IN_SUBQUERY, (subquery.sql, col_difference)))
+
+        return results
+    
     # TODO: refactor
     def syn_6_common_syntax_error_restriction_in_select_clause(self) -> list[DetectedError]:
         '''
@@ -1091,66 +1208,6 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-    # TODO: refactor
-    def syn_6_common_syntax_error_omitting_commas(self) -> list[DetectedError]:
-        '''
-        Flags queries where commas are likely missing between column expressions 
-        (e.g., SELECT name age FROM ..., GROUP BY x y).
-        '''
-        results = []
-
-        clause_starters = {
-            "SELECT", "FROM", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT", "JOIN", "ON"
-        }
-        comma_required_clauses = {"SELECT", "GROUP BY", "ORDER BY", "VALUES"}
-        current_clause = None
-        in_clause_block = False
-
-        tokens = self.tokens
-        i = 0
-        while i < len(tokens):
-            tt, val = tokens[i]
-            val_upper = val.upper().strip()
-
-            # Detect clause start
-            if val_upper in {"SELECT", "GROUP BY", "ORDER BY", "VALUES"}:
-                current_clause = val_upper
-                in_clause_block = True
-            elif val_upper in clause_starters:
-                current_clause = None
-                in_clause_block = False
-
-            # Check for missing commas inside comma-required clauses
-            if in_clause_block and current_clause in comma_required_clauses:
-                is_valid_column = (
-                    tt in sqlparse.tokens.Name or
-                    (tt is None and val.replace('.', '').isalnum())
-                )
-                if is_valid_column and val_upper not in clause_starters:
-                    # Look ahead to the next non-whitespace token
-                    j = i + 1
-                    while j < len(tokens) and tokens[j][0] in sqlparse.tokens.Whitespace:
-                        j += 1
-                    if j < len(tokens):
-                        next_tt, next_val = tokens[j]
-                        next_val_upper = next_val.upper().strip()
-                        is_next_valid_column = (
-                            next_tt in sqlparse.tokens.Name or
-                            (next_tt is None and next_val.replace('.', '').isalnum())
-                        )
-                        if (
-                            is_next_valid_column and
-                            next_val_upper not in clause_starters and
-                            next_val != ','
-                        ):
-                            results.append((
-                                SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_COMMAS,
-                                f"Possible missing comma between '{val}' and '{next_val}' in {current_clause} clause"
-                            ))
-            i += 1
-
-        return results
-
     def syn_6_common_syntax_error_curly_square_or_unmatched_brackets(self) -> list[DetectedError]:
         '''
         Flags unmatched parentheses or usage of non-standard square or curly brackets in the SQL query.
@@ -1198,25 +1255,5 @@ class SyntaxErrorDetector(BaseDetector):
     #TODO: implement
     def syn_6_common_syntax_error_nonstandard_keywords_or_standard_keywords_in_wrong_context(self) -> list[DetectedError]:
         return []
-    
-    def syn_6_common_syntax_error_nonstandard_operators(self) -> list[DetectedError]:
-        '''
-        Flags usage of non-standard or language-specific operators like &&, ||, ==, etc.
-        '''
-
-        results: list[DetectedError] = []
-        
-        nonstandard_ops = {
-            '==', '===', '!==', '&&', '||', '!', '+=', '-=', '*=', '/=', '^', '~', '>>', '<<', '≠', '≥', '≤'
-        }
-
-        for ttype, val in self.query.tokens:
-            val_stripped = val.strip()
-            if ttype in sqlparse.tokens.Operator or ttype in sqlparse.tokens.Operator.Comparison:
-                if val_stripped in nonstandard_ops:
-                    results.append(DetectedError(SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_NONSTANDARD_OPERATORS, (val_stripped,)))
-
-        return results
-
     # endregion
 
