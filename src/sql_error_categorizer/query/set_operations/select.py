@@ -130,7 +130,7 @@ class Select(SetOperation, TokenizedSQL):
             if clause_upper in ('FROM', 'JOIN'):
                 replacement = f'__subq{counter}'
                 counter += 1
-            elif clause_upper in ('WHERE', 'HAVING', 'ON', 'SELECT'):
+            elif clause_upper in ('WHERE', 'HAVING', 'ON', 'SELECT', 'COMPARISON'):
                 replacement = 'NULL'
             elif clause_upper in ('IN', 'EXISTS'):
                 replacement = '(NULL)'
@@ -149,7 +149,7 @@ class Select(SetOperation, TokenizedSQL):
 
     # region Properties
     @property
-    def subqueries(self) -> list['Select']:
+    def subqueries(self) -> list[tuple['Select', str]]:
         '''Returns a list of subqueries as TokenizedSQL objects.'''
         if self._subqueries is None:
             self._subqueries = []
@@ -167,7 +167,7 @@ class Select(SetOperation, TokenizedSQL):
 
             for subquery_sql, clause in subquery_sqls:
                 subquery = Select(subquery_sql, catalog=self.catalog, search_path=self.search_path)
-                self._subqueries.append(subquery)
+                self._subqueries.append((subquery, clause))
     
         return self._subqueries
 
@@ -337,5 +337,5 @@ class Select(SetOperation, TokenizedSQL):
     
     @property
     def selects(self) -> list['Select']:
-        return self.subqueries + [self]
+        return [self] + [subquery for subquery, _ in self.subqueries]
 
