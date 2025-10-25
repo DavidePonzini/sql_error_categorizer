@@ -36,3 +36,14 @@ def test_expression_types(sql, expected_types, make_query):
         where_type = get_type(query.main_query.where, query.main_query.referenced_tables)[0]
         result.append((where_type.type.value, where_type.constant, where_type.nullable))
     assert result == expected_types
+
+# functions
+def test_function_types(make_query):
+    sql = "SELECT COUNT(DISTINCT sname), AVG(sid), SUM(sid), MIN(sname), MAX(sid), CONCAT(NULL,NULL,1), CONCAT(NULL) FROM store;"
+    query = make_query(sql)
+
+    result = []
+    for col in query.main_query.output.columns:
+        result.append(col.column_type)
+
+    assert result == ['number', 'number', 'number', 'string', 'number', 'string', 'null']

@@ -124,6 +124,116 @@ def _(expression: exp.Not, referenced_tables: list[Table]) -> list[ResultType]:
 def _(expression: exp.Paren, referenced_tables: list[Table]) -> list[ResultType]:
     return get_type(expression.this, referenced_tables)
 
+@get_type.register
+def _(expression: exp.Alias, referenced_tables: list[Table]) -> list[ResultType]:
+    inner_types = get_type(expression.this, referenced_tables)
+
+    if len(inner_types) != 1:
+        return [ResultType(Type.NONE)]
+    
+    return inner_types
+
+# To handle COUNT(DISTINCT ...) or similar constructs
+@get_type.register
+def _(expression: exp.Distinct, referenced_tables: list[Table]) -> list[ResultType]:
+    
+    if len(expression.expressions) != 1:
+        return [ResultType(Type.NONE)]
+
+    inner_types = get_type(expression.expressions[0], referenced_tables)
+
+    if len(inner_types) != 1:
+        return [ResultType(Type.NONE)]
+    
+    return inner_types
+
+# endregion
+
+# region functions
+
+@get_type.register
+def _(expression: exp.Count, referenced_tables: list[Table]) -> list[ResultType]:
+    inner_types = get_type(expression.this, referenced_tables)
+
+    if len(inner_types) != 1 or inner_types[0].type == Type.NONE:
+        return [ResultType(Type.NONE)]
+    
+    return [ResultType(Type.NUMBER, constant=True, nullable=False)]
+
+@get_type.register
+def _(expression: exp.Avg, referenced_tables: list[Table]) -> list[ResultType]:
+    inner_types = get_type(expression.this, referenced_tables)
+
+    if len(inner_types) != 1:
+        return [ResultType(Type.NONE)]
+    
+    if inner_types[0].type == Type.NUMBER:
+        return [ResultType(Type.NUMBER, constant=False, nullable=inner_types[0].nullable)]
+    
+    # handle implicit casts
+    if to_number(inner_types[0]):
+        return [ResultType(Type.NUMBER, constant=False, nullable=inner_types[0].nullable)]
+        
+    return [ResultType(Type.NONE)]
+
+@get_type.register
+def _(expression: exp.Sum, referenced_tables: list[Table]) -> list[ResultType]:
+    inner_types = get_type(expression.this, referenced_tables)
+
+    if len(inner_types) != 1:
+        return [ResultType(Type.NONE)]
+    
+    if inner_types[0].type == Type.NUMBER:
+        return [ResultType(Type.NUMBER, constant=False, nullable=inner_types[0].nullable)]
+    
+    # handle implicit casts
+    if to_number(inner_types[0]):
+        return [ResultType(Type.NUMBER, constant=False, nullable=inner_types[0].nullable)]
+        
+    return [ResultType(Type.NONE)]
+
+@get_type.register
+def _(expression: exp.Min, referenced_tables: list[Table]) -> list[ResultType]:
+    inner_types = get_type(expression.this, referenced_tables)
+
+    if len(inner_types) != 1:
+        return [ResultType(Type.NONE)]
+    
+    if inner_types[0].type in [Type.NUMBER, Type.STRING, Type.DATE]:
+        return [ResultType(inner_types[0].type, constant=True, nullable=inner_types[0].nullable)]
+    
+    return [ResultType(Type.NONE)]
+
+@get_type.register
+def _(expression: exp.Max, referenced_tables: list[Table]) -> list[ResultType]:
+    inner_types = get_type(expression.this, referenced_tables)
+
+    if len(inner_types) != 1:
+        return [ResultType(Type.NONE)]
+    
+    if inner_types[0].type in [Type.NUMBER, Type.STRING, Type.DATE]:
+        return [ResultType(inner_types[0].type, constant=True, nullable=inner_types[0].nullable)]
+    
+    return [ResultType(Type.NONE)]
+
+@get_type.register
+def _(expression: exp.Concat, referenced_tables: list[Table]) -> list[ResultType]:
+    arg_types = []
+    for arg in expression.expressions:
+        i_type = get_type(arg, referenced_tables)
+        if len(i_type) != 1 or i_type[0].type == Type.NONE:
+            return [ResultType(Type.NONE)]
+        arg_types.append(i_type[0])
+    
+    # if all args are NULL, result is NULL
+    if all(t.type == Type.NULL for t in arg_types):
+        return [ResultType(Type.NULL)]
+    
+    constant = all(t.constant for t in arg_types)
+    nullable = any(t.nullable for t in arg_types)
+    
+    return [ResultType(Type.STRING, constant=constant, nullable=nullable)]
+
 # endregion
 
 # region binary op
@@ -181,10 +291,6 @@ def typecheck_comparisons(type1: ResultType, type2: ResultType, expression: exp.
             return ResultType(Type.BOOLEAN, constant=True, nullable=False)
 
     return ResultType(Type.NONE)
-
-@get_type.register
-def _(expression: exp.Alias, referenced_tables: list[Table]) -> list[ResultType]:
-    return get_type(expression.this, referenced_tables)
 
 # AND, OR
 @get_type.register
