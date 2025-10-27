@@ -47,3 +47,18 @@ def test_function_types(make_query):
         result.append(col.column_type)
 
     assert result == ['number', 'number', 'number', 'string', 'number', 'string', 'null']
+
+# logical operators
+@pytest.mark.parametrize('sql, expected_types', [
+    ("SELECT sname FROM store WHERE sname LIKE 'C%';", 'boolean'),
+    ("SELECT sname FROM store WHERE (sname LIKE 'C%') IS FALSE;", 'boolean'),
+    ("SELECT sname FROM store WHERE sid IS NOT NULL;", 'boolean'),
+    ("SELECT sname FROM store WHERE sid BETWEEN 1 AND 10;", 'boolean')
+])
+def test_logical_operator(sql, expected_types, make_query):
+    query = make_query(sql)
+    result = None
+    if query.main_query.where:
+        where_type = get_type(query.main_query.where, query.main_query.referenced_tables)[0]
+        result = where_type.type.value
+    assert result == expected_types

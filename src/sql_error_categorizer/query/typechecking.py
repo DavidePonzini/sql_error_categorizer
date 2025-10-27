@@ -292,6 +292,62 @@ def typecheck_comparisons(type1: ResultType, type2: ResultType, expression: exp.
 
     return ResultType(Type.NONE)
 
+# region logical ops
+@get_type.register
+def _(expression: exp.Like, referenced_tables: list[Table]) -> list[ResultType]:
+    left_types = get_type(expression.this, referenced_tables)
+    right_types = get_type(expression.expression, referenced_tables)
+
+    if len(left_types) != 1 or len(right_types) != 1:
+        return [ResultType(Type.NONE)]
+
+    if Type.STRING == left_types[0].type == right_types[0].type and right_types[0].constant:
+        return [ResultType(Type.BOOLEAN, constant=True, nullable=False)]
+        
+    return [ResultType(Type.NONE)]
+
+@get_type.register
+def _(expression: exp.Is, referenced_tables: list[Table]) -> list[ResultType]:  
+    left_types = get_type(expression.this, referenced_tables)
+    right_types = get_type(expression.expression, referenced_tables)
+
+    if len(left_types) != 1 or len(right_types) != 1:
+        return [ResultType(Type.NONE)]
+    
+    # IS NULL or IS NOT NULL
+    if right_types[0].type == Type.NULL and right_types[0].constant:
+        return [ResultType(Type.BOOLEAN, constant=True, nullable=False)]
+
+    # IS TRUE, IS FALSE, IS UNKNOWN
+    if Type.BOOLEAN == right_types[0].type == left_types[0].type and right_types[0].constant:
+        return [ResultType(Type.BOOLEAN, constant=True, nullable=False)]
+    
+    return [ResultType(Type.NONE)]
+
+@get_type.register
+def _(expression: exp.Between, referenced_tables: list[Table]) -> list[ResultType]:
+    target_types = get_type(expression.this, referenced_tables)
+    low_types = get_type(expression.args.get("low"), referenced_tables)
+    high_types = get_type(expression.args.get("high"), referenced_tables)
+
+    if len(target_types) != 1 or len(low_types) != 1 or len(high_types) != 1:
+        return [ResultType(Type.NONE)]
+
+    if any(t.type == Type.NONE for t in [target_types[0], low_types[0], high_types[0]]):
+        return [ResultType(Type.NONE)]
+
+    if target_types[0].type == low_types[0].type == high_types[0].type:
+        return [ResultType(Type.BOOLEAN, constant=True, nullable=False)]
+    
+    # handle implicit casts
+    if to_number(target_types[0]) and to_number(low_types[0]) and to_number(high_types[0]):
+        return [ResultType(Type.BOOLEAN, constant=True, nullable=False)]
+
+    if to_date(target_types[0]) and to_date(low_types[0]) and to_date(high_types[0]):
+        return [ResultType(Type.BOOLEAN, constant=True, nullable=False)]
+
+    return [ResultType(Type.NONE)]
+
 # AND, OR
 @get_type.register
 def _(expression: exp.Connector, referenced_tables: list[Table]) -> list[ResultType]:
