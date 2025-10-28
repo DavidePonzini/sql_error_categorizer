@@ -3,6 +3,7 @@ import re
 import sqlparse
 import sqlparse.keywords
 from typing import Callable
+from sqlglot import exp
 
 from .base import BaseDetector, DetectedError
 from ..query import Query
@@ -42,31 +43,37 @@ class ComplicationDetector(BaseDetector):
 
         return results
 
-    # TODO: refactor
     def com_1_like_without_wildcards(self) -> list[DetectedError]:
         '''
         Flags queries where the LIKE operator is used without wildcards ('%' or '_').
         This indicates a potential misunderstanding, where the '=' operator should
         have been used instead.
         '''
-        return []
+        results: list[DetectedError] = []
 
-        results = []
-        like_expressions = re.finditer(
-            r"LIKE\s+((['\"]).*?\2|\w+)", 
-            self.query.sql, 
-            re.IGNORECASE
-        )
+        for select in self.query.selects:
+            ast = select.ast
 
-        for match in like_expressions:
-            pattern = match.group(1)
-            
-            if '%' not in pattern and '_' not in pattern:
-                full_expression = match.group(0)
-                results.append((
-                    SqlErrors.COM_1_COMPLICATION_LIKE_WITHOUT_WILDCARDS,
-                    f"LIKE expression without wildcards: {full_expression}",
-                ))
+            if not ast:
+                continue
+
+            for like in ast.find_all(exp.Like):
+                pattern_expr = like.args.get('expression')
+                
+                if not pattern_expr:
+                    # Malformed LIKE expression
+                    continue
+                
+                if not isinstance(pattern_expr, exp.Literal):
+                    # Some other expression type, e.g., a column reference
+                    continue
+
+                pattern_value = pattern_expr.this
+                if '%' not in pattern_value and '_' not in pattern_value:
+                    full_expression = str(like)
+
+                    results.append(DetectedError(SqlErrors.COM_1_COMPLICATION_LIKE_WITHOUT_WILDCARDS, (full_expression,)))
+
         return results
 
     # TODO: refactor
