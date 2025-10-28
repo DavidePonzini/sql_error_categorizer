@@ -7,7 +7,7 @@ def test_primitive_types(make_query):
     result = []
     for exp in query.main_query.ast.expressions:
         col_type = get_type(exp, query.main_query.referenced_tables)
-        result.append(col_type.type.value)
+        result.append(col_type.name)
     assert result == ["string", "number", "boolean", "null", "date"]
 
 def test_type_columns(make_query):
@@ -18,6 +18,12 @@ def test_type_columns(make_query):
         result.append(col.column_type)
     
     assert result == ['number', 'string', 'string', 'string']
+
+def test_wrong_column_reference(make_query):
+    sql = "SELECT unknown_col FROM store;"
+    query = make_query(sql)
+    col_type = get_type(query.main_query.ast.expressions[0], query.main_query.referenced_tables)
+    assert col_type.message == 'Column not found: unknown_col'
 
 
 @pytest.mark.parametrize('sql, expected_types', [

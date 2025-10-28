@@ -1,11 +1,15 @@
 from dataclasses import dataclass
 from functools import singledispatch
 from enum import Enum
-from tkinter import N
-from typing import Any
 from sqlglot import exp
 from sql_error_categorizer.catalog.catalog import Table
 from dateutil.parser import parse
+
+# region types definitions
+class Type:
+    @property
+    def name(self) -> str:
+        return self.__class__.__name__.lower().split('type')[0]
 
 class EnumType(Enum):
     STRING = "string"
@@ -14,26 +18,31 @@ class EnumType(Enum):
     DATE = "date"
     NULL = "null"
 
-    ERROR = "error"
-    NOT_IMPLEMENTED = "not_implemented"
-
-class Type:
-    pass
-
-class PrimitiveType(Type):
-    def __init__(self, type: EnumType):
-        self.type = type
-
-    def __eq__(self, other):
-        if not isinstance(other, PrimitiveType):
-            return False
-        return self.type == other.type
+@dataclass
+class AtomicType(Type):
+    enum_type: EnumType
+    nullable: bool = True
+    constant: bool = False
+    value: str | None = None
 
     @property
-    def value(self):
-        return self.type.value
+    def name(self) -> str:
+        return self.enum_type.value
+
+    def __eq__(self, other):
+        if not isinstance(other, AtomicType):
+            return False
+        return self.enum_type == other.enum_type
+    
+    def __repr__(self):
+        return f"AtomicType({self.enum_type})"
 
 class TupleType(Type):
+
+    @property
+    def name(self) -> str:
+        return f"tuple({', '.join(t.name for t in self.types)})"
+
     def __init__(self, types: list[Type]):
         self.types = types
 
@@ -42,66 +51,71 @@ class TupleType(Type):
             return False
         return self.types == other.types
     
-    @property
-    def value(self):
-        return None
+    def __repr__(self):
+        inner = ", ".join(repr(t) for t in self.types)
+        return f"TupleType([{inner}])"
 
-@dataclass
-class ResultType:
-    type: Type
-    value: Any = None
-    nullable: bool = True
-    constant: bool = False
-    message: str = ""
+@dataclass    
+class ErrorType(Type):
+    message: str
+
+    def __repr__(self):
+        return f"ErrorType(\"{self.message.split(':')[0]}\")"
+    
+    def __eq__(self, other):
+        return isinstance(other, ErrorType)
+    
+class NotImplementedType(Type):
+    def __repr__(self):
+        return "NotImplementedType()"
+    
+    def __eq__(self, other):
+        return isinstance(other, NotImplementedType)
+    
+# endregion
 
 # region primitive types
 @singledispatch
-def get_type(expression: exp.Expression, referenced_tables: list[Table]) -> ResultType:
-    return ResultType(type=PrimitiveType(EnumType.NOT_IMPLEMENTED), message=f"Type checking not implemented for expression type: {type(expression.sql())}")
+def get_type(expression: exp.Expression, referenced_tables: list[Table]) -> Type:
+    return NotImplementedType()
 
 @get_type.register
-def _(expression: exp.Literal, referenced_tables: list[Table]) -> ResultType:
+def _(expression: exp.Literal, referenced_tables: list[Table]) -> Type:
     if expression.is_string:
-        return ResultType(type=PrimitiveType(EnumType.STRING), constant=True, value=expression.this, nullable=False)
+        return AtomicType(EnumType.STRING, nullable=False, constant=True, value=expression.this)
     elif expression.is_number:
-        return ResultType(type=PrimitiveType(EnumType.NUMBER), constant=True, value=expression.this, nullable=False)
-    return ResultType(type=PrimitiveType(EnumType.ERROR), message=f"Unknown literal type for value: {expression.this}")
+        return AtomicType(EnumType.NUMBER, nullable=False, constant=True, value=expression.this)
+    return ErrorType(f"Unknown literal type for value: {expression.this}")
 
 @get_type.register
-def _(expression: exp.Boolean, referenced_tables: list[Table]) -> ResultType:
-    return ResultType(type=PrimitiveType(EnumType.BOOLEAN), constant=True, nullable=False)
+def _(expression: exp.Boolean, referenced_tables: list[Table]) -> Type:
+    return AtomicType(EnumType.BOOLEAN, nullable=False, constant=True)
 
 @get_type.register
-def _(expression: exp.Null, referenced_tables: list[Table]) -> ResultType:
-    return ResultType(type=PrimitiveType(EnumType.NULL), nullable=True, constant=True)
+def _(expression: exp.Null, referenced_tables: list[Table]) -> Type:
+    return AtomicType(EnumType.NULL, constant=True)
 
 @get_type.register
-def _(expression: exp.Tuple, referenced_tables: list[Table]) -> ResultType:
+def _(expression: exp.Tuple, referenced_tables: list[Table]) -> Type:
 
     types_list = []
     for item in expression.expressions:
         item_type = get_type(item, referenced_tables)
 
-        if item_type.type == PrimitiveType(EnumType.ERROR) or item_type.type == PrimitiveType(EnumType.NOT_IMPLEMENTED):
+        if item_type == ErrorType or item_type == NotImplementedType:
             return item_type
 
         types_list.append(item_type)
 
-    if not types_list:
-        return ResultType(type=PrimitiveType(EnumType.ERROR), message=f"Empty tuple is not supported: {expression.sql()}")
+    return ErrorType("Empty tuple has no type") if not types_list else TupleType(types_list)
 
-    return ResultType(type=TupleType(types_list), constant=all(t.constant for t in types_list), nullable=any(t.nullable for t in types_list))
-
-# endregion
-
-# region dates
-
-# We use cast only for date conversions (it is reasonably valid only if we do "DATE '2020-01-01'" or "TIMESTAMP '2020-01-01 10:00:00'")
+# We use cast only for date conversions (it is reasonably valid if we encounter "DATE '2020-01-01'" or "TIMESTAMP '2020-01-01 10:00:00'")
 @get_type.register
-def _(expression: exp.Cast, referenced_tables: list[Table]) -> ResultType:
+def _(expression: exp.Cast, referenced_tables: list[Table]) -> Type:
+
     original_type = get_type(expression.this, referenced_tables)
 
-    if original_type.type == PrimitiveType(EnumType.ERROR) or original_type.type == PrimitiveType(EnumType.NOT_IMPLEMENTED):
+    if original_type == ErrorType or original_type == NotImplementedType:
         return original_type
     
     # the casting is valid if the original type is a date or a string that can be converted to date
@@ -109,26 +123,24 @@ def _(expression: exp.Cast, referenced_tables: list[Table]) -> ResultType:
 
         to = expression.args.get("to")
         if not to:
-            return ResultType(type=PrimitiveType(EnumType.ERROR), message=f"CAST expression missing target type: {expression.sql()}")
+            return ErrorType(f"CAST missing target type: {expression.sql()}")
 
         if to.sql().upper() in ["DATE", "TIMESTAMP"]:
-            return ResultType(type=PrimitiveType(EnumType.DATE), constant=True, value=original_type.value, nullable=False)
+            return AtomicType(EnumType.DATE, nullable=False, constant=True, value=original_type.value)
 
-    return ResultType(type=PrimitiveType(EnumType.NOT_IMPLEMENTED), message=f"CAST not implemented: {expression.sql()}")
-
-@get_type.register
-def _(expression: exp.CurrentDate, referenced_tables: list[Table]) -> ResultType:
-    return ResultType(type=PrimitiveType(EnumType.DATE), constant=True, nullable=False)
+    # unsupported cast
+    return NotImplementedType()
 
 @get_type.register
-def _(expression: exp.CurrentTimestamp, referenced_tables: list[Table]) -> ResultType:
-    return ResultType(type=PrimitiveType(EnumType.TIMESTAMP), constant=True, nullable=False)
+def _(expression: exp.CurrentDate, referenced_tables: list[Table]) -> Type:
+    return AtomicType(EnumType.DATE, nullable=False, constant=True)
 
-# endregion
-
-# region columns
 @get_type.register
-def _(expression: exp.Column, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.CurrentTimestamp, referenced_tables: list[Table]) -> Type:
+    return AtomicType(EnumType.DATE, nullable=False, constant=True)
+
+@get_type.register
+def _(expression: exp.Column, referenced_tables: list[Table]) -> Type:
     col_name = expression.name
     table_name = expression.table
 
@@ -137,67 +149,82 @@ def _(expression: exp.Column, referenced_tables: list[Table]) -> list[ResultType
         if table_name == '' or table.name == table_name:
             for col in table.columns:
                 if col.name == col_name:
-                    result.append(ResultType(to_res_type(col.column_type), nullable=col.is_nullable))
+
+                    col_type = to_res_type(col.column_type)
+
+                    # text, blob, etc. are not implemented
+                    if col_type == NotImplementedType: 
+                        return col_type
+
+                    result.append(AtomicType(col_type, nullable=col.is_nullable))
+
+    if not result:
+        return ErrorType(f"Column not found: {col_name}")
+    
     if len(result) == 1:
         return result
     
-    # unknown column or ambiguous reference
-    return [ResultType(Type.NONE)]
+    return ErrorType(f"Ambiguous column reference: {col_name}")
 
 # endregion
 
-# region unary op
+# region unary ops
 
 @get_type.register
-def _(expression: exp.Neg, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.Neg, referenced_tables: list[Table]) -> Type:
     inner_types = get_type(expression.this, referenced_tables)
 
-    if len(inner_types) != 1:
-        return [ResultType(Type.NONE)]
+    if inner_types == ErrorType or inner_types == NotImplementedType:
+        return inner_types
     
-    if not inner_types[0].constant:
-        return [ResultType(Type.NONE)]
+    if inner_types == TupleType:
+        return ErrorType("Invalid use of unary minus on tuple expression")
     
-    if inner_types[0].type == Type.NUMBER:
-        return [ResultType(Type.NUMBER, constant=True, value=inner_types[0].value, nullable=False)]
-    
-    # handle implicit casts
-    if inner_types[0].type == Type.STRING and to_number(inner_types[0]):
-        return [ResultType(Type.NUMBER, constant=True, value=inner_types[0].value, nullable=False)]
+    if not inner_types.constant:
+        return ErrorType("Invalid use of unary minus on non-constant expression")
+
+    if to_number(inner_types):
+        return AtomicType(EnumType.NUMBER, nullable=False, constant=True)
         
-    return [ResultType(Type.NONE)]
+    return ErrorType("Invalid use of unary minus on non-numeric expression")
 
 @get_type.register
-def _(expression: exp.Not, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.Not, referenced_tables: list[Table]) -> Type:
     inner_types = get_type(expression.this, referenced_tables)
 
-    if len(inner_types) != 1:
-        return [ResultType(Type.NONE)]
+    if inner_types == ErrorType or inner_types == NotImplementedType:
+        return inner_types
     
-    if inner_types[0].type == Type.BOOLEAN or inner_types[0].type == Type.NULL:
-        return [ResultType(Type.BOOLEAN, constant=True, nullable=False)]
+    if inner_types == TupleType:
+        return ErrorType("Invalid use of NOT on tuple expression")
     
-    return [ResultType(Type.NONE)]
+    if inner_types == AtomicType(EnumType.BOOLEAN):
+        return AtomicType(EnumType.BOOLEAN, constant=True, nullable=False)
+
+    return ErrorType("Invalid use of NOT on non-boolean expression")
 
 @get_type.register
-def _(expression: exp.Paren, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.Paren, referenced_tables: list[Table]) -> Type:
     return get_type(expression.this, referenced_tables)
 
 @get_type.register
-def _(expression: exp.Alias, referenced_tables: list[Table]) -> ResultType:
+def _(expression: exp.Alias, referenced_tables: list[Table]) -> Type:
     return get_type(expression.this, referenced_tables)
 
 # To handle COUNT(DISTINCT ...) or similar constructs
 @get_type.register
-def _(expression: exp.Distinct, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.Distinct, referenced_tables: list[Table]) -> Type:
     
     if len(expression.expressions) != 1:
-        return [ResultType(Type.NONE)]
+        return ErrorType("Invalid use of DISTINCT")
 
     inner_types = get_type(expression.expressions[0], referenced_tables)
 
-    if len(inner_types) != 1:
-        return [ResultType(Type.NONE)]
+    if inner_types == ErrorType or inner_types == NotImplementedType:
+        return inner_types
+
+    if inner_types == TupleType:
+        return ErrorType("Invalid use of DISTINCT on tuple expression")
     
     return inner_types
 
@@ -206,87 +233,94 @@ def _(expression: exp.Distinct, referenced_tables: list[Table]) -> list[ResultTy
 # region functions
 
 @get_type.register
-def _(expression: exp.Count, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.Count, referenced_tables: list[Table]) -> Type:
     inner_types = get_type(expression.this, referenced_tables)
 
-    if len(inner_types) != 1 or inner_types[0].type == Type.NONE:
-        return [ResultType(Type.NONE)]
-    
-    return [ResultType(Type.NUMBER, constant=True, nullable=False)]
+    if inner_types == ErrorType or inner_types == NotImplementedType:
+        return inner_types
+
+    if inner_types == TupleType:
+        return ErrorType("Invalid use of COUNT on tuple expression")
+
+    return AtomicType(EnumType.NUMBER, nullable=inner_types.nullable, constant=True)
 
 @get_type.register
-def _(expression: exp.Avg, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.Avg, referenced_tables: list[Table]) -> Type:
     inner_types = get_type(expression.this, referenced_tables)
 
-    if len(inner_types) != 1:
-        return [ResultType(Type.NONE)]
-    
-    if inner_types[0].type == Type.NUMBER:
-        return [ResultType(Type.NUMBER, constant=False, nullable=inner_types[0].nullable)]
-    
-    # handle implicit casts
-    if to_number(inner_types[0]):
-        return [ResultType(Type.NUMBER, constant=False, nullable=inner_types[0].nullable)]
-        
-    return [ResultType(Type.NONE)]
+    if inner_types == ErrorType or inner_types == NotImplementedType:
+        return inner_types
+
+    if inner_types == TupleType:
+        return ErrorType("Invalid use of AVG on tuple expression")
+
+    if to_number(inner_types):
+        return AtomicType(EnumType.NUMBER, nullable=inner_types.nullable, constant=True)
+
+    return ErrorType("Invalid use of AVG on non-numeric expression")
 
 @get_type.register
-def _(expression: exp.Sum, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.Sum, referenced_tables: list[Table]) -> Type:
     inner_types = get_type(expression.this, referenced_tables)
 
-    if len(inner_types) != 1:
-        return [ResultType(Type.NONE)]
-    
-    if inner_types[0].type == Type.NUMBER:
-        return [ResultType(Type.NUMBER, constant=False, nullable=inner_types[0].nullable)]
-    
-    # handle implicit casts
-    if to_number(inner_types[0]):
-        return [ResultType(Type.NUMBER, constant=False, nullable=inner_types[0].nullable)]
-        
-    return [ResultType(Type.NONE)]
+    if inner_types == ErrorType or inner_types == NotImplementedType:
+        return inner_types
+
+    if inner_types == TupleType:
+        return ErrorType("Invalid use of SUM on tuple expression")
+
+    if to_number(inner_types):
+        return AtomicType(EnumType.NUMBER, nullable=inner_types.nullable, constant=True)
+
+    return ErrorType("Invalid use of SUM on non-numeric expression")
 
 @get_type.register
-def _(expression: exp.Min, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.Min, referenced_tables: list[Table]) -> Type:
     inner_types = get_type(expression.this, referenced_tables)
 
-    if len(inner_types) != 1:
-        return [ResultType(Type.NONE)]
+    if inner_types == ErrorType or inner_types == NotImplementedType:
+        return inner_types
     
-    if inner_types[0].type in [Type.NUMBER, Type.STRING, Type.DATE]:
-        return [ResultType(inner_types[0].type, constant=True, nullable=inner_types[0].nullable)]
-    
-    return [ResultType(Type.NONE)]
+    if inner_types == TupleType:
+        return ErrorType("Invalid use of MIN on tuple expression")
+
+    if inner_types == AtomicType(EnumType.BOOLEAN):
+        return ErrorType("Invalid use of MIN on boolean expression")
+
+    return AtomicType(inner_types, nullable=inner_types.nullable, constant=True)
 
 @get_type.register
-def _(expression: exp.Max, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.Max, referenced_tables: list[Table]) -> Type:
     inner_types = get_type(expression.this, referenced_tables)
 
-    if len(inner_types) != 1:
-        return [ResultType(Type.NONE)]
+    if inner_types == ErrorType or inner_types == NotImplementedType:
+        return inner_types
     
-    if inner_types[0].type in [Type.NUMBER, Type.STRING, Type.DATE]:
-        return [ResultType(inner_types[0].type, constant=True, nullable=inner_types[0].nullable)]
-    
-    return [ResultType(Type.NONE)]
+    if inner_types == TupleType:
+        return ErrorType("Invalid use of MAX on tuple expression")
+
+    if inner_types == AtomicType(EnumType.BOOLEAN):
+        return ErrorType("Invalid use of MAX on boolean expression")
+
+    return AtomicType(inner_types, nullable=inner_types.nullable, constant=True)
 
 @get_type.register
-def _(expression: exp.Concat, referenced_tables: list[Table]) -> list[ResultType]:
+def _(expression: exp.Concat, referenced_tables: list[Table]) -> Type:
     arg_types = []
     for arg in expression.expressions:
         i_type = get_type(arg, referenced_tables)
-        if len(i_type) != 1 or i_type[0].type == Type.NONE:
-            return [ResultType(Type.NONE)]
-        arg_types.append(i_type[0])
+        if i_type == ErrorType or i_type == NotImplementedType:
+            return i_type
+        arg_types.append(i_type)
     
     # if all args are NULL, result is NULL
-    if all(t.type == Type.NULL for t in arg_types):
-        return [ResultType(Type.NULL)]
+    if all(t == AtomicType(EnumType.NULL) for t in arg_types):
+        return AtomicType(EnumType.NULL, nullable=True, constant=True)
     
     constant = all(t.constant for t in arg_types)
     nullable = any(t.nullable for t in arg_types)
-    
-    return [ResultType(Type.STRING, constant=constant, nullable=nullable)]
+
+    return AtomicType(EnumType.STRING, constant=constant, nullable=nullable)
 
 # endregion
 
@@ -445,23 +479,23 @@ def _(expression: exp.Connector, referenced_tables: list[Table]) -> list[ResultT
 
 # region utils
 
-def to_date(res: ResultType) -> bool:
-    if res.type == PrimitiveType(EnumType.DATE):
+def to_date(target: Type) -> bool:
+    if target == AtomicType(EnumType.DATE):
         return True
-    if res.type == PrimitiveType(EnumType.STRING) and res.value is not None:
+    if target == AtomicType(EnumType.STRING) and target.name is not None:
         try:
-            parse(res.value)
+            parse(target.value)
             return True
         except ValueError:
             return False
     return False
     
-def to_number(res: ResultType) -> bool:
-    if res.type == PrimitiveType(EnumType.NUMBER):
+def to_number(target: Type) -> bool:
+    if target == AtomicType(EnumType.NUMBER):
         return True
-    if res.type == PrimitiveType(EnumType.STRING) and res.value is not None:
+    if target == AtomicType(EnumType.STRING) and target.name is not None:
         try:
-            float(res.value)
+            float(target.value)
             return True
         except ValueError:
             return False
@@ -470,14 +504,14 @@ def to_number(res: ResultType) -> bool:
 def to_res_type(original_type: str) -> Type:
     original_type = original_type.upper()
     if original_type in ["VARCHAR", "TEXT"] or original_type.startswith("CHAR"):
-        return PrimitiveType(EnumType.STRING)
+        return AtomicType(EnumType.STRING)
     elif original_type in ["DECIMAL", "NUMERIC", "REAL"] or original_type.startswith("INT") or original_type.startswith("FLOAT") or original_type.startswith("DOUBLE") or original_type.endswith("INT"):
-        return PrimitiveType(EnumType.NUMBER)
+        return AtomicType(EnumType.NUMBER)
     elif original_type.startswith("BOOL"):
-        return PrimitiveType(EnumType.BOOLEAN)
+        return AtomicType(EnumType.BOOLEAN)
     elif original_type.startswith("DATE") or original_type.startswith("TIMESTAMP"):
-        return PrimitiveType(EnumType.DATE)
+        return AtomicType(EnumType.DATE)
     else:
-        return PrimitiveType(EnumType.NOT_IMPLEMENTED)
+        return NotImplementedType()
 
 # endregion
