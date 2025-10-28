@@ -210,7 +210,7 @@ class Select(SetOperation, TokenizedSQL):
                 quoted = alias.quoted
                 col_name = alias.this
 
-                res_type = get_type(col.this, self.referenced_tables)[0]
+                res_type = get_type(col.this, self.referenced_tables)
                 result.add_column(name=col_name if quoted else col_name.lower(), column_type=res_type.type.value, is_nullable=res_type.nullable)
 
             elif isinstance(col, exp.Column):
@@ -221,13 +221,13 @@ class Select(SetOperation, TokenizedSQL):
                     table = next((t for t in self.referenced_tables if t.name == table_name), None)
                     if table:
                         for column in table.columns:
-                            res_type = get_type(column, self.referenced_tables)[0]
+                            res_type = get_type(column, self.referenced_tables)
                             result.add_column(name=column.name, column_type=res_type.type.value, is_nullable=res_type.nullable)
                 else:
                     col_name = col.alias_or_name
                     name = col_name if col.this.quoted else col_name.lower()
 
-                    res_type = get_type(col, self.referenced_tables)[0]
+                    res_type = get_type(col, self.referenced_tables)
                     result.add_column(name=name, column_type=res_type.type.value, is_nullable=res_type.nullable)
 
             elif isinstance(col, exp.Subquery):
@@ -236,14 +236,14 @@ class Select(SetOperation, TokenizedSQL):
                 # Add the first column of the subquery's output
                 if subquery.output.columns:
                     subquery_col = subquery.output.columns[0]
-                    res_type = get_type(subquery_col, self.referenced_tables)[0]
+                    res_type = get_type(subquery_col, self.referenced_tables)
                     result.add_column(name=subquery_col.name, column_type=res_type.type.value, is_nullable=res_type.nullable)
                 else:
                     result.add_column(name='', column_type='None')
 
             else:
                 # mostly unrecognized expressions (e.g. functions, literals, operations), that result in a column without a specific name
-                res_type = get_type(col, self.referenced_tables)[0]
+                res_type = get_type(col, self.referenced_tables)
                 result.add_column(name='', column_type=res_type.type.value, is_nullable=res_type.nullable)
 
         return result

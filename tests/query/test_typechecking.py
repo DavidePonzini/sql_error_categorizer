@@ -6,7 +6,7 @@ def test_primitive_types(make_query):
     query = make_query(sql)
     result = []
     for exp in query.main_query.ast.expressions:
-        col_type = get_type(exp, query.main_query.referenced_tables)[0]
+        col_type = get_type(exp, query.main_query.referenced_tables)
         result.append(col_type.type.value)
     assert result == ["string", "number", "boolean", "null", "date"]
 
