@@ -2,6 +2,7 @@ psycopg2
 pyyaml
 sqlparse
 sqlglot
+z3-solver
 
 ipython
 
