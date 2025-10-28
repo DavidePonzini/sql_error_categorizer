@@ -49,7 +49,7 @@ class Column:
 
     def __repr__(self, level: int = 0) -> str:
         indent = '  ' * level
-        return f'{indent}Column(name=\'{self.name}\', type=\'{self.column_type}\', is_fk={self.is_fk}, is_nullable={self.is_nullable})'
+        return f'{indent}Column(name=\'{self.name}\', type=\'{self.column_type}\', is_fk={self.is_fk}, is_nullable={self.is_nullable}, is_constant={self.is_constant})'
 
     def to_dict(self) -> dict:
         return {
@@ -88,12 +88,25 @@ class Table:
     def add_unique_constraint(self, columns: set[str], constraint_type: UniqueConstraintType) -> None:
         self.unique_constraints.append(UniqueConstraint(columns, constraint_type))
 
-    def add_column(self, name: str, column_type: str, numeric_precision: int | None = None, numeric_scale: int | None = None,
-                   is_nullable: bool = True, fk_schema: str | None = None, fk_table: str | None = None, fk_column: str | None = None) -> Column:
+    def add_column(self,
+                   name: str,
+                   column_type: str,
+                   numeric_precision: int | None = None,
+                   numeric_scale: int | None = None,
+                   is_nullable: bool = True,
+                   is_constant: bool = False,
+                   fk_schema: str | None = None,
+                   fk_table: str | None = None,
+                   fk_column: str | None = None) -> Column:
         column = Column(name=name,
-                        column_type=column_type, numeric_precision=numeric_precision, numeric_scale=numeric_scale,
+                        column_type=column_type,
+                        numeric_precision=numeric_precision,
+                        numeric_scale=numeric_scale,
                         is_nullable=is_nullable,
-                        fk_schema=fk_schema, fk_table=fk_table, fk_column=fk_column)
+                        is_constant=is_constant,
+                        fk_schema=fk_schema,
+                        fk_table=fk_table,
+                        fk_column=fk_column)
         self.columns.append(column)
         return column
     
