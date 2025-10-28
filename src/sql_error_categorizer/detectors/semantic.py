@@ -184,11 +184,6 @@ class SemanticErrorDetector(BaseDetector):
                     continue
 
         return results
-    
-        m = re.search(r"=\s*'[^']*%[^']*'", self.query)
-        if m:
-            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, m.group(0))]
-        return []
 
     # TODO: refactor
     def sem_1_incorrect_wildcard(self) -> list[DetectedError]:
