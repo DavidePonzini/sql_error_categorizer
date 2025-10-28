@@ -3,6 +3,7 @@ import re
 import sqlparse
 import sqlparse.keywords
 from typing import Callable
+from sqlglot import exp
 
 from .base import BaseDetector, DetectedError
 from ..query import Query
@@ -152,7 +153,37 @@ class SemanticErrorDetector(BaseDetector):
     # TODO: refactor
     def sem_1_wildcards_without_like(self) -> list[DetectedError]:
         '''Detect = '%...%' instead of LIKE'''
-        return []
+
+        results: list[DetectedError] = []
+
+        def has_wildcards(literal: exp.Literal) -> bool:
+            value = literal.this
+
+            if not isinstance(value, str):
+                return False
+
+            return '%' in value or '_' in value
+
+
+        for select in self.query.selects:
+            ast = select.ast
+
+            if not ast:
+                continue
+
+            for eq in ast.find_all(exp.EQ):
+                left = eq.this
+                right = eq.expression
+
+                if isinstance(left, exp.Literal) and has_wildcards(left):
+                    results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
+                    continue
+
+                if isinstance(right, exp.Literal) and has_wildcards(right):
+                    results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
+                    continue
+
+        return results
     
         m = re.search(r"=\s*'[^']*%[^']*'", self.query)
         if m:
