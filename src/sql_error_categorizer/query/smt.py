@@ -3,6 +3,7 @@ from z3 import (
     Int, IntVal, RealVal, BoolVal, Bool, StringVal,
     And, Or, Not, Solver, unsat
 )
+from z3 import Solver, Not, unsat, Or, And, BoolSort, is_expr
 
 def sql_to_z3(expr, variables):
     # --- Columns ---
@@ -140,59 +141,10 @@ def check_formula(expr):
 
     return 'contingent'
 
-
-from z3 import Solver, Not, unsat, Or, And, BoolSort, is_expr
-import sqlglot
-from sqlglot.optimizer.normalize import normalize
-
-def consistency_check(expr_z3):
+def consistency_check(expr_z3) -> bool:
     solver = Solver()
     solver.add(expr_z3)
-    messages.debug(expr_z3)
-    return solver.check()
+    return solver.check() != unsat
 
-def extract_DNF(expr):
-    dnf_expr = normalize(expr, dnf=True)
-    disjuncts = dnf_expr.flatten()  # list of Ci (each an And)
-    return disjuncts
-
-
-def is_bool_expr(e):
+def is_bool_expr(e) -> bool:
     return is_expr(e) and e.sort().kind() == BoolSort().kind()
-
-def analyze_error8(expr: exp.Expression):
-    variables = {}
-    dnf = list(extract_DNF(expr))
-
-    results = {'tautology': False, 'contradiction': False, 'redundant_disjuncts': [], 'redundant_conjuncts': []}
-
-    # (1) whole formula
-    whole = Or(*[sql_to_z3(C, variables) for C in dnf])
-
-    if consistency_check(whole) == unsat:
-        results['contradiction'] = True
-    if consistency_check(Not(whole)) == unsat:
-        results['tautology'] = True
-
-    # (2) each Ci redundant?
-    for i, Ci in enumerate(dnf):
-        messages.debug(f'Analyzing disjunct {i}: {Ci}')        
-        Ci_z3 = sql_to_z3(Ci, variables)
-        others = Or(*[sql_to_z3(C, variables) for j, C in enumerate(dnf) if j != i])
-        if consistency_check(And(Ci_z3, Not(others))) == unsat:
-            results['redundant_disjuncts'].append((Ci.sql()))
-        
-        # (3) each Ai,j redundant?
-        conjuncts = list(Ci.flatten())
-        for j, Aj in enumerate(conjuncts):
-            Aj_z3 = sql_to_z3(Aj, variables)
-            if not is_bool_expr(Aj_z3):
-                continue
-            rest = [sql_to_z3(c, variables) for k, c in enumerate(conjuncts)
-                    if k != j and is_bool_expr(sql_to_z3(c, variables))]
-            others = Or(*[sql_to_z3(C, variables) for k, C in enumerate(dnf) if k != i])
-            formula = And(Not(Aj_z3), *rest, Not(others))
-            if consistency_check(formula) == unsat:
-                results['redundant_conjuncts'].append((Ci.sql(), Aj.sql()))
-
-    return results

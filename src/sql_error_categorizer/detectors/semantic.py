@@ -4,12 +4,14 @@ import sqlparse
 import sqlparse.keywords
 from typing import Callable
 from sqlglot import exp
+from z3 import Solver, Not, unsat, Or, And, BoolSort, is_expr
+import sqlglot
+
 
 from .base import BaseDetector, DetectedError
-from ..query import Query
+from ..query import Query, smt, extract_DNF
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
-
 
 class SemanticErrorDetector(BaseDetector):
     def __init__(self,
@@ -51,8 +53,8 @@ class SemanticErrorDetector(BaseDetector):
     # TODO: refactor
     def sem_1_inconsistent_expression(self) -> list[DetectedError]:
         '''Detect contradictory WHERE conditions: equality mismatches and non-overlapping ranges'''
-
         return []
+    
         # Need to check at least 2x equality or range conditions on the same column
         # e.g., col='x' AND col='y' or col < a AND col > b where b >= a
         
@@ -132,9 +134,53 @@ class SemanticErrorDetector(BaseDetector):
 
         return results
     
-    # TODO: implement
     def sem_1_tautological_or_inconsistent_expression(self) -> list[DetectedError]:
-        return []
+        results: list[DetectedError] = []
+
+        for select in self.query.selects:
+            where = select.where
+
+            if not where:
+                continue
+
+            variables = {}
+
+            dnf = extract_DNF(where)
+            # TODO: add checks from constraints in catalog
+
+            # Refer to Brass & Goldberg, 2006 for these checks (error #8)
+            # (1) whole formula
+            try:
+                whole = Or(*[smt.sql_to_z3(C, variables) for C in dnf])
+            except Exception:
+                continue  # skip if cannot convert to z3
+
+            if not smt.consistency_check(whole):
+                results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('contradiction',)))
+            elif not smt.consistency_check(Not(whole)):
+                results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('tautology',)))
+                
+            # (2) each Ci redundant?
+            for i, Ci in enumerate(dnf):
+                    Ci_z3 = smt.sql_to_z3(Ci, variables)
+                    others = Or(*[smt.sql_to_z3(C, variables) for j, C in enumerate(dnf) if j != i])
+                    if not smt.consistency_check(And(Ci_z3, Not(others))):
+                        results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', Ci.sql())))
+                    
+                    # (3) each Ai,j redundant?
+                    conjuncts = list(Ci.flatten())
+                    for j, Aj in enumerate(conjuncts):
+                        Aj_z3 = smt.sql_to_z3(Aj, variables)
+                        if not smt.is_bool_expr(Aj_z3):
+                            continue
+                        rest = [smt.sql_to_z3(c, variables) for k, c in enumerate(conjuncts)
+                                if k != j and smt.is_bool_expr(smt.sql_to_z3(c, variables))]
+                        others = Or(*[smt.sql_to_z3(C, variables) for k, C in enumerate(dnf) if k != i])
+                        formula = And(Not(Aj_z3), *rest, Not(others))
+                        if not smt.consistency_check(formula):
+                            results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_conjunct', (Ci.sql(), Aj.sql()))))
+
+        return results
 
     # TODO: refactor
     def sem_1_distinct_in_sum_or_avg(self) -> list[DetectedError]:
