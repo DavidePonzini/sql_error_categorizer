@@ -46,7 +46,7 @@ class SqlErrors(Enum):
     SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG                                            = 41
     SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_THAT_MIGHT_REMOVE_IMPORTANT_DUPLICATES                   = 42
     SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE                                            = 43
-    SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD_USING_UNDERSCORE_INSTEAD_OF_PERCENT            = 44
+    SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD                                                = 44
     SEM_1_INCONSISTENT_EXPRESSION_MIXING_A_GREATER_THAN_0_WITH_IS_NOT_NULL                          = 45
     SEM_2_INCONSISTENT_JOIN_NULL_IN_IN_ANY_ALL_SUBQUERY                                             = 46
     SEM_2_INCONSISTENT_JOIN_JOIN_ON_INCORRECT_COLUMN                                                = 47

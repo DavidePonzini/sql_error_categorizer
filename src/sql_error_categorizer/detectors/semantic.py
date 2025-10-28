@@ -192,15 +192,15 @@ class SemanticErrorDetector(BaseDetector):
 
         # 1) Using '=' with '_' suggests misuse of wildcard instead of LIKE/%
         if re.search(r"=\s*'[^']*_[^']*'", self.query, re.IGNORECASE):
-            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD_USING_UNDERSCORE_INSTEAD_OF_PERCENT, '_')]
+            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, '_')]
 
         # 2) Using LIKE with '_' but perhaps intending any-length match (should use '%')
         if re.search(r"LIKE\s*'[^']*_[^']*'", self.query, re.IGNORECASE):
-            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD_USING_UNDERSCORE_INSTEAD_OF_PERCENT, '_')]
+            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, '_')]
 
         # 3) Using '*' (either with = or LIKE) instead of '%' wildcard
         if re.search(r"(?:LIKE|=)\s*'[^']*\*[^']*'", self.query, re.IGNORECASE):
-            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD_USING_UNDERSCORE_INSTEAD_OF_PERCENT, '*')]
+            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, '*')]
 
         return []
     
