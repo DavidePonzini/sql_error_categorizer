@@ -1,3 +1,4 @@
+import pytest
 from tests import *
 
 def test_tautology():
@@ -57,16 +58,15 @@ def test_redundant_disjunction():
 
 
 def test_redudant_disjunction_on_subquery():
-    query = """
+    query = '''
     SELECT * FROM employees WHERE department_id IN (
-        SELECT department_id FROM departments WHERE location_id = 1700 OR location_id = 1700
+        SELECT department_id FROM departments WHERE location_id = 1700 OR location_id >= 1700
     )
-    """
+    '''
 
     result = run_test(
         query,
         detectors=[SemanticErrorDetector],
-        debug=True,
     )
 
     assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
@@ -74,16 +74,49 @@ def test_redudant_disjunction_on_subquery():
 
 
 def test_no_errors_on_contingent_subquery():
-    query = """
+    query = '''
     SELECT * FROM employees WHERE department_id IN (
         SELECT department_id FROM departments WHERE location_id = 1700 OR location_id = 1800
     )
-    """
+    '''
 
     result = run_test(
         query,
         detectors=[SemanticErrorDetector],
-        debug=True,
     )
 
     assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 0
+
+@pytest.mark.skip(reason="Subquery handling not yet implemented")
+def test_tautology_with_subquery():
+    query = '''
+    SELECT * FROM employees WHERE department_id >= (
+        SELECT MIN(department_id)
+        FROM departments
+    )
+    '''
+
+    result = run_test(
+        query,
+        detectors=[SemanticErrorDetector],
+    )
+
+    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
+    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('tautology',))
+
+@pytest.mark.skip(reason="CTE handling not yet implemented")
+def test_contradiction_with_cte():
+    query = '''
+    WITH dept_cte AS (
+        SELECT department_id FROM departments WHERE department_id < 100
+    )
+    SELECT * FROM dept_cte WHERE department_id > 100
+    '''
+
+    result = run_test(
+        query,
+        detectors=[SemanticErrorDetector],
+    )
+
+    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
+    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('contradiction',))

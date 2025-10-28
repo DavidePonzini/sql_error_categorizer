@@ -82,6 +82,10 @@ def sql_to_z3(expr, variables):
     # --- IN (list) ---
     elif isinstance(expr, exp.In):
         target = sql_to_z3(expr.this, variables)
+        if isinstance(expr.args['expressions'], exp.Subquery):
+            # Subquery handling can be complex; skipping for now
+            return BoolVal(True)
+        
         options = [sql_to_z3(e, variables) for e in expr.expressions]
         return Or(*[target == o for o in options])
 
