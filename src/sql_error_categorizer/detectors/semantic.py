@@ -23,32 +23,35 @@ class SemanticErrorDetector(BaseDetector):
             update_query=update_query,
         )
 
-    # def _prepare(self):
-    #     super()._prepare()
-    #     self.parsed_qry = sqlparse.parse(self.query)
-    #     if not self.parsed_qry: return
-    #     self.parsed_qry = self.parsed_qry[0]
-
     def run(self) -> list[DetectedError]:
         results: list[DetectedError] = []
 
         checks = [
-            # self.sem_1_inconsistent_expression,   # TODO: refactor
-            # self.sem_1_distinct_in_sum_or_avg,    # TODO: refactor
-            # self.sem_1_wildcards_without_like,    # TODO: refactor
-            # self.sem_1_incorrect_wildcard,    # TODO: refactor
-            # self.sem_1_mixing_comparison_and_null,    # TODO: refactor
-            # self.sem_2_join_on_incorrect_column,  # TODO: refactor
-            # self.sem_5_constant_column_output,    # TODO: refactor
-            # self.sem_5_duplicate_column_output    # TODO: refactor
+            self.sem_1_inconsistent_expression,
+            self.sem_1_tautological_or_inconsistent_expression,
+            self.sem_1_distinct_in_sum_or_avg,
+            self.sem_1_distinct_removing_important_duplicates,
+            self.sem_1_wildcards_without_like,
+            self.sem_1_incorrect_wildcard,
+            self.sem_1_mixing_comparison_and_null,
+            self.sem_2_null_in_in_subquery,
+            self.sem_2_join_on_incorrect_column,
+            self.sem_3_missing_join,
+            self.sem_4_duplicate_rows,
+            self.sem_5_constant_column_output,
+            self.sem_5_duplicate_column_output,
         ]
         
         for chk in checks:
             results.extend(chk())
+            
         return results
 
-    def sem_1_inconsistent_expression(self) -> list:
-        """Detect contradictory WHERE conditions: equality mismatches and non-overlapping ranges"""
+    # TODO: refactor
+    def sem_1_inconsistent_expression(self) -> list[DetectedError]:
+        '''Detect contradictory WHERE conditions: equality mismatches and non-overlapping ranges'''
+
+        return []
         # Need to check at least 2x equality or range conditions on the same column
         # e.g., col='x' AND col='y' or col < a AND col > b where b >= a
         
@@ -128,26 +131,39 @@ class SemanticErrorDetector(BaseDetector):
 
         return results
     
-    #TODO def sem_1_tautological_or_inconsistent_expression(self):
+    # TODO: implement
+    def sem_1_tautological_or_inconsistent_expression(self) -> list[DetectedError]:
+        return []
 
-    def sem_1_distinct_in_sum_or_avg(self) -> list:
-        """Detect SUM(DISTINCT ...) or AVG(DISTINCT ...)"""
+    # TODO: refactor
+    def sem_1_distinct_in_sum_or_avg(self) -> list[DetectedError]:
+        '''Detect SUM(DISTINCT ...) or AVG(DISTINCT ...)'''
+        return []
+    
         # Accepts SUM(DISTINCT col), SUM(DISTINCT(col)), etc.
         if re.search(r"\b(SUM|AVG)\s*\(\s*DISTINCT\s*\(?\s*\w+\s*\)?", self.query, re.IGNORECASE):
             return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG, 'DISTINCT')]
         return []
     
-    #TODO def sem_1_distinct_removing_important_duplicates(self):
+    # TODO: implement
+    def sem_1_distinct_removing_important_duplicates(self) -> list[DetectedError]:
+        return []
+
+    # TODO: refactor
+    def sem_1_wildcards_without_like(self) -> list[DetectedError]:
+        '''Detect = '%...%' instead of LIKE'''
+        return []
     
-    def sem_1_wildcards_without_like(self) -> list:
-        """Detect = '%...%' instead of LIKE"""
         m = re.search(r"=\s*'[^']*%[^']*'", self.query)
         if m:
             return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, m.group(0))]
         return []
-    
-    def sem_1_incorrect_wildcard(self) -> list:
-        """Detect misuse of '_' or '*' wildcards"""
+
+    # TODO: refactor
+    def sem_1_incorrect_wildcard(self) -> list[DetectedError]:
+        '''Detect misuse of '_' or '*' wildcards'''
+        return []
+
         # 1) Using '=' with '_' suggests misuse of wildcard instead of LIKE/%
         if re.search(r"=\s*'[^']*_[^']*'", self.query, re.IGNORECASE):
             return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD_USING_UNDERSCORE_INSTEAD_OF_PERCENT, '_')]
@@ -162,8 +178,11 @@ class SemanticErrorDetector(BaseDetector):
 
         return []
     
-    def sem_1_mixing_comparison_and_null(self) -> list: 
-        """Detect mixing of >0 with IS NOT NULL or empty string with IS NULL on the same column"""
+    # TODO: refactor
+    def sem_1_mixing_comparison_and_null(self) -> list[DetectedError]: 
+        '''Detect mixing of >0 with IS NOT NULL or empty string with IS NULL on the same column'''
+        return []
+
         results = []
         # a > 0 AND a IS NOT NULL
         m = re.search(r"(\w+)\s*>\s*0\s+AND\s+\1\s+IS\s+NOT\s+NULL", self.query, re.IGNORECASE)
@@ -183,32 +202,41 @@ class SemanticErrorDetector(BaseDetector):
 
         return results    
     
-    #TODO def sem_2_null_in_in_subquery(self) -> list:
-        """Detect potential NULL/UNKNOWN in IN/ANY/ALL subqueries when subquery column is nullable.
+    #TODO: implement
+    def sem_2_null_in_in_subquery(self) -> list[DetectedError]:
+        '''Detect potential NULL/UNKNOWN in IN/ANY/ALL subqueries when subquery column is nullable.
             heuristically assume that if a column is not declared as NOT NULL, then every typical 
-            database state contains at least one row in which it is null. """
+            database state contains at least one row in which it is null. '''
+        return []
 
-    def sem_2_join_on_incorrect_column(self) -> list:
-        """
+    # TODO: implement
+    def sem_2_join_on_incorrect_column(self) -> list[DetectedError]:
+        '''
         For each JOIN … ON: require at least one “A.col = B.col” in the ON clause.
         For comma-style joins (FROM A, B): require at least one “A.col = B.col” in the WHERE.
         If no such predicate is found for a given join, emit SEM_2_JOIN_ON_INCORRECT_COLUMN.
         If the join operation is a self-join, then skip the check.
         Check based on the content of the catalog column_metadata the compatibility of the columns.
-        """
-        results = []
-        return results
-            
-    #TODO def sem_3_missing_join(self) -> list:
+        '''
+        return []
+
+    # TODO: implement
+    def sem_3_missing_join(self) -> list[DetectedError]:
+        return []
     
-    #TODO def sem_4_duplicate_rows(self) -> list:
+    # TODO: implement
+    def sem_4_duplicate_rows(self) -> list[DetectedError]:
+        return []
     
-    def sem_5_constant_column_output(self) -> list:
-        """
+    # TODO: refactor
+    def sem_5_constant_column_output(self) -> list[DetectedError]:
+        '''
         Detect when a SELECT-list column is constrained to a constant.
         - If WHERE has A = c and A is in SELECT, warn.
         - If WHERE has A = c and also A = B, then both A and B in SELECT should warn.
-        """
+        '''
+        return []
+
         results = []
 
         # 1. Extract selected columns (simple ones only)
@@ -284,10 +312,13 @@ class SemanticErrorDetector(BaseDetector):
 
         return results
     
-    def sem_5_duplicate_column_output(self) -> list:
-        """
+    # TODO: refactor
+    def sem_5_duplicate_column_output(self) -> list[DetectedError]:
+        '''
         Detects if the same column or expression appears multiple times in the SELECT list.
-        """
+        '''
+        return []
+
         results = []
 
         # 1. Usa il SELECT list già parsato dalla query_map
