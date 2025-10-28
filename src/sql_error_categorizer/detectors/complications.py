@@ -30,11 +30,6 @@ class ComplicationDetector(BaseDetector):
 
         results: list[DetectedError] = super().run()
 
-        # If correct_solutions are not provided, return an empty list
-        if not self.solutions:
-            print("Missing correct solutions to analyze logical errors.")
-            return results
-        
         checks = [
             self.com_1_like_without_wildcards,
             self.com_1_complication_unnecessary_distinct_in_select_clause,

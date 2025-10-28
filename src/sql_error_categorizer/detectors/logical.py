@@ -26,11 +26,6 @@ class LogicalErrorDetector(BaseDetector):
     def run(self) -> list[DetectedError]:    
         results: list[DetectedError] = super().run()
 
-        # If correct_solutions are not provided, return an empty list
-        if not self.solutions:
-            print("Missing correct solutions to analyze logical errors.")
-            return results
-        
         checks = [
             self.log_1_operator_error_or_instead_of_and,
             self.log_1_operator_error_incorrect_comparison_operator_or_value,
