@@ -27,7 +27,7 @@ class SyntaxErrorDetector(BaseDetector):
 
     def run(self) -> list[DetectedError]:
         '''Run the detector and return a list of detected errors with their descriptions'''
-        results: list[DetectedError] = []
+        results: list[DetectedError] = super().run()
 
         # 1) fix stray semicolons (to allow ast building for subsequent checks)
         checks = [self.syn_6_additional_omitted_semicolons]

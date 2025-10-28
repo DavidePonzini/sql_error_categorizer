@@ -24,7 +24,7 @@ class SemanticErrorDetector(BaseDetector):
         )
 
     def run(self) -> list[DetectedError]:
-        results: list[DetectedError] = []
+        results: list[DetectedError] = super().run()
 
         checks = [
             self.sem_1_inconsistent_expression,
@@ -44,7 +44,7 @@ class SemanticErrorDetector(BaseDetector):
         
         for chk in checks:
             results.extend(chk())
-            
+
         return results
 
     # TODO: refactor

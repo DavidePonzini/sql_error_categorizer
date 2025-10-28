@@ -24,32 +24,24 @@ class LogicalErrorDetector(BaseDetector):
         )
 
     def run(self) -> list[DetectedError]:    
-        results = super().run()
+        results: list[DetectedError] = super().run()
 
         # If correct_solutions are not provided, return an empty list
         if not self.solutions:
             print("Missing correct solutions to analyze logical errors.")
             return results
         
-        # AST parsing for proposed and correct solutions
-        # self.q_ast = get_ast(self.query.sql)
-        # self.s_ast = [get_ast(sol) for sol in self.correct_solutions]
-        # self.s_ast = self.s_ast[0] # TODO: for now we only support one correct solution
-
-        # if not self.q_ast or not self.s_ast:
-        #     return results
-        
         checks = [
-            # self.log_1_operator_error_or_instead_of_and,  # TODO: refactor
-            # self.log_1_operator_error_incorrect_comparison_operator_or_value, # TODO: refactor
-            # self.log_4_expression_error_missing_expression,   # TODO: refactor
-            # self.log_4_expression_error_expression_on_incorrect_column,   # TODO: refactor
-            # self.log_5_projection_error_extraneous_column_in_select,  # TODO: refactor
-            # self.log_5_projection_error_missing_column_from_select,   # TODO: refactor
-            # self.log_5_projection_error_missing_column_from_order_by, # TODO: refactor
-            # self.log_5_projection_error_incorrect_column_in_order_by, # TODO: refactor
-            # self.log_5_projection_error_extraneous_order_by_clause,   # TODO: refactor
-            # self.log_5_projection_error_incorrect_ordering_of_rows    # TODO: refactor
+            self.log_1_operator_error_or_instead_of_and,
+            self.log_1_operator_error_incorrect_comparison_operator_or_value,
+            self.log_4_expression_error_missing_expression,
+            self.log_4_expression_error_expression_on_incorrect_column,
+            self.log_5_projection_error_extraneous_column_in_select,
+            self.log_5_projection_error_missing_column_from_select,
+            self.log_5_projection_error_missing_column_from_order_by,
+            self.log_5_projection_error_incorrect_column_in_order_by,
+            self.log_5_projection_error_extraneous_order_by_clause,
+            self.log_5_projection_error_incorrect_ordering_of_rows
         ]
 
         for chk in checks:
@@ -57,11 +49,14 @@ class LogicalErrorDetector(BaseDetector):
 
         return results
         
-    def log_1_operator_error_or_instead_of_and(self) -> list:
-        """
+    # TODO: refactor
+    def log_1_operator_error_or_instead_of_and(self) -> list[DetectedError]:
+        '''
         Detects if OR is used instead of AND in the WHERE or HAVING clauses
         by comparing the query's AST against the correct solution's AST.
-        """
+        '''
+        return []
+
         results = []
         clauses_to_check = ['where', 'having']
 
@@ -87,14 +82,17 @@ class LogicalErrorDetector(BaseDetector):
                 
         return results
     
-    def log_1_operator_error_incorrect_comparison_operator_or_value(self) -> list:
-        """
+    # TODO: refactor
+    def log_1_operator_error_incorrect_comparison_operator_or_value(self) -> list[DetectedError]:
+        '''
         Flags errors in comparison operators or values in WHERE and HAVING clauses.
         
         This function identifies two types of errors:
         1.  An incorrect comparison operator is used (e.g., '<' instead of '>').
         2.  An incorrect literal value is used in a comparison (e.g., 'Morandi' instead of 'Morando').
-        """
+        '''
+        return []
+
         results = []
 
         # 1. Extract all comparison tuples from the proposed and correct queries.
@@ -140,8 +138,11 @@ class LogicalErrorDetector(BaseDetector):
                     ))
         return results
     
-    def log_4_expression_error_missing_expression(self) -> list:
-        """Flags when a required expression is missing from the SELECT clause."""
+    # TODO: refactor
+    def log_4_expression_error_missing_expression(self) -> list[DetectedError]:
+        '''Flags when a required expression is missing from the SELECT clause.'''
+        return []
+
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -166,8 +167,11 @@ class LogicalErrorDetector(BaseDetector):
             
         return results
 
-    def log_4_expression_error_expression_on_incorrect_column(self) -> list:
-        """Flags when an expression (e.g., AVG) is used on an incorrect column."""
+    # TODO: refactor
+    def log_4_expression_error_expression_on_incorrect_column(self) -> list[DetectedError]:
+        '''Flags when an expression (e.g., AVG) is used on an incorrect column.'''
+        return []
+        
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -206,10 +210,13 @@ class LogicalErrorDetector(BaseDetector):
                         ))
         return results
 
-    def log_4_expression_error_extraneous_error(self) -> list:
-        """
+    # TODO: refactor
+    def log_4_expression_error_extraneous_error(self) -> list[DetectedError]:
+        '''
         Flags when an extraneous expression is included in the SELECT clause.
-        """
+        '''
+        return []
+    
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -235,12 +242,15 @@ class LogicalErrorDetector(BaseDetector):
             ))
             
         return results
-    
-    def log_5_projection_error_extraneous_column_in_select(self) -> list:
-        """
+
+    # TODO: refactor
+    def log_5_projection_error_extraneous_column_in_select(self) -> list[DetectedError]:
+        '''
         Flags when an extraneous column is included in the SELECT clause,
         with a special check for inappropriate use of 'SELECT *'.
-        """
+        '''
+        return []
+    
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -280,11 +290,14 @@ class LogicalErrorDetector(BaseDetector):
             
         return results
 
-    def log_5_projection_error_missing_column_from_select(self) -> list:
-        """
+    # TODO: refactor
+    def log_5_projection_error_missing_column_from_select(self) -> list[DetectedError]:
+        '''
         Flags when a required column is missing from the SELECT clause,
         correctly handling cases where duplicate columns are required.
-        """
+        '''
+        return []
+    
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -309,9 +322,12 @@ class LogicalErrorDetector(BaseDetector):
             ))
                 
         return results
+
+    # TODO: refactor
+    def log_5_projection_error_missing_column_from_order_by(self) -> list[DetectedError]:
+        '''Flags when a required column is missing from the ORDER BY clause.'''
+        return []
     
-    def log_5_projection_error_missing_column_from_order_by(self) -> list:
-        """Flags when a required column is missing from the ORDER BY clause."""
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -334,8 +350,11 @@ class LogicalErrorDetector(BaseDetector):
             ))
         return results
 
-    def log_5_projection_error_incorrect_column_in_order_by(self) -> list:
-        """Flags when a column is incorrectly included in the ORDER BY clause."""
+    # TODO: refactor
+    def log_5_projection_error_incorrect_column_in_order_by(self) -> list[DetectedError]:
+        '''Flags when a column is incorrectly included in the ORDER BY clause.'''
+        return []
+    
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -358,8 +377,11 @@ class LogicalErrorDetector(BaseDetector):
             ))
         return results
 
-    def log_5_projection_error_extraneous_order_by_clause(self) -> list:
-        """Flags when an ORDER BY clause is present but not required."""
+    # TODO: refactor
+    def log_5_projection_error_extraneous_order_by_clause(self) -> list[DetectedError]:
+        '''Flags when an ORDER BY clause is present but not required.'''
+        return []
+    
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -374,8 +396,11 @@ class LogicalErrorDetector(BaseDetector):
             ))
         return results
 
-    def log_5_projection_error_incorrect_ordering_of_rows(self) -> list:
-        """Flags when a column in ORDER BY has the wrong sort direction (ASC/DESC)."""
+    # TODO: refactor
+    def log_5_projection_error_incorrect_ordering_of_rows(self) -> list[DetectedError]:
+        '''Flags when a column in ORDER BY has the wrong sort direction (ASC/DESC).'''
+        return []
+    
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -403,7 +428,7 @@ class LogicalErrorDetector(BaseDetector):
     
     #region Utility methods
     def _get_comparisons(self, node: dict) -> list:
-        """
+        '''
         Recursively traverses an AST node to find all comparison expressions.
         
         Args:
@@ -412,7 +437,7 @@ class LogicalErrorDetector(BaseDetector):
         Returns:
             A list of tuples, where each tuple represents a comparison in the
             form (column_name, operator_class, literal_value).
-        """
+        '''
         if not node or not isinstance(node, dict):
             return []
 
@@ -445,7 +470,7 @@ class LogicalErrorDetector(BaseDetector):
         return []
     
     def _get_structured_expressions(self, ast: dict) -> list:
-        """
+        '''
         Extracts a list of structured representations of aggregate/function expressions
         from a SELECT query's AST.
 
@@ -454,7 +479,7 @@ class LogicalErrorDetector(BaseDetector):
 
         Returns:
             A list of tuples, e.g., [('AVG', 'Age'), ('COUNT', '*')].
-        """
+        '''
         structured_exprs = []
         if not ast:
             return structured_exprs
@@ -483,10 +508,10 @@ class LogicalErrorDetector(BaseDetector):
         return structured_exprs
     
     def _get_select_columns(self, ast: dict) -> list:
-        """
+        '''
         Extracts a list of simple column names from a SELECT query's AST.
         This version handles simple columns, qualified columns (table.col), and aliased columns.
-        """
+        '''
         columns = []
         if not ast:
             return columns
@@ -503,9 +528,9 @@ class LogicalErrorDetector(BaseDetector):
         return columns
 
     def _find_underlying_column(self, node: dict):
-        """
+        '''
         Recursively traverses an expression node to find the underlying column identifier.
-        """
+        '''
         if not isinstance(node, dict):
             return None
         
@@ -531,7 +556,7 @@ class LogicalErrorDetector(BaseDetector):
         return None
     
     def _selects_star(self, ast: dict) -> bool:
-        """
+        '''
         Checks if a 'SELECT *' is used in the query by looking for a 'Star'
         node in the AST's expression list.
 
@@ -540,7 +565,7 @@ class LogicalErrorDetector(BaseDetector):
 
         Returns:
             True if 'SELECT *' is found, otherwise False.
-        """
+        '''
         if not ast:
             return False
         try:
@@ -554,7 +579,7 @@ class LogicalErrorDetector(BaseDetector):
         return False
     
     def _get_orderby_columns(self, ast: dict) -> list:
-        """
+        '''
         Extracts a list of columns and their sort direction from an ORDER BY clause.
 
         Args:
@@ -562,7 +587,7 @@ class LogicalErrorDetector(BaseDetector):
 
         Returns:
             A list of tuples, e.g., [('col_name', 'ASC'), ('col_name2', 'DESC')].
-        """
+        '''
         orderby_terms = []
         if not ast:
             return orderby_terms

@@ -28,38 +28,34 @@ class ComplicationDetector(BaseDetector):
         Executes all complication checks and returns a list of identified misconceptions.
         '''
 
-        results: list[DetectedError] = []
+        results: list[DetectedError] = super().run()
 
         # If correct_solutions are not provided, return an empty list
-        # if not self.solutions:
-        #     print("Missing correct solutions to analyze logical errors.")
-        #     return results
-        
-        # AST parsing for proposed and correct solutions
-        # self.q_ast = get_ast(self.query.sql)
-        # self.s_ast = [get_ast(sol) for sol in self.correct_solutions]
-        # self.s_ast = self.s_ast[0] # TODO: for now we only support one correct solution
-        
-        # if not self.q_ast or not self.s_ast:
-        #     return results
+        if not self.solutions:
+            print("Missing correct solutions to analyze logical errors.")
+            return results
         
         checks = [
-                    # self.com_1_like_without_wildcards,    # TODO: refactor
-                    # self.com_1_complication_unnecessary_distinct_in_select_clause,    # TODO: refactor
-                    # self.com_1_complication_unnecessary_join, # TODO: refactor
-                    # self.com_1_complication_unnecessary_column_in_order_by_clause # TODO: refactor
+            self.com_1_like_without_wildcards,
+            self.com_1_complication_unnecessary_distinct_in_select_clause,
+            self.com_1_complication_unnecessary_join,
+            self.com_1_complication_unnecessary_column_in_order_by_clause
         ]
         
         for chk in checks:
             results.extend(chk())
+
         return results
 
-    def com_1_like_without_wildcards(self) -> list:
-        """
+    # TODO: refactor
+    def com_1_like_without_wildcards(self) -> list[DetectedError]:
+        '''
         Flags queries where the LIKE operator is used without wildcards ('%' or '_').
         This indicates a potential misunderstanding, where the '=' operator should
         have been used instead.
-        """
+        '''
+        return []
+
         results = []
         like_expressions = re.finditer(
             r"LIKE\s+((['\"]).*?\2|\w+)", 
@@ -78,11 +74,14 @@ class ComplicationDetector(BaseDetector):
                 ))
         return results
 
-    def com_1_complication_unnecessary_distinct_in_select_clause(self) -> list:
-        """
+    # TODO: refactor
+    def com_1_complication_unnecessary_distinct_in_select_clause(self) -> list[DetectedError]:
+        '''
         Flags the unnecessary use of DISTINCT by comparing the proposed query
         against the correct solution.
-        """
+        '''
+        return []
+
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -105,10 +104,13 @@ class ComplicationDetector(BaseDetector):
             
         return results
 
-    def com_1_complication_unnecessary_join(self) -> list:
-        """
+    # TODO: refactor
+    def com_1_complication_unnecessary_join(self) -> list[DetectedError]:
+        '''
         Flags a query that joins to a table not present in the correct solution.
-        """
+        '''
+        return []
+
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -133,11 +135,14 @@ class ComplicationDetector(BaseDetector):
             
         return results
     
-    def com_1_complication_unnecessary_column_in_order_by_clause(self) -> list:
-        """
+    # TODO: refactor
+    def com_1_complication_unnecessary_column_in_order_by_clause(self) -> list[DetectedError]:
+        '''
         Flags when the ORDER BY clause contains unnecessary columns in addition
         to the required ones.
-        """
+        '''
+        return []
+    
         results = []
         if not self.q_ast or not self.s_ast:
             return results
@@ -161,9 +166,9 @@ class ComplicationDetector(BaseDetector):
 
     #region Utility methods
     def _get_select_columns(self, ast: dict) -> list:
-        """
+        '''
         Extracts a list of simple column names from a SELECT query's AST.
-        """
+        '''
         columns = []
         if not ast:
             return columns
@@ -177,9 +182,9 @@ class ComplicationDetector(BaseDetector):
         
         return columns
     def _find_underlying_column(self, node: dict):
-        """
+        '''
         Recursively traverses an expression node to find the underlying column identifier.
-        """
+        '''
         if not isinstance(node, dict):
             return None
         
@@ -200,9 +205,9 @@ class ComplicationDetector(BaseDetector):
         if node_class == 'Alias':
             return self._find_underlying_column(node.get('args', {}).get('this'))
     def _get_from_tables(self, ast: dict, with_alias=False) -> list:
-        """
+        '''
         Extracts a list of all table names from the FROM and JOIN clauses of a query's AST.
-        """
+        '''
         tables = []
         if not ast:
             return tables
@@ -224,9 +229,9 @@ class ComplicationDetector(BaseDetector):
                 
         return list(set(tables))
     def _collect_tables_recursive(self, node: dict, tables: list, with_alias=False):
-        """
+        '''
         Recursively traverses a FROM clause node (including joins) to collect table names.
-        """
+        '''
         if not isinstance(node, dict):
             return
 
@@ -260,9 +265,9 @@ class ComplicationDetector(BaseDetector):
             if 'expression' in node.get('args', {}):
                 self._collect_tables_recursive(node.get('args', {}).get('expression'), tables, with_alias)
     def _get_orderby_columns(self, ast: dict) -> list:
-        """
+        '''
         Extracts a list of columns and their sort direction from an ORDER BY clause.
-        """
+        '''
         orderby_terms = []
         if not ast:
             return orderby_terms
