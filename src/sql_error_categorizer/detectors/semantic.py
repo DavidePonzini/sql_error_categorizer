@@ -240,7 +240,6 @@ class SemanticErrorDetector(BaseDetector):
     def sem_1_distinct_removing_important_duplicates(self) -> list[DetectedError]:
         return []
 
-    # TODO: refactor
     def sem_1_wildcards_without_like(self) -> list[DetectedError]:
         '''
             Detect = '%...%' instead of LIKE
@@ -267,15 +266,15 @@ class SemanticErrorDetector(BaseDetector):
                     right = eq.expression
 
                     if isinstance(left, exp.Literal):
-                        if has_underscore(left):
+                        if has_character(left, '_'):
                             allow_underscore = True
-                        if has_percent(left):
+                        if has_character(left, '%'):
                             allow_percent = True
 
                     if isinstance(right, exp.Literal):
-                        if has_underscore(right):
+                        if has_character(right, '_'):
                             allow_underscore = True
-                        if has_percent(right):
+                        if has_character(right, '%'):
                             allow_percent = True
 
         for select in self.query.selects:
@@ -289,42 +288,102 @@ class SemanticErrorDetector(BaseDetector):
                 right = eq.expression
 
                 if isinstance(left, exp.Literal):
-                    if not allow_percent and has_percent(left):
+                    if not allow_underscore and has_character(left, '_'):
                         results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
                         continue
-                    if not allow_underscore and has_underscore(left):
+                    if not allow_percent and has_character(left, '%'):
                         results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
                         continue
 
                 if isinstance(right, exp.Literal):
-                    if not allow_percent and has_percent(right):
+                    if not allow_underscore and has_character(right, '_'):
                         results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
                         continue
-                    if not allow_underscore and has_underscore(right):
+                    if not allow_percent and has_character(right, '%'):
                         results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
                         continue
 
         return results
 
-    # TODO: refactor
     def sem_1_incorrect_wildcard(self) -> list[DetectedError]:
-        '''Detect misuse of '_' or '*' wildcards'''
-        return []
+        '''
+            Detect misuse of wildcards, namely:
+            - '_' instead of '%'
+            - '%' instead of '_'
+            - '*' instead of '%'
 
-        # 1) Using '=' with '_' suggests misuse of wildcard instead of LIKE/%
-        if re.search(r"=\s*'[^']*_[^']*'", self.query, re.IGNORECASE):
-            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, '_')]
+            If the correct solution uses the same character,
+            the user query is unlikely to be incorrect, so we do not flag it.
+        '''
 
-        # 2) Using LIKE with '_' but perhaps intending any-length match (should use '%')
-        if re.search(r"LIKE\s*'[^']*_[^']*'", self.query, re.IGNORECASE):
-            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, '_')]
+        results: list[DetectedError] = []
 
-        # 3) Using '*' (either with = or LIKE) instead of '%' wildcard
-        if re.search(r"(?:LIKE|=)\s*'[^']*\*[^']*'", self.query, re.IGNORECASE):
-            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, '*')]
+        # First check the correct solutions
+        underscore_in_solution = False
+        percent_in_solution = False
+        star_in_solution = False
+        question_mark_in_solution = False
 
-        return []
-    
+        for solution in self.solutions:
+            for select in solution.selects:
+                ast = select.ast
+
+                if not ast:
+                    continue
+
+                for like in ast.find_all(exp.Like):
+                    pattern = like.expression
+                    if isinstance(pattern, exp.Literal):
+                        if has_character(pattern, '_'):
+                            underscore_in_solution = True
+                        if has_character(pattern, '%'):
+                            percent_in_solution = True
+                        if has_character(pattern, '*'):
+                            star_in_solution = True
+                        if has_character(pattern, '?'):
+                            question_mark_in_solution = True
+
+        # Then check the user query
+        for select in self.query.selects:
+            ast = select.ast
+
+            if not ast:
+                continue
+
+            for like in ast.find_all(exp.Like):
+                pattern = like.expression
+                if isinstance(pattern, exp.Literal):
+                    if not self.solutions:
+                        # No solutions to compare against
+                        # Fall back to detecting just '*' or '?' usage
+                        if has_character(pattern, '*') or has_character(pattern, '?'):
+                            results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, (str(like),)))
+                        continue
+
+                    # query contains '*' while solution does not
+                    # most likely an attempt to use '%' wildcard
+                    if not star_in_solution and has_character(pattern, '*'):
+                        results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, (str(like),)))
+
+                    # query contains '?' while solution does not
+                    # most likely an attempt to use '_' wildcard
+                    if not question_mark_in_solution and has_character(pattern, '?'):
+                        results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, (str(like),)))
+
+                    # '_' instead of '%'
+                    if percent_in_solution and not underscore_in_solution:
+                        if has_character(pattern, '_') and not has_character(pattern, '%'):
+                            results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, (str(like),)))
+
+                    # '%' instead of '_'
+                    if underscore_in_solution and not percent_in_solution:
+                        if has_character(pattern, '%') and not has_character(pattern, '_'):
+                            results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_INCORRECT_WILDCARD, (str(like),)))
+
+
+        
+        return results
+
     # TODO: refactor
     def sem_1_mixing_comparison_and_null(self) -> list[DetectedError]: 
         '''Detect mixing of >0 with IS NOT NULL or empty string with IS NULL on the same column'''
@@ -500,21 +559,15 @@ class SemanticErrorDetector(BaseDetector):
 
 
 # region Helper methods
-def has_underscore(literal: exp.Literal) -> bool:
-    '''Check if the literal contains an underscore character.'''
+def has_character(literal: exp.Literal, chars: str) -> bool:
+    '''
+        Check if the literal contains a specific character.
+        If `chars` contains multiple characters, check if any of them are present.
+    '''
     value = literal.this
 
     if not isinstance(value, str):
         return False
 
-    return '_' in value
-
-def has_percent(literal: exp.Literal) -> bool:
-    '''Check if the literal contains a percent character.'''
-    value = literal.this
-
-    if not isinstance(value, str):
-        return False
-
-    return '%' in value
+    return any(c in value for c in chars)
 # endregion 
