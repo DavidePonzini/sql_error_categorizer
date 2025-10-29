@@ -62,7 +62,7 @@ class Query(TokenizedSQL):
                 continue
 
             cte_parenthesis_str = str(cte_parenthesis)[1:-1]  # Remove surrounding parentheses
-            cte = create_set_operation_tree(cte_parenthesis_str)
+            cte = create_set_operation_tree(cte_parenthesis_str, catalog=self.catalog, search_path=self.search_path)
 
             self.ctes.append(cte)
 

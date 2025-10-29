@@ -1,5 +1,5 @@
 import pytest
-from sql_error_categorizer.query.typechecking import get_type
+from sql_error_categorizer.query.typechecking import ErrorType, get_type
 
 def test_primitive_types(make_query):
     sql = "SELECT 'hello' AS str_col, 123 AS num_col, TRUE AS bool_col, NULL AS null_col, DATE '2020-01-01' AS date_col;"
@@ -36,12 +36,31 @@ def test_expression_types(sql, expected_types, make_query):
     query = make_query(sql)
     result = []
     for exp in query.main_query.ast.expressions:
-        col_type = get_type(exp, query.main_query.referenced_tables)[0]
-        result.append((col_type.type.value, col_type.constant, col_type.nullable))
+        col_type = get_type(exp, query.main_query.referenced_tables)
+        result.append((col_type.name, col_type.constant, col_type.nullable))
     if query.main_query.where:
-        where_type = get_type(query.main_query.where, query.main_query.referenced_tables)[0]
-        result.append((where_type.type.value, where_type.constant, where_type.nullable))
+        where_type = get_type(query.main_query.where, query.main_query.referenced_tables)
+        result.append((where_type.name, where_type.constant, where_type.nullable))
     assert result == expected_types
+
+@pytest.mark.parametrize('sql, expected_error', [
+    ("SELECT 1 + TRUE AS invalid_sum;", "1 + TRUE"),
+    ("SELECT sname FROM store WHERE sname > 5;", "sname > 5"),
+    ("SELECT MIN(TRUE) FROM store;", "MIN(TRUE)"),
+    ("SELECT MAX(sname > 'A') FROM store;", "MAX(sname > 'A')")
+])
+def test_expression_type_errors(sql, expected_error, make_query):
+    query = make_query(sql)
+    error_message = ""
+    for exp in query.main_query.ast.expressions:
+        col_type = get_type(exp, query.main_query.referenced_tables)
+        if col_type == ErrorType:
+            error_message += col_type.message.split(': ').pop()
+    if query.main_query.where:
+        where_type = get_type(query.main_query.where, query.main_query.referenced_tables)
+        if where_type == ErrorType:
+            error_message += where_type.message.split(': ').pop()
+    assert error_message == expected_error
 
 # functions
 def test_function_types(make_query):
@@ -59,12 +78,27 @@ def test_function_types(make_query):
     ("SELECT sname FROM store WHERE sname LIKE 'C%';", 'boolean'),
     ("SELECT sname FROM store WHERE (sname LIKE 'C%') IS FALSE;", 'boolean'),
     ("SELECT sname FROM store WHERE sid IS NOT NULL;", 'boolean'),
-    ("SELECT sname FROM store WHERE sid BETWEEN 1 AND 10;", 'boolean')
+    ("SELECT sname FROM store WHERE sid BETWEEN 1 AND 10;", 'boolean'),
+    ("SELECT sname FROM store WHERE (sname, sid) BETWEEN ('A', 5) AND ('B',7);", 'boolean')
 ])
 def test_logical_operator(sql, expected_types, make_query):
     query = make_query(sql)
     result = None
     if query.main_query.where:
-        where_type = get_type(query.main_query.where, query.main_query.referenced_tables)[0]
-        result = where_type.type.value
+        where_type = get_type(query.main_query.where, query.main_query.referenced_tables)
+        result = where_type.name
     assert result == expected_types
+
+@pytest.mark.parametrize('sql, expected_error', [
+    ("SELECT sname FROM store WHERE sname LIKE 5;", "sname LIKE 5"),
+    ("SELECT sname FROM store WHERE sid IS TRUE;", "sid IS TRUE"),
+    ("SELECT sname FROM store WHERE sid BETWEEN 'A' AND 'Z';", "sid BETWEEN 'A' AND 'Z'")
+])
+def test_logical_operator_errors(sql, expected_error, make_query):
+    query = make_query(sql)
+    error_message = ""
+    if query.main_query.where:
+        where_type = get_type(query.main_query.where, query.main_query.referenced_tables)
+        if where_type == ErrorType:
+            error_message += where_type.message.split(': ').pop()
+    assert error_message == expected_error
