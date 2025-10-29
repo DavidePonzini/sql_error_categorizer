@@ -56,8 +56,22 @@ def test_redundant_disjunction():
     assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
     assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', 'sal > 1000'))
 
+def test_redundant_disjunction_strings():
+    query = "SELECT * FROM store WHERE sname <= 'Coop' OR sname IN ('Coop', 'Lidl') or sname >= 'Lidl';"
 
-def test_redudant_disjunction_on_subquery():
+    result = run_test(
+        query,
+        detectors=[SemanticErrorDetector],
+        catalog_filename='cat_miedema.json',
+        search_path='miedema',
+        debug=True,
+    )
+
+    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
+    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', "sname IN ('Coop', 'Lidl')"))
+
+
+def test_redundant_disjunction_on_subquery():
     query = '''
     SELECT * FROM employees WHERE department_id IN (
         SELECT department_id FROM departments WHERE location_id = 1700 OR location_id >= 1700

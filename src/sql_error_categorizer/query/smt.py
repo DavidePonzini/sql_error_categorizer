@@ -1,17 +1,65 @@
+from typing import Any, Callable
 from sqlglot import exp
 from z3 import (
-    Int, IntVal, RealVal, BoolVal, Bool, StringVal,
-    And, Or, Not, Solver, unsat
+    Int, IntVal,
+    Real, RealVal,
+    Bool, BoolVal,
+    String, StringVal,
+    And, Or, Not,
+    Solver,
+    unsat,
+    is_expr,
+    BoolSort,
+    ExprRef
 )
-from z3 import Solver, Not, unsat, Or, And, BoolSort, is_expr
 
-def sql_to_z3(expr, variables):
+from ..catalog import Table
+
+def create_z3_var(variables: dict[str, Any], table_name: str | None, col_name: str, col_type: Callable[[str], ExprRef] | None = None) -> None:
+    '''
+    Create a Z3 variable for the given column name and type, and add it to the variables dictionary.
+    If col_type is None, default to Int.
+    '''
+    
+    if col_type is None:
+        col_type = Int  # default type
+
+    # Add both unqualified and qualified names and null flags
+    variables[col_name] = col_type(col_name)
+    variables[f'{col_name}_isnull'] = Bool(f'{col_name}_isnull')
+
+    if table_name:
+        variables[f'{table_name}.{col_name}'] = col_type(f'{table_name}.{col_name}')
+        variables[f'{table_name}.{col_name}_isnull'] = Bool(f'{table_name}.{col_name}_isnull')
+
+def catalog_table_to_z3_vars(table: Table) -> dict[str, ExprRef]:
+    '''Convert catalog table columns to Z3 variables.'''
+
+    variables = {}
+    for column in table.columns:
+        col_name = column.name
+        col_type = column.column_type.upper()
+
+        if col_type in ('INT', 'INTEGER', 'BIGINT', 'SMALLINT'):
+            create_z3_var(variables, table.name, col_name, Int)
+        elif col_type in ('FLOAT', 'REAL', 'DOUBLE'):
+            create_z3_var(variables, table.name, col_name, Real)
+        elif col_type in ('BOOLEAN', 'BOOL'):
+            create_z3_var(variables, table.name, col_name, Bool)
+        elif col_type in ('VARCHAR', 'CHAR', 'TEXT', 'CHARACTER VARYING'):
+            create_z3_var(variables, table.name, col_name, String)
+        else:
+            create_z3_var(variables, table.name, col_name)
+
+    return variables
+
+def sql_to_z3(expr, variables: dict[str, ExprRef] = {}) -> Any:
+    '''Convert a SQLGlot expression to a Z3 expression.'''
     # --- Columns ---
     if isinstance(expr, exp.Column):
         name = expr.name.lower()
         if name not in variables:
-            variables[name] = Int(name)  # actual value
-            variables[f'{name}_isnull'] = Bool(f'{name}_isnull')  # null flag
+            create_z3_var(variables, None, name)
         return variables[name]
 
     # --- Literals ---
@@ -72,7 +120,7 @@ def sql_to_z3(expr, variables):
     elif isinstance(expr, exp.Pow):
         return sql_to_z3(expr.left, variables) ** sql_to_z3(expr.right, variables)
 
-    # --- BETWEEN a AND b ---
+    # --- BETWEEN a AND b ---String
     elif isinstance(expr, exp.Between):
         target = sql_to_z3(expr.this, variables)
         low = sql_to_z3(expr.args['low'], variables)
@@ -120,7 +168,8 @@ def sql_to_z3(expr, variables):
     # Fallback: skip unsupported expressions
     return BoolVal(True)
 
-def check_formula(expr):
+def check_formula(expr) -> str:
+    '''Check if the given SQLGlot expression is a tautology, contradiction, or contingent.'''
     formula = sql_to_z3(expr, {})
     if formula is None:
         return 'unknown'
@@ -145,10 +194,13 @@ def check_formula(expr):
 
     return 'contingent'
 
-def consistency_check(expr_z3) -> bool:
+def is_satisfiable(expr_z3) -> bool:
+    '''Check if the given Z3 expression is satisfiable.'''
     solver = Solver()
     solver.add(expr_z3)
+
     return solver.check() != unsat
 
 def is_bool_expr(e) -> bool:
+    '''Check if the given Z3 expression is boolean.'''
     return is_expr(e) and e.sort().kind() == BoolSort().kind()

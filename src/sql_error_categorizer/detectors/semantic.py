@@ -143,10 +143,12 @@ class SemanticErrorDetector(BaseDetector):
             if not where:
                 continue
 
+            # Build Z3 variables from catalog
             variables = {}
+            for table in select.referenced_tables:
+                variables.update(smt.catalog_table_to_z3_vars(table))
 
             dnf = extract_DNF(where)
-            # TODO: add checks from constraints in catalog
 
             # Refer to Brass & Goldberg, 2006 for these checks (error #8)
             # (1) whole formula
@@ -155,16 +157,16 @@ class SemanticErrorDetector(BaseDetector):
             except Exception:
                 continue  # skip if cannot convert to z3
 
-            if not smt.consistency_check(whole):
+            if not smt.is_satisfiable(whole):
                 results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('contradiction',)))
-            elif not smt.consistency_check(Not(whole)):
+            elif not smt.is_satisfiable(Not(whole)):
                 results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('tautology',)))
                 
             # (2) each Ci redundant?
             for i, Ci in enumerate(dnf):
                     Ci_z3 = smt.sql_to_z3(Ci, variables)
                     others = Or(*[smt.sql_to_z3(C, variables) for j, C in enumerate(dnf) if j != i])
-                    if not smt.consistency_check(And(Ci_z3, Not(others))):
+                    if not smt.is_satisfiable(And(Ci_z3, Not(others))):
                         results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', Ci.sql())))
                     
                     # (3) each Ai,j redundant?
@@ -177,7 +179,7 @@ class SemanticErrorDetector(BaseDetector):
                                 if k != j and smt.is_bool_expr(smt.sql_to_z3(c, variables))]
                         others = Or(*[smt.sql_to_z3(C, variables) for k, C in enumerate(dnf) if k != i])
                         formula = And(Not(Aj_z3), *rest, Not(others))
-                        if not smt.consistency_check(formula):
+                        if not smt.is_satisfiable(formula):
                             results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_conjunct', (Ci.sql(), Aj.sql()))))
 
         return results
