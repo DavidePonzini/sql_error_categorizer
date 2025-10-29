@@ -308,9 +308,9 @@ class SemanticErrorDetector(BaseDetector):
     def sem_1_incorrect_wildcard(self) -> list[DetectedError]:
         '''
             Detect misuse of wildcards, namely:
+            - '*' and '?'
             - '_' instead of '%'
             - '%' instead of '_'
-            - '*' instead of '%'
 
             If the correct solution uses the same character,
             the user query is unlikely to be incorrect, so we do not flag it.
