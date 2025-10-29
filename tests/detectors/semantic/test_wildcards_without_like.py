@@ -62,3 +62,43 @@ def test_left_expression():
 
     assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE) == 1
     assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, ("'John%' = name",))
+
+def test_underscore_in_solution():
+    query = "SELECT * FROM employees WHERE name = 'John_Doe'"
+
+    result = run_test(
+        query,
+        detectors=[SemanticErrorDetector],
+        solutions=[
+            "SELECT * FROM employees WHERE name = 'John_Doe'",
+        ]
+    )
+
+    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE) == 0
+
+def test_percent_in_solution():
+    query = "SELECT * FROM employees WHERE status = '100%'"
+
+    result = run_test(
+        query,
+        detectors=[SemanticErrorDetector],
+        solutions=[
+            "SELECT * FROM employees WHERE status = '100%'",
+        ]
+    )
+
+    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE) == 0
+
+def test_only_one_in_solution():
+    query = "SELECT * FROM employees WHERE name = 'John%' or name = 'Jane_'"
+
+    result = run_test(
+        query,
+        detectors=[SemanticErrorDetector],
+        solutions=[
+            "SELECT * FROM employees WHERE name = 'Jane_'",
+        ]
+    )
+
+    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE) == 1
+    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, ("name = 'John%'",))

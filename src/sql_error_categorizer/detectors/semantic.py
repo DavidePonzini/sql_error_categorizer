@@ -198,12 +198,9 @@ class SemanticErrorDetector(BaseDetector):
         allow_sum_distinct = False
         allow_avg_distinct = False
         
-        from dav_tools import messages
         # First check the correct solutions
         for solution in self.solutions:
             for select in solution.selects:
-                messages.debug(f"Checking solution select: {select}")
-
                 ast = select.ast
 
                 if not ast:
@@ -216,9 +213,6 @@ class SemanticErrorDetector(BaseDetector):
                 for func in ast.find_all(exp.Avg):
                     if func.this and isinstance(func.this, exp.Distinct):
                         allow_avg_distinct = True
-
-        messages.debug(f"SUM(DISTINCT ...) allowed: {allow_sum_distinct}")
-        messages.debug(f"AVG(DISTINCT ...) allowed: {allow_avg_distinct}")
 
         # Then check the user query
         for select in self.query.selects:
@@ -248,18 +242,41 @@ class SemanticErrorDetector(BaseDetector):
 
     # TODO: refactor
     def sem_1_wildcards_without_like(self) -> list[DetectedError]:
-        '''Detect = '%...%' instead of LIKE'''
+        '''
+            Detect = '%...%' instead of LIKE
+
+            If the correct query uses equality checks containing wildcards characters ('%' or '_'),
+            the user query is unlikely to be incorrect, so we do not flag it.
+        '''
 
         results: list[DetectedError] = []
 
-        def has_wildcards(literal: exp.Literal) -> bool:
-            value = literal.this
+        # First check the correct solutions
+        allow_underscore = False
+        allow_percent = False
 
-            if not isinstance(value, str):
-                return False
+        for solution in self.solutions:
+            for select in solution.selects:
+                ast = select.ast
 
-            return '%' in value or '_' in value
+                if not ast:
+                    continue
 
+                for eq in ast.find_all(exp.EQ):
+                    left = eq.this
+                    right = eq.expression
+
+                    if isinstance(left, exp.Literal):
+                        if has_underscore(left):
+                            allow_underscore = True
+                        if has_percent(left):
+                            allow_percent = True
+
+                    if isinstance(right, exp.Literal):
+                        if has_underscore(right):
+                            allow_underscore = True
+                        if has_percent(right):
+                            allow_percent = True
 
         for select in self.query.selects:
             ast = select.ast
@@ -271,13 +288,21 @@ class SemanticErrorDetector(BaseDetector):
                 left = eq.this
                 right = eq.expression
 
-                if isinstance(left, exp.Literal) and has_wildcards(left):
-                    results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
-                    continue
+                if isinstance(left, exp.Literal):
+                    if not allow_percent and has_percent(left):
+                        results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
+                        continue
+                    if not allow_underscore and has_underscore(left):
+                        results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
+                        continue
 
-                if isinstance(right, exp.Literal) and has_wildcards(right):
-                    results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
-                    continue
+                if isinstance(right, exp.Literal):
+                    if not allow_percent and has_percent(right):
+                        results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
+                        continue
+                    if not allow_underscore and has_underscore(right):
+                        results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_WILDCARDS_WITHOUT_LIKE, (str(eq),)))
+                        continue
 
         return results
 
@@ -473,3 +498,23 @@ class SemanticErrorDetector(BaseDetector):
 
         return results
 
+
+# region Helper methods
+def has_underscore(literal: exp.Literal) -> bool:
+    '''Check if the literal contains an underscore character.'''
+    value = literal.this
+
+    if not isinstance(value, str):
+        return False
+
+    return '_' in value
+
+def has_percent(literal: exp.Literal) -> bool:
+    '''Check if the literal contains a percent character.'''
+    value = literal.this
+
+    if not isinstance(value, str):
+        return False
+
+    return '%' in value
+# endregion 
