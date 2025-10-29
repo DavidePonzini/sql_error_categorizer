@@ -8,7 +8,7 @@ def run_test(query: str, *,
              catalog_filename: str | None = None,
              search_path: str = 'public', 
              detectors: list[type[BaseDetector]],
-             expected_solutions: list[str] = [],
+             solutions: list[str] = [],
              debug: bool = False
     ) -> list[DetectedError]:
     
@@ -19,7 +19,7 @@ def run_test(query: str, *,
 
     detector = Detector(
         query=query,
-        solutions=expected_solutions,
+        solutions=solutions,
         catalog=catalog,
         search_path=search_path,
         solution_search_path=search_path,

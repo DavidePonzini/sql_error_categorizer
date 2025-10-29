@@ -185,19 +185,60 @@ class SemanticErrorDetector(BaseDetector):
         return results
 
     def sem_1_distinct_in_sum_or_avg(self) -> list[DetectedError]:
-        '''Detect SUM(DISTINCT ...) or AVG(DISTINCT ...)'''
+        '''
+            Detect SUM(DISTINCT ...) or AVG(DISTINCT ...)
+
+            If the correct query uses SUM(DISTINCT ...) or AVG(DISTINCT ...), then
+            the user query is unlikely to be incorrect, so we do not flag it.
+        '''
 
         results: list[DetectedError] = []
 
+        # Flags for skipping detection if correct query uses DISTINCT in SUM/AVG
+        allow_sum_distinct = False
+        allow_avg_distinct = False
+        
+        from dav_tools import messages
+        # First check the correct solutions
+        for solution in self.solutions:
+            for select in solution.selects:
+                messages.debug(f"Checking solution select: {select}")
+
+                ast = select.ast
+
+                if not ast:
+                    continue
+
+                for func in ast.find_all(exp.Sum):
+                    if func.this and isinstance(func.this, exp.Distinct):
+                        allow_sum_distinct = True
+
+                for func in ast.find_all(exp.Avg):
+                    if func.this and isinstance(func.this, exp.Distinct):
+                        allow_avg_distinct = True
+
+        messages.debug(f"SUM(DISTINCT ...) allowed: {allow_sum_distinct}")
+        messages.debug(f"AVG(DISTINCT ...) allowed: {allow_avg_distinct}")
+
+        # Then check the user query
         for select in self.query.selects:
             ast = select.ast
 
             if not ast:
                 continue
 
-            for func in ast.find_all(exp.Sum, exp.Avg):
-                if func.this and isinstance(func.this, exp.Distinct):
-                    results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG, (func.sql(),)))
+            if not allow_sum_distinct:
+                # Solution does not use SUM(DISTINCT ...), so check user query
+                for func in ast.find_all(exp.Sum):
+                    if func.this and isinstance(func.this, exp.Distinct):
+                        results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG, (func.sql(),)))
+
+            if not allow_avg_distinct:
+                # Solution does not use AVG(DISTINCT ...), so check user query
+                for func in ast.find_all(exp.Avg):
+                    if func.this and isinstance(func.this, exp.Distinct):
+                        results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG, (func.sql(),)))
+
         return results
     
     

@@ -62,3 +62,16 @@ def test_distinct_in_sum_in_having():
 
     assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG) == 1
     assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG, ('SUM(DISTINCT amount)',))
+
+def test_distinct_in_solution():
+    query = '''SELECT SUM(DISTINCT amount), AVG(DISTINCT amount) AS distinct_avg_amount FROM payments;'''
+    solution = '''SELECT SUM(DISTINCT amount), AVG(amount) AS total_amount FROM payments;'''
+
+    result = run_test(
+        query,
+        solutions=[solution],
+        detectors=[SemanticErrorDetector],
+    )
+
+    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG) == 1
+    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG, ('AVG(DISTINCT amount)',))
