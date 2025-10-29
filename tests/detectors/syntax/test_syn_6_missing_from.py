@@ -9,8 +9,8 @@ def test_no_from_simple():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (query,))
+    assert count_errors(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE, (query,))
 
 @pytest.mark.skip(reason="is_constant not yet implemented")
 def test_no_from_with_constant_expression():
@@ -21,7 +21,7 @@ def test_no_from_with_constant_expression():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 0
+    assert count_errors(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE) == 0
 
 def test_no_from_with_cte():
     query = '''
@@ -36,8 +36,8 @@ def test_no_from_with_cte():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, ('SELECT no_col',))
+    assert count_errors(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE, ('SELECT no_col',))
 
 def test_no_from_with_subquery_both():
     subquery = 'SELECT no_col'
@@ -48,9 +48,9 @@ def test_no_from_with_subquery_both():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 2
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (query,))
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (subquery,))
+    assert count_errors(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE) == 2
+    assert has_error(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE, (query,))
+    assert has_error(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE, (subquery,))
 
 def test_no_from_with_subquery_only_sub():
     subquery = 'SELECT no_col'
@@ -61,8 +61,8 @@ def test_no_from_with_subquery_only_sub():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (subquery,))
+    assert count_errors(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE, (subquery,))
 
 def test_no_from_with_subquery_only_main():
     subquery = 'SELECT col3 FROM table2'
@@ -73,5 +73,5 @@ def test_no_from_with_subquery_only_main():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_OMITTING_THE_FROM_CLAUSE, (query,))
+    assert count_errors(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE, (query,))

@@ -12,9 +12,9 @@ def test_nested_aggregate_functions():
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == 2
-    assert has_error(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (agg1,))
-    assert has_error(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (agg2,))
+    assert count_errors(detected_errors, SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == 2
+    assert has_error(detected_errors, SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (agg1,))
+    assert has_error(detected_errors, SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (agg2,))
 
 def test_no_nested_aggregate_functions_subquery():
     agg_in_subquery = 'MAX(price)'
@@ -34,7 +34,7 @@ def test_no_nested_aggregate_functions_subquery():
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == 0
+    assert count_errors(detected_errors, SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == 0
 
 def test_aggregate_functions_subquery():
     agg_in_subquery = 'COUNT(SUM(price))'
@@ -54,8 +54,8 @@ def test_aggregate_functions_subquery():
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == 2
-    assert has_error(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (agg_in_subquery,))
-    assert has_error(detected_errors, SqlErrors.SYN_4_ILLEGAL_AGGREGATE_FUNCTION_PLACEMENT_GROUPING_ERROR_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (outer_agg,))
+    assert count_errors(detected_errors, SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == 2
+    assert has_error(detected_errors, SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (agg_in_subquery,))
+    assert has_error(detected_errors, SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (outer_agg,))
 
 

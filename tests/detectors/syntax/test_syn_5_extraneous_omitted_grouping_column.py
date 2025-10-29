@@ -6,7 +6,7 @@ def test_grouping_columns_ok():
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 0
+    assert count_errors(detected_errors, SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 0
 
 def test_extraneous_grouping_column():
     detected_errors = run_test(
@@ -14,10 +14,10 @@ def test_extraneous_grouping_column():
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 1
+    assert count_errors(detected_errors, SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 1
     assert has_error(
         detected_errors,
-        SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
+        SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
         ('col2', 'ONLY IN GROUP BY'),
     )
 
@@ -27,10 +27,10 @@ def test_omitted_grouping_column():
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 1
+    assert count_errors(detected_errors, SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 1
     assert has_error(
         detected_errors,
-        SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
+        SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
         ('col2', 'ONLY IN SELECT'),
     )
 
@@ -40,16 +40,16 @@ def test_extraneous_and_omitted_grouping_columns():
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 2
+    assert count_errors(detected_errors, SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 2
     
     assert has_error(
         detected_errors,
-        SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
+        SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
         ('col2', 'ONLY IN SELECT'),
     )
 
     assert has_error(
         detected_errors,
-        SqlErrors.SYN_5_ILLEGAL_OR_INSUFFICIENT_GROUPING_GROUPING_ERROR_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
+        SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
         ('col4', 'ONLY IN GROUP BY'),
     )

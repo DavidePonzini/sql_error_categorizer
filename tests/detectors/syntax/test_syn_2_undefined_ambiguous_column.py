@@ -7,8 +7,8 @@ def test_undefined_column():
         catalog_filename='cat_miedema.json'
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, ('id',))
+    assert count_errors(detected_errors, SqlErrors.SYN_4_UNDEFINED_COLUMN) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_4_UNDEFINED_COLUMN, ('id',))
 
 def test_defined_column():
     detected_errors = run_test(
@@ -18,8 +18,8 @@ def test_defined_column():
         search_path='miedema'
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN) == 0
-    assert not has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, ('sid',))
+    assert count_errors(detected_errors, SqlErrors.SYN_4_UNDEFINED_COLUMN) == 0
+    assert not has_error(detected_errors, SqlErrors.SYN_4_UNDEFINED_COLUMN, ('sid',))
 
 def test_undefined_column_where():
     detected_errors = run_test(
@@ -29,8 +29,8 @@ def test_undefined_column_where():
         search_path='miedema'
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_2_UNDEFINED_DATABASE_OBJECT_UNDEFINED_COLUMN, ('id',))
+    assert count_errors(detected_errors, SqlErrors.SYN_4_UNDEFINED_COLUMN) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_4_UNDEFINED_COLUMN, ('id',))
 
 def test_ambiguous_column():
     detected_errors = run_test(
@@ -40,10 +40,10 @@ def test_ambiguous_column():
         search_path='miedema'
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN) == 1
+    assert count_errors(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN) == 1
     assert any([
-        has_error(detected_errors, SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, ('street', ['s.street', 'c.street'])),
-        has_error(detected_errors, SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, ('street', ['c.street', 's.street'])),
+        has_error(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN, ('street', ['s.street', 'c.street'])),
+        has_error(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN, ('street', ['c.street', 's.street'])),
     ])
 
 def test_ambiguous_column_no_error():
@@ -54,10 +54,10 @@ def test_ambiguous_column_no_error():
         search_path='miedema'
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN) == 0
+    assert count_errors(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN) == 0
     assert not any([
-        has_error(detected_errors, SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, ('street', ['s.street', 'c.street'])),
-        has_error(detected_errors, SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, ('street', ['c.street', 's.street'])),
+        has_error(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN, ('street', ['s.street', 'c.street'])),
+        has_error(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN, ('street', ['c.street', 's.street'])),
     ])
 
 def test_ambiguous_column_where():
@@ -68,8 +68,8 @@ def test_ambiguous_column_where():
         search_path='miedema'
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN) == 1
+    assert count_errors(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN) == 1
     assert any([
-        has_error(detected_errors, SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, ('street', ['s.street', 'c.street'])),
-        has_error(detected_errors, SqlErrors.SYN_1_AMBIGUOUS_DATABASE_OBJECT_AMBIGUOUS_COLUMN, ('street', ['c.street', 's.street'])),
+        has_error(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN, ('street', ['s.street', 'c.street'])),
+        has_error(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN, ('street', ['c.street', 's.street'])),
     ])

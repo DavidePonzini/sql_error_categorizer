@@ -27,16 +27,36 @@ class LogicalErrorDetector(BaseDetector):
         results: list[DetectedError] = super().run()
 
         checks = [
-            self.log_1_operator_error_or_instead_of_and,
-            self.log_1_operator_error_incorrect_comparison_operator_or_value,
-            self.log_4_expression_error_missing_expression,
-            self.log_4_expression_error_expression_on_incorrect_column,
-            self.log_5_projection_error_extraneous_column_in_select,
-            self.log_5_projection_error_missing_column_from_select,
-            self.log_5_projection_error_missing_column_from_order_by,
-            self.log_5_projection_error_incorrect_column_in_order_by,
-            self.log_5_projection_error_extraneous_order_by_clause,
-            self.log_5_projection_error_incorrect_ordering_of_rows
+            self.log_52_or_instead_of_and,
+            self.log_53_extraneous_not_operator,
+            self.log_54_missing_not_operator,
+            self.log_55_substituting_existance_negation_with_less_more_than,
+            self.log_56_putting_not_in_front_of_incorrect_in_exists,
+            self.log_57_incorrect_comparison_operator_or_value,
+            self.log_58_join_on_incorrect_table,
+            self.log_59_join_when_join_needs_to_be_omitted,
+            self.log_60_join_on_incorrect_column,
+            self.log_61_join_with_incorrect_comparison_operator,
+            self.log_62_missing_join,
+            self.log_63_improper_nesting_of_expressions,
+            self.log_64_improper_nesting_of_subqueries,
+            self.log_65_extraneous_quotes,
+            self.log_66_missing_expression,
+            self.log_67_expression_on_incorrect_column,
+            self.log_68_extraneous_expression,
+            self.log_69_expression_on_incorrect_clause,
+            self.log_70_extraneous_column_in_select,
+            self.log_71_missing_column_from_select,
+            self.log_72_missing_distinct_from_select,
+            self.log_73_missing_as_from_select,
+            self.log_74_missing_column_from_order_by,
+            self.log_75_incorrect_column_in_order_by,
+            self.log_76_extraneous_order_by_clause,
+            self.log_77_incorrect_ordering_of_rows,
+            self.log_78_distinct_as_function_parameter_when_not_applicable,
+            self.log_79_missing_distinct_from_function_parameter,
+            self.log_80_incorrect_function,
+            self.log_81_incorrect_column_as_function_parameter,
         ]
 
         for chk in checks:
@@ -45,7 +65,7 @@ class LogicalErrorDetector(BaseDetector):
         return results
         
     # TODO: refactor
-    def log_1_operator_error_or_instead_of_and(self) -> list[DetectedError]:
+    def log_52_or_instead_of_and(self) -> list[DetectedError]:
         '''
         Detects if OR is used instead of AND in the WHERE or HAVING clauses
         by comparing the query's AST against the correct solution's AST.
@@ -71,14 +91,30 @@ class LogicalErrorDetector(BaseDetector):
             # Check if the proposed query incorrectly uses 'Or' when the correct solution uses 'And'.
             if q_operator == 'Or' and s_operator == 'And':
                 results.append((
-                    SqlErrors.LOG_1_OPERATOR_ERROR_OR_INSTEAD_OF_AND,
+                    SqlErrors.LOG_52_OR_INSTEAD_OF_AND,
                     f"OR used instead of AND in the {clause_name.upper()} clause"
                 ))
                 
         return results
     
+    # TODO: implement
+    def log_53_extraneous_not_operator(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def log_54_missing_not_operator(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def log_55_substituting_existance_negation_with_less_more_than(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def log_56_putting_not_in_front_of_incorrect_in_exists(self) -> list[DetectedError]:
+        return []
+    
     # TODO: refactor
-    def log_1_operator_error_incorrect_comparison_operator_or_value(self) -> list[DetectedError]:
+    def log_57_incorrect_comparison_operator_or_value(self) -> list[DetectedError]:
         '''
         Flags errors in comparison operators or values in WHERE and HAVING clauses.
         
@@ -121,20 +157,52 @@ class LogicalErrorDetector(BaseDetector):
                 # Check for an incorrect comparison operator
                 if q_op != s_op:
                     results.append((
-                        SqlErrors.LOG_1_OPERATOR_ERROR_INCORRECT_COMPARISON_OPERATOR_OR_VALUE,
+                        SqlErrors.LOG_57_INCORRECT_COMPARISON_OPERATOR_OR_VALUE,
                         f"Incorrect operator on column '{q_col}'. Found {q_op} but expected {s_op}."
                     ))
 
                 # Check for an incorrect comparison value (exact comparison for all value types)
                 if q_val != s_val:
                     results.append((
-                        SqlErrors.LOG_1_OPERATOR_ERROR_INCORRECT_COMPARISON_OPERATOR_OR_VALUE,
+                        SqlErrors.LOG_57_INCORRECT_COMPARISON_OPERATOR_OR_VALUE,
                         f"Incorrect value in comparison for column '{q_col}'. Found '{q_val}' but expected '{s_val}'."
                     ))
         return results
     
+    # TODO: implement
+    def log_58_join_on_incorrect_table(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def log_59_join_when_join_needs_to_be_omitted(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def log_60_join_on_incorrect_column(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def log_61_join_with_incorrect_comparison_operator(self) -> list[DetectedError]:
+        return []
+
+    # TODO: implement
+    def log_62_missing_join(self) -> list[DetectedError]:
+        return []
+
+    # TODO: implement
+    def log_63_improper_nesting_of_expressions(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def log_64_improper_nesting_of_subqueries(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def log_65_extraneous_quotes(self) -> list[DetectedError]:
+        return []
+
     # TODO: refactor
-    def log_4_expression_error_missing_expression(self) -> list[DetectedError]:
+    def log_66_missing_expression(self) -> list[DetectedError]:
         '''Flags when a required expression is missing from the SELECT clause.'''
         return []
 
@@ -156,14 +224,14 @@ class LogicalErrorDetector(BaseDetector):
             # Format the expression string for the error message
             expr_str = f"{func.upper()}({col})"
             results.append((
-                SqlErrors.LOG_4_EXPRESSION_ERROR_MISSING_EXPRESSION,
+                SqlErrors.LOG_66_MISSING_EXPRESSION,
                 f"The expression '{expr_str}' is missing from the SELECT clause."
             ))
             
         return results
 
     # TODO: refactor
-    def log_4_expression_error_expression_on_incorrect_column(self) -> list[DetectedError]:
+    def log_67_expression_on_incorrect_column(self) -> list[DetectedError]:
         '''Flags when an expression (e.g., AVG) is used on an incorrect column.'''
         return []
         
@@ -200,13 +268,13 @@ class LogicalErrorDetector(BaseDetector):
                     
                     if correct_col != "unknown" and correct_col.lower() != q_col_lower:
                         results.append((
-                            SqlErrors.LOG_4_EXPRESSION_ERROR_EXPRESSION_ON_INCORRECT_COLUMN,
+                            SqlErrors.LOG_67_EXPRESSION_ON_INCORRECT_COLUMN,
                             f"The function '{q_func}' was applied to the wrong column. Expected {q_func}({correct_col}) but found {q_func}({q_col})."
                         ))
         return results
 
     # TODO: refactor
-    def log_4_expression_error_extraneous_error(self) -> list[DetectedError]:
+    def log_68_extraneous_expression(self) -> list[DetectedError]:
         '''
         Flags when an extraneous expression is included in the SELECT clause.
         '''
@@ -238,8 +306,12 @@ class LogicalErrorDetector(BaseDetector):
             
         return results
 
+    # TODO: implement
+    def log_69_expression_on_incorrect_clause(self) -> list[DetectedError]:
+        return []
+
     # TODO: refactor
-    def log_5_projection_error_extraneous_column_in_select(self) -> list[DetectedError]:
+    def log_70_extraneous_column_in_select(self) -> list[DetectedError]:
         '''
         Flags when an extraneous column is included in the SELECT clause,
         with a special check for inappropriate use of 'SELECT *'.
@@ -256,7 +328,7 @@ class LogicalErrorDetector(BaseDetector):
 
         if user_selects_star and not solution_selects_star:
             results.append((
-                SqlErrors.LOG_5_PROJECTION_ERROR_EXTRANEOUS_COLUMN_IN_SELECT,
+                SqlErrors.LOG_70_EXTRANEOUS_COLUMN_IN_SELECT,
                 "Using 'SELECT *' is not correct for this query. Please select only the required columns."
             ))
             return results
@@ -279,14 +351,14 @@ class LogicalErrorDetector(BaseDetector):
             # Find the original case from the query for the error message
             original_col = next((col for col in q_cols if col.lower() == col_lower), col_lower)
             results.append((
-                SqlErrors.LOG_5_PROJECTION_ERROR_EXTRANEOUS_COLUMN_IN_SELECT,
+                SqlErrors.LOG_70_EXTRANEOUS_COLUMN_IN_SELECT,
                 f"The column '{original_col}' is extraneous and should be removed from the SELECT clause."
             ))
             
         return results
 
     # TODO: refactor
-    def log_5_projection_error_missing_column_from_select(self) -> list[DetectedError]:
+    def log_71_missing_column_from_select(self) -> list[DetectedError]:
         '''
         Flags when a required column is missing from the SELECT clause,
         correctly handling cases where duplicate columns are required.
@@ -312,14 +384,22 @@ class LogicalErrorDetector(BaseDetector):
             # Find the original case from the solution for a more user-friendly message
             original_col = next((col for col in s_cols if col.lower() == col_lower), col_lower)
             results.append((
-                SqlErrors.LOG_5_PROJECTION_ERROR_MISSING_COLUMN_FROM_SELECT,
+                SqlErrors.LOG_71_MISSING_COLUMN_FROM_SELECT,
                 f"A required column '{original_col}' is missing from the SELECT clause."
             ))
                 
         return results
+    
+    # TODO: implement
+    def log_72_missing_distinct_from_select(self) -> list[DetectedError]:
+        return []
+
+    # TODO: implement
+    def log_73_missing_as_from_select(self) -> list[DetectedError]:
+        return []
 
     # TODO: refactor
-    def log_5_projection_error_missing_column_from_order_by(self) -> list[DetectedError]:
+    def log_74_missing_column_from_order_by(self) -> list[DetectedError]:
         '''Flags when a required column is missing from the ORDER BY clause.'''
         return []
     
@@ -340,13 +420,13 @@ class LogicalErrorDetector(BaseDetector):
             # Find the original case from the solution
             original_col = next((col for col, direction in s_orderby_cols if col.lower() == col_lower), col_lower)
             results.append((
-                SqlErrors.LOG_5_PROJECTION_ERROR_MISSING_COLUMN_FROM_ORDER_BY,
+                SqlErrors.LOG_74_MISSING_COLUMN_FROM_ORDER_BY,
                 f"The column '{original_col}' is missing from the ORDER BY clause."
             ))
         return results
 
     # TODO: refactor
-    def log_5_projection_error_incorrect_column_in_order_by(self) -> list[DetectedError]:
+    def log_75_incorrect_column_in_order_by(self) -> list[DetectedError]:
         '''Flags when a column is incorrectly included in the ORDER BY clause.'''
         return []
     
@@ -367,13 +447,13 @@ class LogicalErrorDetector(BaseDetector):
             # Find the original case from the query
             original_col = next((col for col, direction in q_orderby_cols if col.lower() == col_lower), col_lower)
             results.append((
-                SqlErrors.LOG_5_PROJECTION_ERROR_INCORRECT_COLUMN_IN_ORDER_BY,
+                SqlErrors.LOG_75_INCORRECT_COLUMN_IN_ORDER_BY,
                 f"The column '{original_col}' should not be in the ORDER BY clause."
             ))
         return results
 
     # TODO: refactor
-    def log_5_projection_error_extraneous_order_by_clause(self) -> list[DetectedError]:
+    def log_76_extraneous_order_by_clause(self) -> list[DetectedError]:
         '''Flags when an ORDER BY clause is present but not required.'''
         return []
     
@@ -386,13 +466,13 @@ class LogicalErrorDetector(BaseDetector):
 
         if q_has_orderby and not s_has_orderby:
             results.append((
-                SqlErrors.LOG_5_PROJECTION_ERROR_EXTRANEOUS_ORDER_BY_CLAUSE,
+                SqlErrors.LOG_76_EXTRANEOUS_ORDER_BY_CLAUSE,
                 "The ORDER BY clause is not required for this query."
             ))
         return results
 
     # TODO: refactor
-    def log_5_projection_error_incorrect_ordering_of_rows(self) -> list[DetectedError]:
+    def log_77_incorrect_ordering_of_rows(self) -> list[DetectedError]:
         '''Flags when a column in ORDER BY has the wrong sort direction (ASC/DESC).'''
         return []
     
@@ -416,10 +496,26 @@ class LogicalErrorDetector(BaseDetector):
                 s_col_orig, s_dir = s_order_map[col_lower]
                 if q_dir != s_dir:
                     results.append((
-                        SqlErrors.LOG_5_PROJECTION_ERROR_INCORRECT_ORDERING_OF_ROWS,
+                        SqlErrors.LOG_77_INCORRECT_ORDERING_OF_ROWS,
                         f"Incorrect sort direction for column '{q_col_orig}'. Expected {s_dir} but found {q_dir}."
                     ))
         return results
+
+    # TODO: implement
+    def log_78_distinct_as_function_parameter_when_not_applicable(self) -> list[DetectedError]:
+        return []
+
+    # TODO: implement
+    def log_79_missing_distinct_from_function_parameter(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def log_80_incorrect_function(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def log_81_incorrect_column_as_function_parameter(self) -> list[DetectedError]:
+        return []
     
     #region Utility methods
     def _get_comparisons(self, node: dict) -> list:

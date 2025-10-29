@@ -32,10 +32,29 @@ class ComplicationDetector(BaseDetector):
         results: list[DetectedError] = super().run()
 
         checks = [
-            self.com_1_like_without_wildcards,
-            self.com_1_complication_unnecessary_distinct_in_select_clause,
-            self.com_1_complication_unnecessary_join,
-            self.com_1_complication_unnecessary_column_in_order_by_clause
+            self.com_83_unnecessary_distinct_in_select_clause,
+            self.com_84_unnecessary_join,
+            self.com_85_unused_correlation_name,
+            self.com_86_correlation_names_are_always_identical,
+            self.com_87_unnecessary_general_comparison_operator,
+            self.com_88_like_without_wildcards,
+            self.com_89_unnecessarily_complicated_select_in_exists_subquery,
+            self.com_90_in_exists_can_be_replaced_by_comparison,
+            self.com_91_unnecessary_aggregate_function,
+            self.com_92_unnecessary_distinct_in_aggregate_function,
+            self.com_93_unnecessary_argument_of_count,
+            self.com_94_unnecessary_group_by_in_exists_subquery,
+            self.com_95_group_by_with_singleton_groups,
+            self.com_96_group_by_with_only_a_single_group,
+            self.com_97_group_by_can_be_replaced_by_distinct,
+            self.com_98_union_can_be_replaced_by_or,
+            self.com_99_complication_unnecessary_column_in_order_by_clause,
+            self.com_100_order_by_in_subquery,
+            self.com_101_inefficient_having,
+            self.com_102_inefficient_union,
+            self.com_103_condition_in_the_subquery_can_be_moved_up,
+            self.com_104_condition_on_left_table_in_left_outer_join,
+            self.com_105_outer_join_can_be_replaced_by_inner_join,
         ]
         
         for chk in checks:
@@ -43,7 +62,80 @@ class ComplicationDetector(BaseDetector):
 
         return results
 
-    def com_1_like_without_wildcards(self) -> list[DetectedError]:
+    # TODO: refactor
+    def com_83_unnecessary_distinct_in_select_clause(self) -> list[DetectedError]:
+        '''
+        Flags the unnecessary use of DISTINCT by comparing the proposed query
+        against the correct solution.
+        '''
+        return []
+
+        results = []
+        if not self.q_ast or not self.s_ast:
+            return results
+
+        # Check if the proposed query has a DISTINCT clause.
+        # This can be a boolean `True` or a Dictionary node for `DISTINCT(...)`.
+        q_args = self.q_ast.get('args', {})
+        q_has_distinct = q_args.get('distinct') not in [None, False]
+
+        # Check if the correct solution has a DISTINCT clause.
+        s_args = self.s_ast.get('args', {})
+        s_has_distinct = s_args.get('distinct') not in [None, False]
+
+        # If the user's query has DISTINCT but the solution doesn't, it's unnecessary.
+        if q_has_distinct and not s_has_distinct:
+            results.append((
+                SqlErrors.COM_83_UNNECESSARY_DISTINCT_IN_SELECT_CLAUSE,
+                "The DISTINCT keyword is used unnecessarily and is not present in the optimal solution."
+            ))
+            
+        return results
+
+    # TODO: refactor
+    def com_84_unnecessary_join(self) -> list[DetectedError]:
+        '''
+        Flags a query that joins to a table not present in the correct solution.
+        '''
+        return []
+
+        results = []
+        if not self.q_ast or not self.s_ast:
+            return results
+
+        q_tables = self._get_from_tables(self.q_ast)
+        s_tables = self._get_from_tables(self.s_ast)
+
+        q_tables_set = {t.lower() for t in q_tables}
+        s_tables_set = {t.lower() for t in s_tables}
+
+        extraneous_tables = q_tables_set - s_tables_set
+
+        if extraneous_tables:
+            original_q_tables = self._get_from_tables(self.q_ast, with_alias=True)
+            for table_name_lower in extraneous_tables:
+                # Find the original table name (with alias if it was used) to report back
+                original_table_name = next((t for t in original_q_tables if t.lower().startswith(table_name_lower)), table_name_lower)
+                results.append((
+                    SqlErrors.COM_84_UNNECESSARY_JOIN,
+                    f"Unnecessary JOIN: The table '{original_table_name}' is not needed to answer the query."
+                ))
+            
+        return results
+    
+    # TODO: implement
+    def com_85_unused_correlation_name(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_86_correlation_names_are_always_identical(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_87_unnecessary_general_comparison_operator(self) -> list[DetectedError]:
+        return []
+    
+    def com_88_like_without_wildcards(self) -> list[DetectedError]:
         '''
         Flags queries where the LIKE operator is used without wildcards ('%' or '_').
         This indicates a potential misunderstanding, where the '=' operator should
@@ -72,73 +164,52 @@ class ComplicationDetector(BaseDetector):
                 if '%' not in pattern_value and '_' not in pattern_value:
                     full_expression = str(like)
 
-                    results.append(DetectedError(SqlErrors.COM_1_COMPLICATION_LIKE_WITHOUT_WILDCARDS, (full_expression,)))
+                    results.append(DetectedError(SqlErrors.COM_88_LIKE_WITHOUT_WILDCARDS, (full_expression,)))
 
-        return results
-
-    # TODO: refactor
-    def com_1_complication_unnecessary_distinct_in_select_clause(self) -> list[DetectedError]:
-        '''
-        Flags the unnecessary use of DISTINCT by comparing the proposed query
-        against the correct solution.
-        '''
-        return []
-
-        results = []
-        if not self.q_ast or not self.s_ast:
-            return results
-
-        # Check if the proposed query has a DISTINCT clause.
-        # This can be a boolean `True` or a Dictionary node for `DISTINCT(...)`.
-        q_args = self.q_ast.get('args', {})
-        q_has_distinct = q_args.get('distinct') not in [None, False]
-
-        # Check if the correct solution has a DISTINCT clause.
-        s_args = self.s_ast.get('args', {})
-        s_has_distinct = s_args.get('distinct') not in [None, False]
-
-        # If the user's query has DISTINCT but the solution doesn't, it's unnecessary.
-        if q_has_distinct and not s_has_distinct:
-            results.append((
-                SqlErrors.COM_1_COMPLICATION_UNNECESSARY_DISTINCT_IN_SELECT_CLAUSE,
-                "The DISTINCT keyword is used unnecessarily and is not present in the optimal solution."
-            ))
-            
-        return results
-
-    # TODO: refactor
-    def com_1_complication_unnecessary_join(self) -> list[DetectedError]:
-        '''
-        Flags a query that joins to a table not present in the correct solution.
-        '''
-        return []
-
-        results = []
-        if not self.q_ast or not self.s_ast:
-            return results
-
-        q_tables = self._get_from_tables(self.q_ast)
-        s_tables = self._get_from_tables(self.s_ast)
-
-        q_tables_set = {t.lower() for t in q_tables}
-        s_tables_set = {t.lower() for t in s_tables}
-
-        extraneous_tables = q_tables_set - s_tables_set
-
-        if extraneous_tables:
-            original_q_tables = self._get_from_tables(self.q_ast, with_alias=True)
-            for table_name_lower in extraneous_tables:
-                # Find the original table name (with alias if it was used) to report back
-                original_table_name = next((t for t in original_q_tables if t.lower().startswith(table_name_lower)), table_name_lower)
-                results.append((
-                    SqlErrors.COM_1_COMPLICATION_UNNECESSARY_JOIN,
-                    f"Unnecessary JOIN: The table '{original_table_name}' is not needed to answer the query."
-                ))
-            
         return results
     
+    # TODO: implement
+    def com_89_unnecessarily_complicated_select_in_exists_subquery(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_90_in_exists_can_be_replaced_by_comparison(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_91_unnecessary_aggregate_function(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_92_unnecessary_distinct_in_aggregate_function(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_93_unnecessary_argument_of_count(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_94_unnecessary_group_by_in_exists_subquery(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_95_group_by_with_singleton_groups(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_96_group_by_with_only_a_single_group(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_97_group_by_can_be_replaced_by_distinct(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_98_union_can_be_replaced_by_or(self) -> list[DetectedError]:
+        return []
+    
     # TODO: refactor
-    def com_1_complication_unnecessary_column_in_order_by_clause(self) -> list[DetectedError]:
+    def com_99_complication_unnecessary_column_in_order_by_clause(self) -> list[DetectedError]:
         '''
         Flags when the ORDER BY clause contains unnecessary columns in addition
         to the required ones.
@@ -160,11 +231,36 @@ class ComplicationDetector(BaseDetector):
             for col_lower in unnecessary_cols:
                 original_col = next((col for col, direction in q_orderby_cols if col.lower() == col_lower), col_lower)
                 results.append((
-                    SqlErrors.COM_1_COMPLICATION_UNNECESSARY_COLUMN_IN_ORDER_BY_CLAUSE,
+                    SqlErrors.COM_99_UNNECESSARY_COLUMN_IN_ORDER_BY_CLAUSE,
                     f"Unnecessary column in ORDER BY clause: '{original_col}' is not needed for sorting."
                 ))
 
         return results
+    
+    # TODO: implement
+    def com_100_order_by_in_subquery(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_101_inefficient_having(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_102_inefficient_union(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_103_condition_in_the_subquery_can_be_moved_up(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_104_condition_on_left_table_in_left_outer_join(self) -> list[DetectedError]:
+        return []
+    
+    # TODO: implement
+    def com_105_outer_join_can_be_replaced_by_inner_join(self) -> list[DetectedError]:
+        return []
+
 
     #region Utility methods
     def _get_select_columns(self, ast: dict) -> list:

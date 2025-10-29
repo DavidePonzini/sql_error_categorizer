@@ -9,8 +9,8 @@ def test_tautology():
         detectors=[SemanticErrorDetector],
     )
 
-    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('tautology',))
+    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
+    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('tautology',))
 
 def test_contradiction():
     query = "SELECT * FROM orders WHERE 1 = 0"
@@ -20,9 +20,9 @@ def test_contradiction():
         detectors=[SemanticErrorDetector],
     )
 
-    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 2
-    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('contradiction',))
-    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', '1 = 0'))
+    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 2
+    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('contradiction',))
+    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', '1 = 0'))
 
 def test_contingent_expression():
     query = "SELECT * FROM orders WHERE amount > 100"
@@ -32,7 +32,7 @@ def test_contingent_expression():
         detectors=[SemanticErrorDetector],
     )
 
-    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 0
+    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 0
 
 def test_redundant_conjunction():
     query = "SELECT * FROM orders WHERE (sal < 500 AND comm > 1000) OR sal >= 500"
@@ -42,8 +42,8 @@ def test_redundant_conjunction():
         detectors=[SemanticErrorDetector],
     )
 
-    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_conjunct', ('sal < 500 AND comm > 1000', 'sal < 500')))
+    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
+    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_conjunct', ('sal < 500 AND comm > 1000', 'sal < 500')))
 
 def test_redundant_disjunction():
     query = "SELECT * FROM orders WHERE sal > 500 OR sal > 1000"
@@ -53,8 +53,8 @@ def test_redundant_disjunction():
         detectors=[SemanticErrorDetector],
     )
 
-    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', 'sal > 1000'))
+    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
+    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', 'sal > 1000'))
 
 def test_redundant_disjunction_strings():
     query = "SELECT * FROM store WHERE sname <= 'Coop' OR sname IN ('Coop', 'Lidl') or sname >= 'Lidl';"
@@ -67,8 +67,8 @@ def test_redundant_disjunction_strings():
         debug=True,
     )
 
-    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', "sname IN ('Coop', 'Lidl')"))
+    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
+    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', "sname IN ('Coop', 'Lidl')"))
 
 
 def test_redundant_disjunction_on_subquery():
@@ -83,8 +83,8 @@ def test_redundant_disjunction_on_subquery():
         detectors=[SemanticErrorDetector],
     )
 
-    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', 'location_id = 1700'))
+    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
+    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', 'location_id = 1700'))
 
 
 def test_no_errors_on_contingent_subquery():
@@ -99,7 +99,7 @@ def test_no_errors_on_contingent_subquery():
         detectors=[SemanticErrorDetector],
     )
 
-    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 0
+    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 0
 
 @pytest.mark.skip(reason="Subquery handling not yet implemented")
 def test_tautology_with_subquery():
@@ -115,8 +115,8 @@ def test_tautology_with_subquery():
         detectors=[SemanticErrorDetector],
     )
 
-    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('tautology',))
+    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
+    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('tautology',))
 
 @pytest.mark.skip(reason="CTE handling not yet implemented")
 def test_contradiction_with_cte():
@@ -132,5 +132,5 @@ def test_contradiction_with_cte():
         detectors=[SemanticErrorDetector],
     )
 
-    assert count_errors(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('contradiction',))
+    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
+    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('contradiction',))

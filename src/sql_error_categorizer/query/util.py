@@ -20,3 +20,8 @@ def extract_DNF(expr) -> list[exp.Expression]:
     
     disjuncts = dnf_expr.flatten()  # list of Ci (each an And)
     return list(disjuncts)
+
+def extract_function_name(func_expr: exp.Func) -> str:
+    if isinstance(func_expr, exp.Anonymous):
+        return func_expr.name.upper()
+    return func_expr.__class__.__name__.lower()

@@ -8,8 +8,8 @@ def test_like_no_wildcards():
         detectors=[ComplicationDetector],
     )
 
-    assert count_errors(result, SqlErrors.COM_1_COMPLICATION_LIKE_WITHOUT_WILDCARDS) == 1
-    assert has_error(result, SqlErrors.COM_1_COMPLICATION_LIKE_WITHOUT_WILDCARDS, ("name LIKE 'JohnDoe'",))
+    assert count_errors(result, SqlErrors.COM_88_LIKE_WITHOUT_WILDCARDS) == 1
+    assert has_error(result, SqlErrors.COM_88_LIKE_WITHOUT_WILDCARDS, ("name LIKE 'JohnDoe'",))
 
 def test_like_with_underscore():
     query = "SELECT * FROM employees WHERE name LIKE 'John_Doe'"
@@ -19,7 +19,7 @@ def test_like_with_underscore():
         detectors=[ComplicationDetector],
     )
 
-    assert count_errors(result, SqlErrors.COM_1_COMPLICATION_LIKE_WITHOUT_WILDCARDS) == 0
+    assert count_errors(result, SqlErrors.COM_88_LIKE_WITHOUT_WILDCARDS) == 0
 
 def test_like_with_percent():
     query = "SELECT * FROM employees WHERE name LIKE 'John%'"
@@ -29,4 +29,4 @@ def test_like_with_percent():
         detectors=[ComplicationDetector],
     )
 
-    assert count_errors(result, SqlErrors.COM_1_COMPLICATION_LIKE_WITHOUT_WILDCARDS) == 0
+    assert count_errors(result, SqlErrors.COM_88_LIKE_WITHOUT_WILDCARDS) == 0

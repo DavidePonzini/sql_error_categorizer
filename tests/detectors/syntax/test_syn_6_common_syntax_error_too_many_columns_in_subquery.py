@@ -10,8 +10,8 @@ def test_in():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_TOO_MANY_COLUMNS_IN_SUBQUERY) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_TOO_MANY_COLUMNS_IN_SUBQUERY, (subquery, 1))
+    assert count_errors(detected_errors, SqlErrors.SYN_26_TOO_MANY_COLUMNS_IN_SUBQUERY) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_26_TOO_MANY_COLUMNS_IN_SUBQUERY, (subquery, 1))
     
 def test_exists():
     subquery = 'SELECT col2, col3 FROM table2'
@@ -22,7 +22,7 @@ def test_exists():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_TOO_MANY_COLUMNS_IN_SUBQUERY) == 0
+    assert count_errors(detected_errors, SqlErrors.SYN_26_TOO_MANY_COLUMNS_IN_SUBQUERY) == 0
 
 def test_comparison():
     subquery = 'SELECT col3, col4 FROM table2'
@@ -33,8 +33,8 @@ def test_comparison():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_TOO_MANY_COLUMNS_IN_SUBQUERY) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_TOO_MANY_COLUMNS_IN_SUBQUERY, (subquery, 1))
+    assert count_errors(detected_errors, SqlErrors.SYN_26_TOO_MANY_COLUMNS_IN_SUBQUERY) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_26_TOO_MANY_COLUMNS_IN_SUBQUERY, (subquery, 1))
 
 def test_comparison_no_error():
     subquery = 'SELECT col3 FROM table2'
@@ -45,7 +45,7 @@ def test_comparison_no_error():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_TOO_MANY_COLUMNS_IN_SUBQUERY) == 0
+    assert count_errors(detected_errors, SqlErrors.SYN_26_TOO_MANY_COLUMNS_IN_SUBQUERY) == 0
 
 def test_multiple_columns_select():
     subquery = 'SELECT col1, col2 FROM table2'
@@ -56,8 +56,8 @@ def test_multiple_columns_select():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_TOO_MANY_COLUMNS_IN_SUBQUERY) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_TOO_MANY_COLUMNS_IN_SUBQUERY, (subquery, 1))
+    assert count_errors(detected_errors, SqlErrors.SYN_26_TOO_MANY_COLUMNS_IN_SUBQUERY) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_26_TOO_MANY_COLUMNS_IN_SUBQUERY, (subquery, 1))
 
 def test_multiple_columns_from():
     subquery = 'SELECT col2, col3 FROM table2'
@@ -68,4 +68,4 @@ def test_multiple_columns_from():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_TOO_MANY_COLUMNS_IN_SUBQUERY) == 0
+    assert count_errors(detected_errors, SqlErrors.SYN_26_TOO_MANY_COLUMNS_IN_SUBQUERY) == 0

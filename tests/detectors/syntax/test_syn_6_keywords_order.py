@@ -9,7 +9,7 @@ def test_correct_order():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS) == 0
+    assert count_errors(detected_errors, SqlErrors.SYN_30_CONFUSING_THE_ORDER_OF_KEYWORDS) == 0
 
 
 def test_incorrect_order():
@@ -20,8 +20,8 @@ def test_incorrect_order():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS, (['SELECT', 'WHERE', 'FROM'],))
+    assert count_errors(detected_errors, SqlErrors.SYN_30_CONFUSING_THE_ORDER_OF_KEYWORDS) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_30_CONFUSING_THE_ORDER_OF_KEYWORDS, (['SELECT', 'WHERE', 'FROM'],))
 
 
 def test_incorrect_order_with_subquery():
@@ -33,5 +33,5 @@ def test_incorrect_order_with_subquery():
         detectors=[SyntaxErrorDetector]
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_6_COMMON_SYNTAX_ERROR_CONFUSING_THE_ORDER_OF_KEYWORDS, (['SELECT', 'GROUP BY', 'FROM', 'ORDER BY', 'LIMIT', 'OFFSET', 'WHERE'],))
+    assert count_errors(detected_errors, SqlErrors.SYN_30_CONFUSING_THE_ORDER_OF_KEYWORDS) == 1
+    assert has_error(detected_errors, SqlErrors.SYN_30_CONFUSING_THE_ORDER_OF_KEYWORDS, (['SELECT', 'GROUP BY', 'FROM', 'ORDER BY', 'LIMIT', 'OFFSET', 'WHERE'],))

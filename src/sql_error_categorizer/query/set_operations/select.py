@@ -4,6 +4,7 @@ from ..tokenized_sql import TokenizedSQL
 from .. import extractors
 from ...catalog import Catalog, Table
 from ...util import *
+from ..util import extract_function_name
 from sql_error_categorizer.query.typechecking import get_type, to_res_type
 
 from copy import deepcopy
@@ -240,9 +241,16 @@ class Select(SetOperation, TokenizedSQL):
                     result.add_column(name=subquery_col.name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
                 else:
                     result.add_column(name='', column_type='None')
-
+            elif isinstance(col, exp.Literal):
+                # literal value in select clause
+                res_type = get_type(col, self.referenced_tables)[0]
+                result.add_column(name='?column?', column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
+            elif isinstance(col, exp.Func):
+                # anonymous function call in select clause
+                res_type = get_type(col, self.referenced_tables)[0]
+                result.add_column(name=extract_function_name(col), column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
             else:
-                # mostly unrecognized expressions (e.g. functions, literals, operations), that result in a column without a specific name
+                # mostly unrecognized expressions (e.g. functions, operations), that result in a column without a specific name
                 res_type = get_type(col, self.referenced_tables)[0]
                 result.add_column(name='', column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
 
