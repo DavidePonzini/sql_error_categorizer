@@ -184,15 +184,22 @@ class SemanticErrorDetector(BaseDetector):
 
         return results
 
-    # TODO: refactor
     def sem_1_distinct_in_sum_or_avg(self) -> list[DetectedError]:
         '''Detect SUM(DISTINCT ...) or AVG(DISTINCT ...)'''
-        return []
+
+        results: list[DetectedError] = []
+
+        for select in self.query.selects:
+            ast = select.ast
+
+            if not ast:
+                continue
+
+            for func in ast.find_all(exp.Sum, exp.Avg):
+                if func.this and isinstance(func.this, exp.Distinct):
+                    results.append(DetectedError(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG, (func.sql(),)))
+        return results
     
-        # Accepts SUM(DISTINCT col), SUM(DISTINCT(col)), etc.
-        if re.search(r"\b(SUM|AVG)\s*\(\s*DISTINCT\s*\(?\s*\w+\s*\)?", self.query, re.IGNORECASE):
-            return [(SqlErrors.SEM_1_INCONSISTENT_EXPRESSION_DISTINCT_IN_SUM_OR_AVG, 'DISTINCT')]
-        return []
     
     # TODO: implement
     def sem_1_distinct_removing_important_duplicates(self) -> list[DetectedError]:
