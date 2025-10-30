@@ -7,7 +7,6 @@ name = "sql_error_categorizer"
 version = "0.1.0"
 authors = [
   { name="Davide Ponzini", email="davide.ponzini95@gmail.com" },
-  { name="Davide Miggiano" },
 ]
 description = "This project analyses SQL statements and labels possible errors or complications."
 readme = "README.md"
@@ -25,6 +24,6 @@ dependencies = [
 ]
 
 [project.urls]
-"Repository" = "https://github.com/DavidePonzini/sqlerrcat"
-"Documentation" = "https://sqlerrcat.readthedocs.io/en/latest/index.html"
-"Bug Tracker" = "https://github.com/DavidePonzini/sqlerrcat/issues"
+"Repository" = "https://github.com/DavidePonzini/sql_error_categorizer"
+"Documentation" = "https://sql_error_categorizer.readthedocs.io/en/latest/index.html"
+"Bug Tracker" = "https://github.com/DavidePonzini/sql_error_categorizer/issues"
