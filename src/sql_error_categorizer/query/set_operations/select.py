@@ -334,6 +334,15 @@ class Select(SetOperation, TokenizedSQL):
     def __repr__(self, pre: str = '') -> str:
         return f'{pre}{self.__class__.__name__}(SQL="{self.sql.splitlines()[0]}{"..." if len(self.sql.splitlines()) > 1 else ""}")'
     
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, Select):
+            return False
+        
+        if self.ast and value.ast:
+            return self.ast.sql() == value.ast.sql()
+        
+        return self.tokens == value.tokens
+    
     @property
     def selects(self) -> list['Select']:
         return [self] + [subquery for subquery, _ in self.subqueries]
