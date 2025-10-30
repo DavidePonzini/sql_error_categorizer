@@ -3,11 +3,12 @@ pyyaml
 sqlparse
 sqlglot
 z3-solver
-
-ipython
-
 python-dateutil
 
+# Dependencies for development
+ipython
+
+# Dependencies for building
 build
 autoapi
 pytest
