@@ -907,31 +907,23 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-    # TODO: refactor, needs AST
     def syn_21_comparison_with_null(self) -> list[DetectedError]:
         '''
         Flags SQL comparisons using = NULL, <> NULL, etc. instead of IS NULL / IS NOT NULL.
         '''
-        return []
+        results: list[DetectedError] = []
 
-        results = []
-        comparison_ops = {"=", "<>", "!=", "<", ">", "<=", ">="}
-        null_literals = {"NULL", "null"}
-        
-        tokens = self.tokens
+        for select in self.query.selects:
+            select = select.strip_subqueries(replacement='1')   # avoid false positives from subqueries
 
-        for i, (tt, val) in enumerate(tokens):
-            #print(f"DEBUG: Token {i}: {tt} -> {val}")
-            if val.upper() in comparison_ops:
-                # Check left and right tokens
-                lhs = tokens[i - 1][1].strip() if i > 0 else ""
-                rhs = tokens[i + 1][1].strip() if i + 1 < len(tokens) else ""
+            if select.ast is None:
+                continue
 
-                if lhs.upper() in null_literals or rhs.upper() in null_literals:
-                    results.append((
-                        SqlErrors.SYN_21_COMPARISON_WITH_NULL,
-                        f"Invalid NULL comparison using '{val}' with NULL: use IS NULL or IS NOT NULL instead"
-                    ))
+            for comparison in select.ast.find_all(exp.EQ, exp.NEQ, exp.LT, exp.GT, exp.LTE, exp.GTE):
+                left = comparison.left
+                right = comparison.right
+                if (isinstance(left, exp.Null) or isinstance(right, exp.Null)):
+                    results.append(DetectedError(SqlErrors.SYN_21_COMPARISON_WITH_NULL, (comparison.sql(),)))
 
         return results
 

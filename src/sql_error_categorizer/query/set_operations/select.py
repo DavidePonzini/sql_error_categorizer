@@ -115,7 +115,7 @@ class Select(SetOperation, TokenizedSQL):
 
     # endregion
 
-    def strip_subqueries(self) -> 'Select':
+    def strip_subqueries(self, replacement: str = 'NULL') -> 'Select':
         '''Returns the SQL query with all subqueries removed (replaced by a context-aware placeholder).'''
 
         stripped_sql = self.sql
@@ -124,27 +124,27 @@ class Select(SetOperation, TokenizedSQL):
 
         counter = 1
         for subquery_sql, clause in subquery_sqls:
-            replacement = 'NULL'  # default safe fallback
+            repl = replacement  # default safe fallback
 
             clause_upper = (clause or '').upper()
 
             if clause_upper in ('FROM', 'JOIN'):
-                replacement = f'__subq{counter}'
+                repl = f'__subq{counter}'
                 counter += 1
             elif clause_upper in ('WHERE', 'HAVING', 'ON', 'SELECT', 'COMPARISON'):
-                replacement = 'NULL'
+                repl = replacement
             elif clause_upper in ('IN', 'EXISTS'):
-                replacement = '(NULL)'
+                repl = f'({replacement})'
 
             escaped = re.escape(subquery_sql)
             pattern = rf'\(\s*{escaped}\s*\)'
 
             # Replace the parentheses and enclosed subquery entirely
-            stripped_sql, n = re.subn(pattern, replacement, stripped_sql, count=1)
+            stripped_sql, n = re.subn(pattern, repl, stripped_sql, count=1)
 
             # Fallback: if not found with parentheses, remove raw subquery text
             if n == 0:
-                stripped_sql = re.sub(escaped, replacement, stripped_sql, count=1)
+                stripped_sql = re.sub(escaped, repl, stripped_sql, count=1)
 
         return Select(stripped_sql, catalog=self.catalog, search_path=self.search_path)
 
