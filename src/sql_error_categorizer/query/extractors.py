@@ -13,7 +13,7 @@ def extract_functions(tokens, current_clause: str = 'NONE') -> list[tuple[sqlpar
 
     for token in tokens:
         if token.ttype is sqlparse.tokens.Keyword or token.ttype is sqlparse.tokens.DML or token.ttype is sqlparse.tokens.CTE:
-            if token.value.upper() in ('WITH', 'SELECT', 'FROM', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'LIMIT'):
+            if token.value.upper() in ('WITH', 'SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT'):
                 current_clause = token.value.upper()
             continue
 
@@ -32,7 +32,7 @@ def extract_comparisons(tokens, current_clause: str = 'NONE') -> list[tuple[sqlp
     
     for token in tokens:
         if token.ttype is sqlparse.tokens.Keyword or token.ttype is sqlparse.tokens.DML or token.ttype is sqlparse.tokens.CTE:
-            if token.value.upper() in ('WITH', 'SELECT', 'FROM', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'LIMIT'):
+            if token.value.upper() in ('WITH', 'SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT'):
                 current_clause = token.value.upper()
             continue
 

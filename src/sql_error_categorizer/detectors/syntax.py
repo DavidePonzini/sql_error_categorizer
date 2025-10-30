@@ -620,8 +620,8 @@ class SyntaxErrorDetector(BaseDetector):
             '!'     : ' NOT ',
             # '^'     : '',
             # '~'     : '',
-            '>>'    : None,
-            '<<'    : None,
+            '>>'    : '>',
+            '<<'    : '<',
             '≠'     : '<>',
             '≥'     : '>=',
             '≤'     : '<=',
@@ -629,7 +629,7 @@ class SyntaxErrorDetector(BaseDetector):
 
         for ttype, val in self.query.tokens:
             val_stripped = val.strip()
-            if ttype in sqlparse.tokens.Operator or ttype in sqlparse.tokens.Operator.Comparison:
+            if ttype in sqlparse.tokens.Operator or ttype in sqlparse.tokens.Operator.Comparison or ttype == sqlparse.tokens.Error:
                 if val_stripped in nonstandard_ops:
                     correction = nonstandard_ops[val_stripped]
                     results.append(DetectedError(SqlErrors.SYN_37_NONSTANDARD_OPERATORS, (val_stripped, correction)))
@@ -1257,6 +1257,13 @@ class SyntaxErrorDetector(BaseDetector):
                     curly_open += 1
                 elif val == '}':
                     curly_close += 1
+            elif ttype is sqlparse.tokens.Name:
+                if val.startswith('{') or val.endswith('}'):
+                    curly_open += val.count('{')
+                    curly_close += val.count('}')
+                if val.startswith('[') or val.endswith(']'):
+                    square_open += val.count('[')
+                    square_close += val.count(']')
 
         # Check for imbalance
         if round_open != round_close:
