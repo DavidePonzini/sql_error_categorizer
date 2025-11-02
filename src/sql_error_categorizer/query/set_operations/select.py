@@ -4,7 +4,7 @@ from ..tokenized_sql import TokenizedSQL
 from .. import extractors
 from ...catalog import Catalog, Table
 from ...util import *
-from sql_error_categorizer.query.typechecking import determinate_type
+from sql_error_categorizer.query.typechecking import get_type, rewrite_expression
 
 from copy import deepcopy
 
@@ -198,7 +198,9 @@ class Select(SetOperation, TokenizedSQL):
 
         result = super().output
 
-        columns = self.ast.expressions if self.ast else []
+        typed_ast = rewrite_expression(self.ast, self.referenced_tables)
+
+        columns = typed_ast.expressions if typed_ast else []
         for col in columns:
             if isinstance(col, exp.Star):
                 # Expand star to all columns from all referenced tables
@@ -210,7 +212,7 @@ class Select(SetOperation, TokenizedSQL):
                 quoted = alias.quoted
                 col_name = alias.this
 
-                res_type = determinate_type(col.this, self.referenced_tables)
+                res_type = get_type(col.this)
                 result.add_column(name=col_name if quoted else col_name.lower(), column_type=res_type.data_type, is_nullable=res_type.nullable)
 
             elif isinstance(col, exp.Column):
@@ -226,7 +228,7 @@ class Select(SetOperation, TokenizedSQL):
                     col_name = col.alias_or_name
                     name = col_name if col.this.quoted else col_name.lower()
 
-                    res_type = determinate_type(col, self.referenced_tables)
+                    res_type = get_type(col)
                     result.add_column(name=name, column_type=res_type.data_type, is_nullable=res_type.nullable)
 
             elif isinstance(col, exp.Subquery):
@@ -235,14 +237,14 @@ class Select(SetOperation, TokenizedSQL):
                 # Add the first column of the subquery's output
                 if subquery.output.columns:
                     subquery_col = subquery.output.columns[0]
-                    res_type = determinate_type(subquery_col, self.referenced_tables)
+                    res_type = get_type(subquery_col)
                     result.add_column(name=subquery_col.name, column_type=res_type.data_type, is_nullable=res_type.nullable)
                 else:
                     result.add_column(name='', column_type='None')
 
             else:
                 # mostly unrecognized expressions (e.g. functions, literals, operations), that result in a column without a specific name
-                res_type = determinate_type(col, self.referenced_tables)
+                res_type = get_type(col)
                 result.add_column(name='', column_type=res_type.data_type, is_nullable=res_type.nullable)
 
         return result

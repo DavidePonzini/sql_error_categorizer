@@ -11,12 +11,10 @@ from sql_error_categorizer.catalog.types import ResultType, AtomicType, TupleTyp
 # region primitive types
 @singledispatch
 def get_type(expression: exp.Expression) -> ResultType:
-    return AtomicType()
+    return AtomicType(messages=[("Unknown expression type", expression.sql())])
 
 @get_type.register
 def _(expression: exp.Literal) -> ResultType:
-    if expression.type.this == DataType.Type.UNKNOWN:
-        return AtomicType(messages=[("Unknown literal type", expression.sql())])
     return AtomicType(data_type=expression.type.this, nullable=False, constant=True, value=expression.this)
 
 @get_type.register
@@ -38,6 +36,10 @@ def _(expression: exp.Tuple) -> ResultType:
             old_messages.extend(item_type.messages)
         types.append(item_type)
 
+    if not types:
+        old_messages.append(("Empty tuple type", expression.sql()))
+        return AtomicType(messages=old_messages)
+
     return TupleType(types=types, messages=old_messages, nullable=any(t.nullable for t in types), constant=all(t.constant for t in types))
 
 @get_type.register
@@ -51,7 +53,6 @@ def _(expression: exp.Cast) -> ResultType:
 
     if new_type in (DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
         old_messages.append(("Invalid cast type", expression.sql()))
-        return AtomicType(messages=old_messages)
 
     # handle cast to numeric types
     if new_type in DataType.NUMERIC_TYPES and not to_number(original_type):
@@ -81,159 +82,124 @@ def _(expression: exp.Column) -> ResultType:
 
 # endregion
 
-# # region unary ops
+# region unary ops
 
-# @get_type.register
-# def _(expression: exp.Neg, referenced_tables: list[Table]) -> Type:
-#     inner_type = get_type(expression.this, referenced_tables)
+@get_type.register
+def _(expression: exp.Neg) -> ResultType:
+    inner_type = get_type(expression.this)
 
-#     if (early_errors := check_errors([inner_type])) is not None:
-#         return early_errors
+    old_messages = inner_type.messages
+
+    if expression.type.this not in DataType.NUMERIC_TYPES:
+        old_messages.append(("Invalid unary minus type", expression.sql()))
     
-#     if inner_type == TupleType:
-#         return ErrorType(f"Invalid use of unary minus on tuple expression: {expression.sql()}")
+    return AtomicType(data_type=expression.type.this, nullable=inner_type.nullable, constant=inner_type.constant, messages=old_messages, value=inner_type.value)
 
-#     if to_number(inner_type):
-#         return AtomicType(EnumType.NUMBER, nullable=inner_type.nullable, constant=inner_type.constant)
+@get_type.register
+def _(expression: exp.Not) -> ResultType:
+    old_messages = get_type(expression.this).messages
 
-#     return ErrorType(f"Invalid use of unary minus on non-numeric expression: {expression.sql()}")
+    if expression.type.this != DataType.Type.BOOLEAN:
+        old_messages.append(("Invalid NOT operand type", expression.sql()))
 
-# @get_type.register
-# def _(expression: exp.Not, referenced_tables: list[Table]) -> Type:
-#     inner_type = get_type(expression.this, referenced_tables)
+    return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
 
-#     if (early_errors := check_errors([inner_type])) is not None:
-#         return early_errors
-    
-#     if inner_type == TupleType:
-#         return ErrorType(f"Invalid use of NOT on tuple expression: {expression.sql()}")
-    
-#     if inner_type == AtomicType(EnumType.BOOLEAN):
-#         return AtomicType(EnumType.BOOLEAN, constant=True, nullable=False)
-
-#     return ErrorType(f"Invalid use of NOT on non-boolean expression: {expression.sql()}")
-
-# @get_type.register
-# def _(expression: exp.Paren, referenced_tables: list[Table]) -> Type:
-#     return get_type(expression.this, referenced_tables)
+@get_type.register
+def _(expression: exp.Paren) -> ResultType:
+    return get_type(expression.this)
 
 @get_type.register
 def _(expression: exp.Alias) -> ResultType:
     return get_type(expression.this)
 
-# # To handle COUNT(DISTINCT ...) or similar constructs
-# @get_type.register
-# def _(expression: exp.Distinct, referenced_tables: list[Table]) -> Type:
+# To handle COUNT(DISTINCT ...) or similar constructs
+@get_type.register
+def _(expression: exp.Distinct) -> ResultType:
     
-#     if len(expression.expressions) != 1:
-#         return ErrorType(f"Invalid use of DISTINCT: {expression.sql()}")
+    if len(expression.expressions) != 1:
+        return AtomicType(messages=[("DISTINCT with multiple expressions is not supported", expression.sql())])
 
-#     inner_type = get_type(expression.expressions[0], referenced_tables)
-
-#     if (early_errors := check_errors([inner_type])) is not None:
-#         return early_errors
-
-#     if inner_type == TupleType:
-#         return ErrorType(f"Invalid use of DISTINCT on tuple expression: {expression.sql()}")
-    
-#     return inner_type
+    return get_type(expression.expressions[0])
 
 # # endregion
 
-# # region functions
+# region functions
 
-# @get_type.register
-# def _(expression: exp.Count, referenced_tables: list[Table]) -> Type:
-#     inner_type = get_type(expression.this, referenced_tables)
+@get_type.register
+def _(expression: exp.Count) -> ResultType:
+    old_messages = get_type(expression.this).messages
 
-#     if (early_errors := check_errors([inner_type])) is not None:
-#         return early_errors
+    return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
 
-#     if inner_type == TupleType:
-#         return ErrorType(f"Invalid use of COUNT on tuple expression: {expression.sql()}")
+@get_type.register
+def _(expression: exp.Avg) -> ResultType:
+    inner_type = get_type(expression.this)
 
-#     return AtomicType(EnumType.NUMBER, nullable=inner_type.nullable, constant=True)
+    old_messages = inner_type.messages
 
-# @get_type.register
-# def _(expression: exp.Avg, referenced_tables: list[Table]) -> Type:
-#     inner_type = get_type(expression.this, referenced_tables)
+    if not to_number(inner_type):
+        old_messages.append(("Invalid AVG operand type", expression.sql()))
 
-#     if (early_errors := check_errors([inner_type])) is not None:
-#         return early_errors
+    return AtomicType(data_type=expression.type.this, nullable=True, constant=True, messages=old_messages)
 
-#     if inner_type == TupleType:
-#         return ErrorType(f"Invalid use of AVG on tuple expression: {expression.sql()}")
+@get_type.register
+def _(expression: exp.Sum) -> ResultType:
+    inner_type = get_type(expression.this)
 
-#     if to_number(inner_type):
-#         return AtomicType(EnumType.NUMBER, nullable=inner_type.nullable, constant=True)
+    old_messages = inner_type.messages
 
-#     return ErrorType(f"Invalid use of AVG on non-numeric expression: {expression.sql()}")
+    if not to_number(inner_type):
+        old_messages.append(("Invalid SUM operand type", expression.sql()))
 
-# @get_type.register
-# def _(expression: exp.Sum, referenced_tables: list[Table]) -> Type:
-#     inner_type = get_type(expression.this, referenced_tables)
+    return AtomicType(data_type=expression.type.this, nullable=True, constant=True, messages=old_messages)
 
-#     if (early_errors := check_errors([inner_type])) is not None:
-#         return early_errors
+@get_type.register
+def _(expression: exp.Min) -> ResultType:
+    inner_type = get_type(expression.this)
 
-#     if inner_type == TupleType:
-#         return ErrorType(f"Invalid use of SUM on tuple expression: {expression.sql()}")
+    old_messages = inner_type.messages
 
-#     if to_number(inner_type):
-#         return AtomicType(EnumType.NUMBER, nullable=inner_type.nullable, constant=True)
+    if inner_type.data_type in (DataType.Type.BOOLEAN, DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
+        old_messages.append(("Invalid MIN operand type", expression.sql()))
 
-#     return ErrorType(f"Invalid use of SUM on non-numeric expression: {expression.sql()}")
+    return AtomicType(data_type=inner_type.data_type, nullable=inner_type.nullable, constant=True, messages=old_messages)
 
-# @get_type.register
-# def _(expression: exp.Min, referenced_tables: list[Table]) -> Type:
-#     inner_type = get_type(expression.this, referenced_tables)
+@get_type.register
+def _(expression: exp.Max) -> ResultType:
+    inner_type = get_type(expression.this)
 
-#     if (early_errors := check_errors([inner_type])) is not None:
-#         return early_errors
+    old_messages = inner_type.messages
 
-#     if inner_type == TupleType:
-#         return ErrorType(f"Invalid use of MIN on tuple expression: {expression.sql()}")
+    if inner_type.data_type in (DataType.Type.BOOLEAN, DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
+        old_messages.append(("Invalid MAX operand type", expression.sql()))
 
-#     if inner_type == AtomicType(EnumType.BOOLEAN):
-#         return ErrorType(f"Invalid use of MIN on boolean expression: {expression.sql()}")
+    return AtomicType(data_type=inner_type.data_type, nullable=inner_type.nullable, constant=True, messages=old_messages)
 
-#     return AtomicType(inner_type.enum_type, nullable=inner_type.nullable, constant=True)
+@get_type.register
+def _(expression: exp.Concat) -> ResultType:
+    old_messages = []
+    args_type = []
 
-# @get_type.register
-# def _(expression: exp.Max, referenced_tables: list[Table]) -> Type:
-#     inner_type = get_type(expression.this, referenced_tables)
-
-#     if (early_errors := check_errors([inner_type])) is not None:
-#         return early_errors
-
-#     if inner_type == TupleType:
-#         return ErrorType(f"Invalid use of MAX on tuple expression: {expression.sql()}")
-
-#     if inner_type == AtomicType(EnumType.BOOLEAN):
-#         return ErrorType(f"Invalid use of MAX on boolean expression: {expression.sql()}")
-
-#     return AtomicType(inner_type.enum_type, nullable=inner_type.nullable, constant=True)
-
-# @get_type.register
-# def _(expression: exp.Concat, referenced_tables: list[Table]) -> Type:
-#     args_type = [get_type(arg, referenced_tables) for arg in expression.expressions]
-
-#     if not args_type:
-#         return ErrorType(f"CONCAT requires at least one argument: {expression.sql()}")
+    for arg in expression.expressions:
+        arg_type = get_type(arg)
+        if arg_type.messages:
+            old_messages.extend(arg_type.messages)
+        args_type.append(arg_type)
         
-#     if (early_errors := check_errors(args_type)) is not None:
-#         return early_errors
+
+    if not args_type:
+        return AtomicType(messages=[("CONCAT with no arguments", expression.sql())])
     
-#     # if all args are NULL, result is NULL
-#     if all(target_type == AtomicType(EnumType.NULL) for target_type in args_type):
-#         return AtomicType(EnumType.NULL, nullable=True, constant=True)
+    # if all args are NULL, result is NULL
+    if all(target_type.data_type == DataType.Type.NULL for target_type in args_type):
+        return AtomicType(data_type=DataType.Type.NULL, constant=True, messages=old_messages)
 
-#     constant = all(target_type.constant for target_type in args_type)
-#     nullable = any(target_type.nullable for target_type in args_type)
+    constant = all(target_type.constant for target_type in args_type)
+    nullable = any(target_type.nullable for target_type in args_type)
 
-#     return AtomicType(EnumType.STRING, constant=constant, nullable=nullable)
+    return AtomicType(data_type=expression.type.this, nullable=nullable, constant=constant, messages=old_messages)
 
-# # endregion
+# endregion
 
 # # region binary op
 
@@ -358,36 +324,23 @@ def _(expression: exp.Alias) -> ResultType:
 #     #TODO: handle subquery case
 #     return NotImplementedType()
 
-# # AND, OR
-# @get_type.register
-# def _(expression: exp.Connector, referenced_tables: list[Table]) -> Type:
-#     left_type = get_type(expression.this, referenced_tables)
-#     right_type = get_type(expression.expression, referenced_tables)
+# AND, OR
+@get_type.register
+def _(expression: exp.Connector) -> ResultType:
+    left_type = get_type(expression.this)
+    right_type = get_type(expression.expression)
 
-#     if (early_errors := check_errors([left_type, right_type])) is not None:
-#         return early_errors
+    old_messages = left_type.messages + right_type.messages
 
-#     if AtomicType(EnumType.BOOLEAN) == left_type == right_type:
-#         return AtomicType(EnumType.BOOLEAN, constant=True, nullable=False)
-    
-#     return ErrorType(f"Invalid use of logical operator on non-boolean expressions: {expression.sql()}")
+    if left_type.data_type != DataType.Type.BOOLEAN or right_type.data_type != DataType.Type.BOOLEAN:
+        old_messages.append(("Invalid logical operator operand type", expression.sql()))
+
+
+    return AtomicType(data_type=expression.this.type, nullable=False, constant=True, messages=old_messages)
 
 # # endregion
 
 # # region utils
-
-# def check_errors(types: list[Type]) -> ErrorType | NotImplementedType | None:
-
-#     # collect error messages
-#     messages = [target_type.message for target_type in types if target_type == ErrorType]
-
-#     # check for NotImplementedType
-#     if any(target_type == NotImplementedType for target_type in types) or messages:
-
-#         # if we have already encountered errors, prioritize them
-#         return ErrorType("\n".join(messages)) if messages else NotImplementedType()
-
-#     return None
 
 def to_date(target: ResultType) -> bool:
     if target.data_type in DataType.TEMPORAL_TYPES:
@@ -420,12 +373,14 @@ def create_schema(referenced_tables: list[Table]) -> dict:
         for table in referenced_tables
     }
 
-def determinate_type(expression: exp.Expression, referenced_tables: list[Table]) -> ResultType:
+def rewrite_expression(expression: exp.Expression, referenced_tables: list[Table]) -> exp.Expression:
+    '''
+    Rewrites the expression by annotating types to its nodes based on the referenced tables.
+    '''
     schema = create_schema(referenced_tables)
-    typed_expression = annotate_types(qualify_columns(expression, schema), schema)
-    return get_type(typed_expression)
+    return annotate_types(qualify_columns(expression, schema), schema)
 
 def collect_errors(expression: exp.Expression, referenced_tables: list[Table]) -> list[(str, str)]:
-    return determinate_type(expression, referenced_tables).messages
+    return get_type(rewrite_expression(expression, referenced_tables)).messages
 
 # endregion

@@ -1,13 +1,12 @@
 import pytest
-from sql_error_categorizer.query.typechecking import collect_errors, determinate_type
+from sql_error_categorizer.query.typechecking import collect_errors, get_type, rewrite_expression
 
 def test_primitive_types(make_query):
     sql = "SELECT 'hello' AS str_col, 123 AS num_col, TRUE AS bool_col, NULL AS null_col, DATE '2020-01-01' AS date_col;"
     query = make_query(sql)
     result = []
-    for exp in query.main_query.ast.expressions:
-        col_type = determinate_type(exp, query.main_query.referenced_tables)
-        result.append(col_type.data_type.value.lower())
+    for col in query.main_query.output.columns:
+        result.append(col.column_type.value.lower())
     assert result == ["varchar", "int", "boolean", "null", "date"]
 
 def test_type_columns(make_query):
@@ -62,16 +61,16 @@ def test_wrong_column_reference(make_query):
 #             error_message += where_type.message.split(': ').pop()
 #     assert error_message == expected_error
 
-# # functions
-# def test_function_types(make_query):
-#     sql = "SELECT COUNT(DISTINCT sname), AVG(sid), SUM(sid), MIN(sname), MAX(sid), CONCAT(NULL,NULL,1), CONCAT(NULL) FROM store;"
-#     query = make_query(sql)
+# functions
+def test_function_types(make_query):
+    sql = "SELECT COUNT(DISTINCT sname), AVG(sid), SUM(sid), MIN(sname), MAX(sid), CONCAT(NULL,NULL,1), CONCAT(NULL) FROM store;"
+    query = make_query(sql)
 
-#     result = []
-#     for col in query.main_query.output.columns:
-#         result.append(col.column_type)
+    result = []
+    for col in query.main_query.output.columns:
+        result.append(col.column_type.value.lower())
 
-#     assert result == ['number', 'number', 'number', 'string', 'number', 'string', 'null']
+    assert result == ['bigint', 'double', 'decimal', 'varchar', 'decimal', 'varchar', 'null']
 
 # # logical operators
 # @pytest.mark.parametrize('sql, expected_types', [
