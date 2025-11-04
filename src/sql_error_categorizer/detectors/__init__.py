@@ -63,12 +63,10 @@ class Detector:
 
         self.detectors.append(detector)
 
-    def _run(self) -> list[DetectedError]:
+    def run(self) -> list[DetectedError]:
         '''
         Run all detectors and return a list of detected errors.
         This function can return duplicate errors, as well as additional information on the detected errors.
-        
-        Useful for automated testing.
         '''
 
         if self.debug:
@@ -88,8 +86,3 @@ class Detector:
             results.extend(errors)
 
         return results
-
-    def run(self) -> set[SqlErrors]:
-        '''Run all detectors and return detected error types'''
-
-        return {error.error for error in self._run()}
