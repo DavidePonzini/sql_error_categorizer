@@ -199,40 +199,44 @@ class Select(SetOperation, TokenizedSQL):
 
         result = super().output
 
-        columns = self.ast.expressions if self.ast else []
-        for col in columns:
-            if isinstance(col, exp.Star):
+        if not self.ast:
+            return result
+        
+        anonymous_counter = 1
+
+        for column in self.ast.expressions:
+            if isinstance(column, exp.Star):
                 # Expand star to all columns from all referenced tables
                 for table in self.referenced_tables:
                     for column in table.columns:
                         result.add_column(name=column.name, column_type=to_res_type(column.column_type).value, is_nullable=column.is_nullable, is_constant=column.is_constant)
-            elif isinstance(col, exp.Alias):
-                alias = col.args['alias']
+            elif isinstance(column, exp.Alias):
+                alias = column.args['alias']
                 quoted = alias.quoted
                 col_name = alias.this
 
-                res_type = get_type(col.this, self.referenced_tables)[0]
+                res_type = get_type(column.this, self.referenced_tables)[0]
                 result.add_column(name=col_name if quoted else col_name.lower(), column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
 
-            elif isinstance(col, exp.Column):
+            elif isinstance(column, exp.Column):
 
                 # Handle table.* case
-                if isinstance(col.this, exp.Star):
-                    table_name = normalize_ast_column_table(col)
+                if isinstance(column.this, exp.Star):
+                    table_name = normalize_ast_column_table(column)
                     table = next((t for t in self.referenced_tables if t.name == table_name), None)
                     if table:
                         for column in table.columns:
                             res_type = get_type(column, self.referenced_tables)[0]
                             result.add_column(name=column.name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
                 else:
-                    col_name = col.alias_or_name
-                    name = col_name if col.this.quoted else col_name.lower()
+                    col_name = column.alias_or_name
+                    name = col_name if column.this.quoted else col_name.lower()
 
-                    res_type = get_type(col, self.referenced_tables)[0]
+                    res_type = get_type(column, self.referenced_tables)[0]
                     result.add_column(name=name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
 
-            elif isinstance(col, exp.Subquery):
-                subquery = Select(remove_parentheses(col.sql()), catalog=self.catalog, search_path=self.search_path)
+            elif isinstance(column, exp.Subquery):
+                subquery = Select(remove_parentheses(column.sql()), catalog=self.catalog, search_path=self.search_path)
 
                 # Add the first column of the subquery's output
                 if subquery.output.columns:
@@ -241,17 +245,25 @@ class Select(SetOperation, TokenizedSQL):
                     result.add_column(name=subquery_col.name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
                 else:
                     result.add_column(name='', column_type='None')
-            elif isinstance(col, exp.Literal):
+            elif isinstance(column, exp.Literal):
                 # literal value in select clause
-                res_type = get_type(col, self.referenced_tables)[0]
-                result.add_column(name='?column?', column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
-            elif isinstance(col, exp.Func):
+                res_type = get_type(column, self.referenced_tables)[0]
+                
+                name = f'?column_{anonymous_counter}?'
+                anonymous_counter += 1
+                
+                result.add_column(name=name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
+            elif isinstance(column, exp.Func):
                 # anonymous function call in select clause
-                res_type = get_type(col, self.referenced_tables)[0]
-                result.add_column(name=extract_function_name(col), column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
+                res_type = get_type(column, self.referenced_tables)[0]
+                
+                name = f'?{extract_function_name(column)}_{anonymous_counter}?'
+                anonymous_counter += 1
+
+                result.add_column(name=name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
             else:
                 # mostly unrecognized expressions (e.g. functions, operations), that result in a column without a specific name
-                res_type = get_type(col, self.referenced_tables)[0]
+                res_type = get_type(column, self.referenced_tables)[0]
                 result.add_column(name='', column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
 
         return result
