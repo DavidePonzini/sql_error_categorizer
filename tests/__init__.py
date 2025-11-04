@@ -27,7 +27,7 @@ def run_test(query: str, *,
         debug=debug
     )
 
-    return detector._run()
+    return detector.run()
 
 def has_error(detected_errors: list[DetectedError], error: SqlErrors, data: tuple[Any, ...] = ()) -> bool:
     '''Check if any detected error matches the given error type and data.'''
