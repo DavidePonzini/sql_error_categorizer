@@ -7,8 +7,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'sql_error_categorizer'
-copyright = '2025, Davide Ponzini, Davide Miggiano'
-author = 'Davide Ponzini, Davide Miggiano'
+copyright = '2025, Davide Ponzini'
+author = 'Davide Ponzini'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

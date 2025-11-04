@@ -1,3 +1,5 @@
+'''Detect and categorize SQL errors in queries.'''
+
 # Hidden, internal use only
 from .detectors import BaseDetector as _BaseDetector, Detector as _Detector
 

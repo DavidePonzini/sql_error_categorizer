@@ -2,6 +2,7 @@ from enum import Enum
 
 
 class SqlErrors(Enum):
+    '''Enumeration of SQL error types with unique identifiers.'''
     SYN_1_OMITTING_CORRELATION_NAMES                                    = 1
     SYN_2_AMBIGUOUS_COLUMN                                              = 2
     SYN_3_AMBIGUOUS_FUNCTION                                            = 3

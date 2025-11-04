@@ -6,10 +6,12 @@ from copy import deepcopy
 
 # region UniqueConstraint
 class UniqueConstraintType(Enum):
+    '''Enumeration of unique constraint types.'''
     PRIMARY_KEY = 'PRIMARY KEY'
     UNIQUE = 'UNIQUE'
 
 class UniqueConstraint:
+    '''A unique constraint on a set of columns in a table.'''
     def __init__(self, columns: set[str], constraint_type: UniqueConstraintType) -> None:
         self.columns = columns
         self.constraint_type = constraint_type
@@ -19,6 +21,7 @@ class UniqueConstraint:
         return f'{indent}UniqueConstraint({self.constraint_type.value}: {self.columns})'
     
     def to_dict(self) -> dict:
+        '''Converts the UniqueConstraint to a dictionary.'''
         return {
             'columns': list(self.columns),  # JSON-friendly (list)
             'constraint_type': self.constraint_type.value,
@@ -26,6 +29,7 @@ class UniqueConstraint:
 
     @classmethod
     def from_dict(cls, data: dict) -> 'UniqueConstraint':
+        '''Creates a UniqueConstraint from a dictionary.'''
         return cls(columns=set(c.lower() for c in data['columns']),
                    constraint_type=UniqueConstraintType(data['constraint_type']))
 # endregion
@@ -33,6 +37,8 @@ class UniqueConstraint:
 # region Column
 @dataclass
 class Column:
+    '''A database table column, with type and constraints.'''
+
     name: str
     column_type: str = 'UNKNOWN'
     numeric_precision: int | None = None
@@ -45,6 +51,7 @@ class Column:
 
     @property
     def is_fk(self) -> bool:
+        '''Returns True if the column is a foreign key.'''
         return all([self.fk_schema, self.fk_table, self.fk_column])
 
     def __repr__(self, level: int = 0) -> str:
@@ -52,6 +59,7 @@ class Column:
         return f'{indent}Column(name=\'{self.name}\', type=\'{self.column_type}\', is_fk={self.is_fk}, is_nullable={self.is_nullable}, is_constant={self.is_constant})'
 
     def to_dict(self) -> dict:
+        '''Converts the Column to a dictionary.'''
         return {
             'name': self.name,
             'column_type': self.column_type,
@@ -65,6 +73,7 @@ class Column:
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Column':
+        '''Creates a Column from a dictionary.'''
         return cls(
             name=data['name'],
             column_type=data['column_type'],
@@ -81,11 +90,13 @@ class Column:
 @dataclass
 class Table:
     '''A database table, with columns and unique constraints. Supports multiple columns with the same name (e.g. from joins).'''
+
     name: str
     unique_constraints: list[UniqueConstraint] = field(default_factory=list)
     columns: list[Column] = field(default_factory=list)
 
     def add_unique_constraint(self, columns: set[str], constraint_type: UniqueConstraintType) -> None:
+        '''Adds a unique constraint to the table.'''
         self.unique_constraints.append(UniqueConstraint(columns, constraint_type))
 
     def add_column(self,
@@ -98,6 +109,7 @@ class Table:
                    fk_schema: str | None = None,
                    fk_table: str | None = None,
                    fk_column: str | None = None) -> Column:
+        '''Adds a column to the table and returns it.'''
         column = Column(name=name,
                         column_type=column_type,
                         numeric_precision=numeric_precision,
@@ -139,6 +151,7 @@ class Table:
         return f'{indent}Table(name=\'{self.name}\', columns=[{columns}], unique_constraints=[{unique_constraints_str}])'
 
     def to_dict(self) -> dict:
+        '''Converts the Table to a dictionary.'''
         return {
             'name': self.name,
             'unique_constraints': [uc.to_dict() for uc in self.unique_constraints],
@@ -147,6 +160,7 @@ class Table:
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Table':
+        '''Creates a Table from a dictionary.'''
         table = cls(name=data['name'])
         # Unique constraints first (so Column.is_pk works immediately on repr, etc.)
         for uc_data in data.get('unique_constraints', []):
@@ -163,6 +177,8 @@ class Table:
 # region Schema
 @dataclass
 class Schema:
+    '''A database schema, with tables and functions.'''
+
     name: str
     _tables: dict[str, Table] = field(default_factory=dict)
     functions: set[str] = field(default_factory=set)
@@ -198,6 +214,7 @@ class Schema:
         return f'{indent}Schema(name=\'{self.name}\', tables=[\n{tables}\n{indent}])'
 
     def to_dict(self) -> dict:
+        '''Converts the Schema to a dictionary.'''
         return {
             'name': self.name,
             'tables': {name: tbl.to_dict() for name, tbl in self._tables.items()},
@@ -205,6 +222,7 @@ class Schema:
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Schema':
+        '''Creates a Schema from a dictionary.'''
         schema = cls(name=data['name'])
         for _, tbl_data in (data.get('tables') or {}).items():
             tbl = Table.from_dict(tbl_data)
@@ -215,6 +233,8 @@ class Schema:
 # region Catalog
 @dataclass
 class Catalog:
+    '''A database catalog, with schemas, tables, and columns.'''
+
     _schemas: dict[str, Schema] = field(default_factory=dict)
 
     def __getitem__(self, schema_name: str) -> Schema:
@@ -295,6 +315,7 @@ class Catalog:
 
     
     def to_dict(self) -> dict:
+        '''Converts the Catalog to a dictionary.'''
         return {
             'version': 1,
             'schemas': {name: sch.to_dict() for name, sch in self._schemas.items()},
@@ -302,6 +323,7 @@ class Catalog:
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Catalog':
+        '''Creates a Catalog from a dictionary.'''
         cat = cls()
         for _, sch_data in (data.get('schemas') or {}).items():
             sch = Schema.from_dict(sch_data)
@@ -310,19 +332,23 @@ class Catalog:
 
     # String-based JSON (handy for DB/blob storage)
     def to_json(self, *, indent: int | None = 2) -> str:
+        '''Converts the Catalog to a JSON string.'''
         return json.dumps(self.to_dict(), indent=indent)
 
     @classmethod
     def from_json(cls, s: str) -> 'Catalog':
+        '''Creates a Catalog from a JSON string.'''
         return cls.from_dict(json.loads(s))
 
     # Convenience file helpers
     def save_json(self, path: str, *, indent: int | None = 2) -> None:
+        '''Saves the Catalog to a JSON file.'''
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(self.to_dict(), f, indent=indent)
 
     @classmethod
     def load_json(cls, path: str) -> 'Catalog':
+        '''Loads a Catalog from a JSON file.'''
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         return cls.from_dict(data)

@@ -1,13 +1,17 @@
+'''SQL error detectors.'''
+
 from .. import catalog
 from ..query import Query
-from ..sql_errors import SqlErrors
 from .base import BaseDetector, DetectedError
+
+# exported detectors
 from .syntax import SyntaxErrorDetector
 from .semantic import SemanticErrorDetector
 from .logical import LogicalErrorDetector
 from .complications import ComplicationDetector
 
 class Detector:
+    '''Manages and runs SQL error detectors on a query.'''
     def __init__(self,
                  query: str,
                  *,

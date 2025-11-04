@@ -1,3 +1,5 @@
+'''Convert SQL expressions to Z3 expressions for logical reasoning.'''
+
 from typing import Any, Callable
 from sqlglot import exp
 from z3 import (

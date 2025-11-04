@@ -1,4 +1,4 @@
-'''Builds a catalog of existing schemas/tables/columns by executing the provided SQL string in a temporary PostgreSQL database.'''
+'''Represents a catalog of database schemas, tables, and columns.'''
 
 from .catalog import Catalog, Schema, Table, Column, UniqueConstraintType
 import psycopg2

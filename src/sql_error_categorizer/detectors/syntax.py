@@ -1,18 +1,21 @@
+'''Detector for syntax errors in SQL queries.'''
+
 import difflib
 import re
 import sqlparse
 from sqlglot import exp
-from typing import Any, Callable
+from typing import Callable
 from copy import deepcopy
 
 from .base import BaseDetector, DetectedError
-from ..query import Query, Select
+from ..query import Query
 from ..sql_errors import SqlErrors
-from ..catalog import Catalog
 from .. import util
 
 
 class SyntaxErrorDetector(BaseDetector):
+    '''Detector for syntax errors in SQL queries.'''
+
     def __init__(self,
                  *,
                  query: Query,

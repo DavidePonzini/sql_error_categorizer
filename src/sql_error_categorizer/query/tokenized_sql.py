@@ -1,3 +1,5 @@
+'''Query representation as a list of tokens. Works even for invalid SQL.'''
+
 import sqlparse
 import sqlparse.tokens
 from sqlparse.tokens import Whitespace, Newline

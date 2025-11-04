@@ -1,13 +1,16 @@
+'''Base classes for SQL error detectors.'''
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from ..sql_errors import SqlErrors
 from ..query import Query
-from ..catalog import Catalog
 
 @dataclass(repr=False)
 class DetectedError:
+    '''Represents a detected SQL error with its type and associated data.'''
+
     error: SqlErrors
     data: tuple[Any, ...] = field(default_factory=tuple)
 
@@ -23,6 +26,8 @@ class DetectedError:
         return hash((self.error, self.data))
 
 class BaseDetector(ABC):
+    '''Abstract base class for SQL error detectors.'''
+
     def __init__(self, *,
                  query: Query,
                  solutions: list[Query] = [],

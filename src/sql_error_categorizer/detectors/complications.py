@@ -1,3 +1,5 @@
+'''Detector for complications in SQL queries.'''
+
 import difflib
 import re
 import sqlparse
@@ -12,6 +14,8 @@ from ..catalog import Catalog
 
 
 class ComplicationDetector(BaseDetector):
+    '''Detector for complications in SQL queries.'''
+
     def __init__(self,
                  *,
                  query: Query,

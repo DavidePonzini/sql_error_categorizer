@@ -1,3 +1,5 @@
+'''Detector for semantic errors in SQL queries.'''
+
 import difflib
 import re
 import sqlparse
@@ -14,6 +16,8 @@ from ..sql_errors import SqlErrors
 from ..catalog import Catalog
 
 class SemanticErrorDetector(BaseDetector):
+    '''Detector for semantic errors in SQL queries.'''
+    
     def __init__(self,
                  *,
                  query: Query,

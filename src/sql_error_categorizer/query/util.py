@@ -1,18 +1,23 @@
+'''Utility functions for SQL query processing.'''
+
 import sqlparse
 from sqlparse.tokens import Whitespace, Newline
 from sqlglot.optimizer.normalize import normalize
 from sqlglot import exp
 
 def strip_ws(tokens: list[sqlparse.sql.Token]) -> list[sqlparse.sql.Token]:
+    '''Remove whitespace and newline tokens from a list of tokens.'''
     return [t for t in tokens if t.ttype not in (Whitespace, Newline)]
 
 def remove_parentheses(sql: str) -> str:
+    '''Remove outer parentheses from a SQL string.'''
     sql = sql.strip()
     while sql.startswith('(') and sql.endswith(')'):
         sql = sql[1:-1].strip()
     return sql
 
 def extract_DNF(expr) -> list[exp.Expression]:
+    '''Given a boolean expression, extract its Disjunctive Normal Form (DNF)'''
     dnf_expr = normalize(expr, dnf=True)
 
     if not isinstance(dnf_expr, exp.Or):
@@ -22,6 +27,7 @@ def extract_DNF(expr) -> list[exp.Expression]:
     return list(disjuncts)
 
 def extract_function_name(func_expr: exp.Func) -> str:
+    '''Extract the function name from a function expression.'''
     if isinstance(func_expr, exp.Anonymous):
         return func_expr.name.upper()
     return func_expr.__class__.__name__.lower()

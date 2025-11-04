@@ -1,3 +1,5 @@
+'''Query representation as set operation trees.'''
+
 from .set_operation import SetOperation
 from .binary_set_operation import BinarySetOperation, Union, Intersect, Except
 from .select import Select

@@ -2,7 +2,7 @@
 This project analyses SQL statements and labels possible errors or complications.
 
 # Credits
-Special thanks to Davide Miggiano for implementing most of the categorizers.
+Special thanks to Davide Miggiano and Flavio Venturini for their valuable contributions to the development of this project.
 
 # Limitations
 - Fully identified schema names are not supported when specifying column names (e.g. `SELECT schema.table.column [...]`)

@@ -1,3 +1,5 @@
+'''Detector for logical errors in SQL queries.'''
+
 import difflib
 import re
 import sqlparse
@@ -11,6 +13,7 @@ from ..catalog import Catalog
 
 
 class LogicalErrorDetector(BaseDetector):
+    '''Detector for logical errors in SQL queries.'''
     def __init__(self,
                  *,
                  query: Query,
