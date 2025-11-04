@@ -22,11 +22,9 @@ def test_wrong_column_reference(make_query):
     sql = "SELECT unknown_col FROM store;"
     query = make_query(sql)
 
-    # USE THIS LINES BELOW AFTER CREATING THE get_type() FUNCTION FOR SELECT EXPRESSIONS
-    # typed_ast = rewrite_expression(query.main_query.ast, query.main_query.referenced_tables)
-    # messages = collect_errors(typed_ast)
-    # assert messages == [("Unknown column type", "unknown_col")]
-    assert query.main_query.output.columns[0].column_type.value.lower() == "unknown"
+    typed_ast = rewrite_expression(query.main_query.ast, query.main_query.referenced_tables)
+    messages = collect_errors(typed_ast)
+    assert messages == [("Unknown column type", "unknown_col")]
 
 # TODO: refactor above tests to comply with the new structure
 # @pytest.mark.parametrize('sql, expected_types', [
@@ -99,6 +97,21 @@ def test_logical_operator(sql, expected_types, make_query):
     ("SELECT sname FROM store WHERE sid BETWEEN 'A' AND 'Z';", ["Invalid low bound type on BETWEEN operation","Invalid high bound type on BETWEEN operation"])
 ])
 def test_logical_operator_errors(sql, expected_errors, make_query):
+    query = make_query(sql)
+    typed_ast_where = rewrite_expression(query.main_query.ast, query.main_query.referenced_tables).args.get('where').this
+    result = collect_errors(typed_ast_where)
+    found_messages = [msg for msg, _ in result]
+    assert found_messages == expected_errors
+
+
+@pytest.mark.parametrize('sql, expected_errors', [
+    ("SELECT sname FROM store WHERE sid IN ('A', 'B', 2);", ["Invalid IN list item type"]*2),
+    ("SELECT sname FROM store WHERE sid IN (1,2,3);", []),
+    ("SELECT sname FROM store WHERE sid IN (SELECT 'a');", ["The argument type of the IN subquery must match the target type"]),
+    ("SELECT sname FROM store WHERE sid IN (SELECT 1);", []),
+    ("SELECT sname FROM store WHERE sid IN (SELECT 1,2);", ["The argument type of the IN subquery must match the target type"])
+])
+def test_in_operator_errors(sql, expected_errors, make_query):
     query = make_query(sql)
     typed_ast_where = rewrite_expression(query.main_query.ast, query.main_query.referenced_tables).args.get('where').this
     result = collect_errors(typed_ast_where)

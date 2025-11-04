@@ -1,10 +1,11 @@
 from functools import singledispatch
+from dateutil.parser import parse
 
 from sqlglot import exp
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify_columns import qualify_columns
-from dateutil.parser import parse
 from sqlglot.expressions import DataType
+
 from sql_error_categorizer.catalog.catalog import Table
 from sql_error_categorizer.catalog.types import ResultType, AtomicType, TupleType
 
@@ -312,21 +313,26 @@ def _(expression: exp.Between) -> ResultType:
     return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
 
 
-# @get_type.register
-# def _(expression: exp.In, referenced_tables: list[Table]) -> Type:
-#     target_type = get_type(expression.this, referenced_tables)
+@get_type.register
+def _(expression: exp.In) -> ResultType:
+    target_type = get_type(expression.this)
 
-#     if (early_errors := check_errors([target_type])) is not None:
-#         return early_errors
+    old_messages = target_type.messages
 
-#     if expression.expressions:
-#         for item in expression.expressions:
-#             item_type = get_type(item, referenced_tables)
-#             if target_type != item_type:
-#                 return ErrorType(f"Invalid use of IN on incompatible types: {expression.sql()}")
+    # Case IN (<list>)
+    for item in expression.expressions:
+        item_type = get_type(item)
+        if target_type != item_type:
+            old_messages.append(("Invalid IN list item type", expression.sql()))
 
-#     #TODO: handle subquery case
-#     return NotImplementedType()
+    # Case IN (subquery)
+    if expression.args.get("query"):
+        subquery_type = get_type(expression.args.get("query"))
+        if target_type != subquery_type:
+            old_messages.append(("The argument type of the IN subquery must match the target type", expression.sql()))
+
+    # Always returns boolean
+    return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
 
 # AND, OR
 @get_type.register
@@ -352,6 +358,41 @@ def _(expression: exp.SubqueryPredicate) -> ResultType:
 def _(expression: exp.Exists) -> ResultType:
     old_messages = get_type(expression.this).messages
     return AtomicType(data_type=DataType.Type.BOOLEAN, nullable=False, constant=True, messages=old_messages)
+
+# endregion
+
+# region query
+
+@get_type.register
+def _(expression: exp.Select) -> ResultType:
+    types = []
+    old_messages = []
+
+    for col in expression.expressions:
+        col_type = get_type(col)
+        if col_type.messages:
+            old_messages.extend(col_type.messages)
+        types.append(col_type)
+
+    if not types:
+        old_messages.append(("Empty SELECT expression", expression.sql()))
+
+    where = expression.args.get("where")
+    if where:
+        old_messages.extend(collect_errors(where))
+
+    having = expression.args.get("having")
+    if having:
+        old_messages.extend(collect_errors(having))
+
+    if len(types) == 1:
+        return AtomicType(data_type=types[0].data_type, messages=old_messages, nullable=types[0].nullable, constant=types[0].constant)
+
+    return TupleType(types=types, messages=old_messages, nullable=any(t.nullable for t in types), constant=all(t.constant for t in types))
+
+@get_type.register
+def _(expression: exp.Subquery) -> ResultType:
+    return get_type(expression.this)
 
 # endregion
 
