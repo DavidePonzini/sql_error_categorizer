@@ -189,23 +189,6 @@ class Select(SetOperation, TokenizedSQL):
         return self._referenced_tables
     
     @property
-    def join_conditions(self) -> list[exp.Expression]:
-        '''Returns a list of join conditions in the main query.'''
-
-        result: list[exp.Expression] = []
-
-        if not self.ast:
-            return result
-
-        joins = self.ast.args.get('joins', [])
-        for join in joins:
-            on = join.args.get('on')
-            if on:
-                result.append(on)
-
-        return result
-
-    @property
     def output(self) -> Table:
         '''
         Returns a list of output column names from the main query, properly normalized.
