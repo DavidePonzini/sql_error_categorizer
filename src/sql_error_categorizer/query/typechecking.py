@@ -55,11 +55,11 @@ def _(expression: exp.Cast) -> ResultType:
         old_messages.append(("Invalid cast type", expression.sql()))
 
     # handle cast to numeric types
-    if new_type in DataType.NUMERIC_TYPES and not to_number(original_type):
+    if is_number(new_type) and not to_number(original_type):
         old_messages.append(("Invalid cast to numeric type", expression.sql()))
 
     # handle cast to date types
-    if new_type in DataType.TEMPORAL_TYPES and not to_date(original_type):
+    if is_date(new_type) and not to_date(original_type):
         old_messages.append(("Invalid cast to date type", expression.sql()))
 
     return AtomicType(data_type=new_type, nullable=original_type.nullable, constant=original_type.constant, messages=old_messages, value=original_type.value)
@@ -90,16 +90,18 @@ def _(expression: exp.Neg) -> ResultType:
 
     old_messages = inner_type.messages
 
-    if expression.type.this not in DataType.NUMERIC_TYPES:
+    if not is_number(expression.type.this):
         old_messages.append(("Invalid unary minus type", expression.sql()))
     
     return AtomicType(data_type=expression.type.this, nullable=inner_type.nullable, constant=inner_type.constant, messages=old_messages, value=inner_type.value)
 
 @get_type.register
 def _(expression: exp.Not) -> ResultType:
-    old_messages = get_type(expression.this).messages
+    inner_type = get_type(expression.this)
 
-    if expression.type.this != DataType.Type.BOOLEAN:
+    old_messages = inner_type.messages
+
+    if inner_type.data_type != DataType.Type.BOOLEAN:
         old_messages.append(("Invalid NOT operand type", expression.sql()))
 
     return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
@@ -197,6 +199,7 @@ def _(expression: exp.Concat) -> ResultType:
     constant = all(target_type.constant for target_type in args_type)
     nullable = any(target_type.nullable for target_type in args_type)
 
+    # Always returns VARCHAR
     return AtomicType(data_type=expression.type.this, nullable=nullable, constant=constant, messages=old_messages)
 
 # endregion
@@ -245,67 +248,68 @@ def _(expression: exp.Concat) -> ResultType:
 
 #     return ErrorType(f"Invalid use of comparison operator on incompatible types: {expression.sql()}")
 
-# # region logical ops
-# @get_type.register
-# def _(expression: exp.Like, referenced_tables: list[Table]) -> Type:
-#     left_type = get_type(expression.this, referenced_tables)
-#     right_type = get_type(expression.expression, referenced_tables)
+# region logical ops
+@get_type.register
+def _(expression: exp.Like) -> ResultType:
+    left_type = get_type(expression.this)
+    right_type = get_type(expression.expression)
 
-#     if (early_errors := check_errors([left_type, right_type])) is not None:
-#         return early_errors
+    old_messages = left_type.messages + right_type.messages
+    
+    if not is_string(left_type.data_type) and left_type.data_type != DataType.Type.NULL:
+        old_messages.append(("Invalid left operand type on LIKE operation", expression.sql()))
 
-#     if TupleType in (left_type, right_type):
-#         return ErrorType(f"Invalid use of LIKE on tuple expression: {expression.sql()}")
+    if not is_string(right_type.data_type) and right_type.data_type != DataType.Type.NULL:
+        old_messages.append(("Invalid right operand type on LIKE operation", expression.sql()))
 
-#     if AtomicType(EnumType.NULL) in (left_type, right_type):
-#         return AtomicType(EnumType.NULL, constant=True)
+    # Always returns boolean
+    return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
 
-#     if AtomicType(EnumType.STRING) == left_type == right_type:
-#         return AtomicType(EnumType.BOOLEAN, constant=True, nullable=False) if right_type.constant else ErrorType(f"Invalid use of LIKE on non-constant pattern: {expression.sql()}")
+@get_type.register
+def _(expression: exp.Is) -> ResultType:  
+    left_type = get_type(expression.this)
+    right_type = get_type(expression.expression)
+
+    old_messages = left_type.messages + right_type.messages
+
+    # IS right operand must be BOOLEAN or NULL constant
+    if right_type.data_type not in (DataType.Type.BOOLEAN, DataType.Type.NULL) or not right_type.constant:
+        old_messages.append(("Invalid right operand type on IS operation", expression.sql()))
+
+    # if right is BOOLEAN and left is not NULL, left must be BOOLEAN
+    if right_type.data_type == DataType.Type.BOOLEAN and left_type.data_type != DataType.Type.NULL:
+        if left_type.data_type != DataType.Type.BOOLEAN:
+            old_messages.append(("Invalid left operand type on IS operation with BOOLEAN", expression.sql()))
+    
+    # Always returns boolean
+    return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
+
+@get_type.register
+def _(expression: exp.Between) -> ResultType:
+    target_type = get_type(expression.this)
+    low_type = get_type(expression.args.get("low"))
+    high_type = get_type(expression.args.get("high"))
+
+    old_messages = target_type.messages + low_type.messages + high_type.messages
+
+    # if the target is NULL, the result will always be NULL (no matter the bounds)
+    if target_type.data_type == DataType.Type.NULL:
+        return AtomicType(data_type=expression.type, constant=True, messages=old_messages)
+
+    if low_type.data_type != target_type.data_type and low_type.data_type != DataType.Type.NULL:
+
+        # check for implicit casts
+        if (to_number(target_type) and not to_number(low_type)) or (to_date(target_type) and not to_date(low_type)):
+            old_messages.append(("Invalid low bound type on BETWEEN operation", expression.sql()))
+
+    if high_type.data_type != target_type.data_type and high_type.data_type != DataType.Type.NULL:
         
-#     return ErrorType(f"Invalid use of LIKE on non-string expressions: {expression.sql()}")
+        # check for implicit casts
+        if (to_number(target_type) and not to_number(high_type)) or (to_date(target_type) and not to_date(high_type)):
+            old_messages.append(("Invalid high bound type on BETWEEN operation", expression.sql()))
 
-# @get_type.register
-# def _(expression: exp.Is, referenced_tables: list[Table]) -> Type:  
-#     left_type = get_type(expression.this, referenced_tables)
-#     right_type = get_type(expression.expression, referenced_tables)
-
-#     if (early_errors := check_errors([left_type, right_type])) is not None:
-#         return early_errors
-    
-#     # IS NULL
-#     if right_type == AtomicType(EnumType.NULL):
-#         return AtomicType(EnumType.BOOLEAN, constant=True, nullable=False)
-
-#     # IS TRUE, IS FALSE, IS UNKNOWN
-#     if AtomicType(EnumType.BOOLEAN) == right_type == left_type:
-#         return AtomicType(EnumType.BOOLEAN, constant=True, nullable=False) if right_type.constant else ErrorType(f"Invalid use of IS operator on non-constant expression: {expression.sql()}")
-
-#     return ErrorType(f"Invalid use of IS operator: {expression.sql()}")
-
-# @get_type.register
-# def _(expression: exp.Between, referenced_tables: list[Table]) -> Type:
-#     target_type = get_type(expression.this, referenced_tables)
-#     low_type = get_type(expression.args.get("low"), referenced_tables)
-#     high_type = get_type(expression.args.get("high"), referenced_tables)
-
-#     if (early_errors := check_errors([target_type, low_type, high_type])) is not None:
-#         return early_errors
-
-#     if AtomicType(EnumType.NULL) == target_type == low_type == high_type:
-#         return AtomicType(EnumType.NULL, constant=True)
-
-#     if target_type == low_type == high_type:
-#         return AtomicType(EnumType.BOOLEAN, constant=True, nullable=False)
-    
-#     # handle implicit casts
-#     if to_number(target_type) and to_number(low_type) and to_number(high_type):
-#         return AtomicType(EnumType.BOOLEAN, constant=True, nullable=False)
-
-#     if to_date(target_type) and to_date(low_type) and to_date(high_type):
-#         return AtomicType(EnumType.BOOLEAN, constant=True, nullable=False)
-
-#     return ErrorType(f"Invalid use of BETWEEN on incompatible types: {expression.sql()}")
+    # Always returns boolean
+    return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
 
 
 # @get_type.register
@@ -335,12 +339,23 @@ def _(expression: exp.Connector) -> ResultType:
     if left_type.data_type != DataType.Type.BOOLEAN or right_type.data_type != DataType.Type.BOOLEAN:
         old_messages.append(("Invalid logical operator operand type", expression.sql()))
 
+    # Always returns boolean
+    return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
 
-    return AtomicType(data_type=expression.this.type, nullable=False, constant=True, messages=old_messages)
+# ANY, ALL
+@get_type.register
+def _(expression: exp.SubqueryPredicate) -> ResultType:
+    return get_type(expression.this)
 
-# # endregion
+# EXISTS
+@get_type.register
+def _(expression: exp.Exists) -> ResultType:
+    old_messages = get_type(expression.this).messages
+    return AtomicType(data_type=DataType.Type.BOOLEAN, nullable=False, constant=True, messages=old_messages)
 
-# # region utils
+# endregion
+
+# region utils
 
 def to_date(target: ResultType) -> bool:
     if target.data_type in DataType.TEMPORAL_TYPES:
@@ -364,6 +379,15 @@ def to_number(target: ResultType) -> bool:
             return False
     return False
 
+def is_number(target: DataType.Type):
+    return target in DataType.NUMERIC_TYPES
+
+def is_string(target: DataType.Type):
+    return target in DataType.TEXT_TYPES
+
+def is_date(target: DataType.Type):
+    return target in DataType.TEMPORAL_TYPES
+
 def create_schema(referenced_tables: list[Table]) -> dict:
     return {
         table.name.lower(): {
@@ -380,7 +404,7 @@ def rewrite_expression(expression: exp.Expression, referenced_tables: list[Table
     schema = create_schema(referenced_tables)
     return annotate_types(qualify_columns(expression, schema), schema)
 
-def collect_errors(expression: exp.Expression, referenced_tables: list[Table]) -> list[(str, str)]:
-    return get_type(rewrite_expression(expression, referenced_tables)).messages
+def collect_errors(expression: exp.Expression) -> list[(str, str)]:
+    return get_type(expression).messages
 
 # endregion
