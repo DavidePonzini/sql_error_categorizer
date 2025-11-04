@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sql_error_categorizer"
-version = "0.1.1"
+version = "0.1.2"
 authors = [
   { name="Davide Ponzini", email="davide.ponzini95@gmail.com" },
 ]
@@ -25,5 +25,5 @@ dependencies = [
 
 [project.urls]
 "Repository" = "https://github.com/DavidePonzini/sql_error_categorizer"
-"Documentation" = "https://sql_error_categorizer.readthedocs.io/en/latest/index.html"
+"Documentation" = "https://sql-error-categorizer.readthedocs.io/en/latest/index.html"
 "Bug Tracker" = "https://github.com/DavidePonzini/sql_error_categorizer/issues"
