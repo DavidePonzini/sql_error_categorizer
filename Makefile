@@ -26,11 +26,11 @@ $(VENV)_upgrade: $(VENV)
 install: uninstall build
 	$(VENV_BIN)/python -m pip install ./dist/*.whl
 
-build: venv
+build: $(VENV)
 	rm -rf dist/
 	$(VENV_BIN)/python -m build
 
-uninstall:
+uninstall: $(VENV)
 	$(VENV_BIN)/python -m pip uninstall -y $(NAME)
 
 documentation:
