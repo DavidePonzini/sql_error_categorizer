@@ -99,7 +99,7 @@ class Select(SetOperation, TokenizedSQL):
                     result.append(table)
                 else:
                     # Table does not exist, add as empty table
-                    result.append(Table(name=table_name_out))
+                    result.append(Table(name=table_name_out, real_name=table_name_in))
         
         from_expr = self.ast.args.get('from')
         
@@ -198,7 +198,10 @@ class Select(SetOperation, TokenizedSQL):
 
         result = super().output
 
-        typed_ast = rewrite_expression(self.ast, self.referenced_tables)
+        if not self.ast:
+            return result
+
+        typed_ast = rewrite_expression(self.ast, self.catalog, search_path=self.search_path)
 
         columns = typed_ast.expressions if typed_ast else []
         for col in columns:

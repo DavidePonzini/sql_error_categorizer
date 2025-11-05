@@ -3,10 +3,10 @@ from dateutil.parser import parse
 
 from sqlglot import exp
 from sqlglot.optimizer.annotate_types import annotate_types
-from sqlglot.optimizer.qualify_columns import qualify_columns
+from sqlglot.optimizer.qualify import qualify
 from sqlglot.expressions import DataType
 
-from sql_error_categorizer.catalog.catalog import Table
+from sql_error_categorizer.catalog.catalog import Catalog
 from sql_error_categorizer.catalog.types import ResultType, AtomicType, TupleType
 
 # region primitive types
@@ -429,21 +429,50 @@ def is_string(target: DataType.Type):
 def is_date(target: DataType.Type):
     return target in DataType.TEMPORAL_TYPES
 
-def create_schema(referenced_tables: list[Table]) -> dict:
-    return {
-        table.name.lower(): {
-            col.name.lower(): col.column_type
-            for col in table.columns
-        }
-        for table in referenced_tables
+def create_schema(catalog: Catalog) -> dict:
+    '''
+    Creates a schema dictionary from the catalog for sqlglot's qualify function.
+    
+    The schema dictionary has the following structure:
+    {
+        'schema_name': {
+            'table_name': {
+                'column_name': DataType.Type,
+                ...
+            },
+            ...
+        },
+        ...
     }
+    '''
 
-def rewrite_expression(expression: exp.Expression, referenced_tables: list[Table]) -> exp.Expression:
+    result = {}
+
+    for schema_name in catalog.schema_names:
+        schema = catalog[schema_name]
+
+        result_tables = {}
+
+        for table_name in schema.table_names:
+            table = schema[table_name]
+            result_columns = {}
+            
+            for column in table.columns:
+                result_columns[column.name] = column.column_type
+
+            result_tables[table_name] = result_columns
+
+        result[schema_name] = result_tables
+
+    return result
+
+
+def rewrite_expression(expression: exp.Expression, catalog: Catalog, search_path: str = 'public') -> exp.Expression:
     '''
     Rewrites the expression by annotating types to its nodes based on the referenced tables.
     '''
-    schema = create_schema(referenced_tables)
-    return annotate_types(qualify_columns(expression, schema), schema)
+    schema = create_schema(catalog)
+    return annotate_types(qualify(expression, schema=schema, db=search_path), schema)
 
 def collect_errors(expression: exp.Expression) -> list[(str, str)]:
     return get_type(expression).messages

@@ -23,7 +23,7 @@ class SetOperation(ABC):
     @abstractmethod
     def output(self) -> Table:
         '''Returns the output table schema of the set operation.'''
-        return Table('')
+        return Table('', '')
     
     def __repr__(self, pre: str = '') -> str:
         return f'{pre}{self.__class__.__name__}'

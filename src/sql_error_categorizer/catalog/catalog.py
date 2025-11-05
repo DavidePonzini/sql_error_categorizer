@@ -82,9 +82,18 @@ class Column:
 @dataclass
 class Table:
     '''A database table, with columns and unique constraints. Supports multiple columns with the same name (e.g. from joins).'''
+
     name: str
+    '''The name used in queries.'''
+
+    real_name: str
+    '''The actual name in the database (may differ due to aliases).'''
+
     unique_constraints: list[UniqueConstraint] = field(default_factory=list)
+    '''List of unique constraints on the table.'''
+
     columns: list[Column] = field(default_factory=list)
+    '''List of columns in the table.'''
 
     def add_unique_constraint(self, columns: set[str], constraint_type: UniqueConstraintType) -> None:
         self.unique_constraints.append(UniqueConstraint(columns, constraint_type))
@@ -123,8 +132,8 @@ class Table:
         
         if len(self.columns) > 0:
             columns = '\n' + columns + '\n' + indent
-        
-        return f'{indent}Table(name=\'{self.name}\', columns=[{columns}], unique_constraints=[{unique_constraints_str}])'
+
+        return f'{indent}Table(name=\'{self.name}\', real_name=\'{self.real_name}\', columns=[{columns}], unique_constraints=[{unique_constraints_str}])'
 
     def to_dict(self) -> dict:
         return {
@@ -135,7 +144,7 @@ class Table:
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Table':
-        table = cls(name=data['name'])
+        table = cls(name=data['name'], real_name=data['name'])
         # Unique constraints first (so Column.is_pk works immediately on repr, etc.)
         for uc_data in data.get('unique_constraints', []):
             uc = UniqueConstraint.from_dict(uc_data)
@@ -158,7 +167,7 @@ class Schema:
     def __getitem__(self, table_name: str) -> Table:
         '''Gets a table from the schema, creating it if it does not exist.'''
         if table_name not in self._tables:
-            self._tables[table_name] = Table(table_name)
+            self._tables[table_name] = Table(name=table_name, real_name=table_name)
         return self._tables[table_name]
 
     def __setitem__(self, table_name: str, table: Table) -> None:
