@@ -2,11 +2,12 @@ from sql_error_categorizer.query.util import remove_parentheses
 from .set_operation import SetOperation
 from ..tokenized_sql import TokenizedSQL
 from .. import extractors
-from ...catalog import Catalog, Table, UniqueConstraintType
+from ...catalog import Catalog, Table, UniqueConstraintType, Column
 from ...catalog.catalog import UniqueConstraint
 from ...util import *
 from ..util import extract_function_name
 from sql_error_categorizer.query.typechecking import get_type, to_res_type
+from copy import deepcopy
 
 from copy import deepcopy
 
@@ -210,38 +211,65 @@ class Select(SetOperation, TokenizedSQL):
         
         anonymous_counter = 1
 
+        from dav_tools import messages
+
         for column in self.ast.expressions:
             if isinstance(column, exp.Star):
+                messages.debug('exp.Star')
                 # Expand star to all columns from all referenced tables
-                for table in self.referenced_tables:
+                for idx, table in enumerate(self.referenced_tables):
                     for column in table.columns:
-                        result.add_column(name=column.name, column_type=to_res_type(column.column_type).value, is_nullable=column.is_nullable, is_constant=column.is_constant)
+                        result.add_column(name=column.name, table_idx=idx, column_type=to_res_type(column.column_type).value, is_nullable=column.is_nullable, is_constant=column.is_constant)
             elif isinstance(column, exp.Alias):
+                messages.debug('exp.Alias')
                 alias = column.args['alias']
                 quoted = alias.quoted
                 col_name = alias.this
 
                 res_type = get_type(column.this, self.referenced_tables)[0]
-                result.add_column(name=col_name if quoted else col_name.lower(), column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
+                result.add_column(name=col_name if quoted else col_name.lower(), table_idx=-9999, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
 
             elif isinstance(column, exp.Column):
-
-                # Handle table.* case
                 if isinstance(column.this, exp.Star):
+                    # Handle table.* case
+                    messages.debug('exp.Column with Star')
                     table_name = normalize_ast_column_table(column)
-                    table = next((t for t in self.referenced_tables if t.name == table_name), None)
-                    if table:
+
+                    table_idx, table = next(((idx, t) for idx, t in enumerate(self.referenced_tables) if t.name == table_name), (None, None))
+                    if table is not None and table_idx is not None:
                         for column in table.columns:
                             res_type = get_type(column, self.referenced_tables)[0]
-                            result.add_column(name=column.name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
+                            result.add_column(name=column.name, table_idx=table_idx, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
                 else:
+                    messages.debug('exp.Column')
                     col_name = column.alias_or_name
                     name = col_name if column.this.quoted else col_name.lower()
+                    table_name = normalize_ast_column_table(column)
+
+                    table_idx = None
+
+                    if table_name is not None:
+                        for idx, table in enumerate(self.referenced_tables):
+                            if table.name == table_name:
+                                table_idx = idx
+                                break
+                    else:
+                        for idx, table in enumerate(self.referenced_tables):
+                            for col in table.columns:
+                                if col.name == name:
+                                    table_idx = idx
+                                    break
+                            if table_idx is not None:
+                                break
+
+                    if table_idx is None:
+                        table_idx = -1  # unknown table
 
                     res_type = get_type(column, self.referenced_tables)[0]
-                    result.add_column(name=name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
+                    result.add_column(name=name, table_idx=table_idx, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
 
             elif isinstance(column, exp.Subquery):
+                messages.debug('exp.Subquery')
                 subquery = Select(remove_parentheses(column.sql()), catalog=self.catalog, search_path=self.search_path)
 
                 # Add the first column of the subquery's output
@@ -252,6 +280,7 @@ class Select(SetOperation, TokenizedSQL):
                 else:
                     result.add_column(name='', column_type='None')
             elif isinstance(column, exp.Literal):
+                messages.debug('exp.Literal')
                 # literal value in select clause
                 res_type = get_type(column, self.referenced_tables)[0]
                 
@@ -260,6 +289,7 @@ class Select(SetOperation, TokenizedSQL):
                 
                 result.add_column(name=name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
             elif isinstance(column, exp.Func):
+                messages.debug('exp.Func')
                 # anonymous function call in select clause
                 res_type = get_type(column, self.referenced_tables)[0]
                 
@@ -268,35 +298,58 @@ class Select(SetOperation, TokenizedSQL):
 
                 result.add_column(name=name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
             else:
+                messages.debug('other expression')
                 # mostly unrecognized expressions (e.g. functions, operations), that result in a column without a specific name
                 res_type = get_type(column, self.referenced_tables)[0]
+
                 result.add_column(name='', column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
 
         # Unique constraints
-
         tables = self.referenced_tables
 
         if len(tables) == 0:
             return result
 
-        constraints = tables[0].unique_constraints
-        for constraint in constraints:
-            constraint.columns = { f'{tables[0].name}.{col}' for col in constraint.columns }
+        all_constraints = deepcopy(tables[0].unique_constraints)
+        for constraint in all_constraints:
+            constraint.columns = { f'0.{col}' for col in constraint.columns }
 
-        for table in tables[1:]:
+        for table_idx, table in enumerate(tables[1:]):
             resulting_constraints = []
 
-            for constraint in constraints:
+            for constraint in all_constraints:
                 for other_constraint in table.unique_constraints:
-                    columns = { f'{table.name}.{col}' for col in other_constraint.columns }
+                    columns = { f'{table_idx + 1}.{col}' for col in other_constraint.columns }
 
                     resulting_constraints.append(UniqueConstraint(constraint.columns.union(columns), UniqueConstraintType.UNIQUE))
 
-            constraints = resulting_constraints
+            all_constraints = resulting_constraints
 
-        for constraint in constraints:
-            result.unique_constraints = constraints
+        # only keep constraints for which all columns are in the output
+        messages.debug('columns', result.columns)
 
+        for constraint in all_constraints:
+            is_valid = True
+            for col in constraint.columns:
+                table_idx, col_name = col.split('.', 1)
+                table_idx = int(table_idx)
+
+                column_found = False
+                for out_col in result.columns:
+                    if out_col.table_idx is None:
+                        continue
+                    if out_col.table_idx == table_idx and out_col.name == col_name:
+                        column_found = True
+                        break
+                if not column_found:
+                    messages.debug(f'Column {col_name} from table index {table_idx} not found in output')
+                    is_valid = False
+                    break
+            if is_valid:
+                messages.info(f'VALID: {constraint}')
+                result.unique_constraints.append(constraint)
+            else:
+                messages.warning(f'INVALID: {constraint}')
         return result
 
     @property

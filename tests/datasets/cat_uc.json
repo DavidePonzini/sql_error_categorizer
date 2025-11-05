@@ -1,0 +1,256 @@
+{
+  "version": 1,
+  "schemas": {
+    "public": {
+      "name": "public",
+      "tables": {
+        "teachers": {
+          "name": "teachers",
+          "unique_constraints": [
+            {
+              "columns": [
+                "name"
+              ],
+              "constraint_type": "UNIQUE"
+            },
+            {
+              "columns": [
+                "teacher_id"
+              ],
+              "constraint_type": "PRIMARY KEY"
+            }
+          ],
+          "columns": [
+            {
+              "name": "teacher_id",
+              "column_type": "integer",
+              "numeric_precision": 32,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "name",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            }
+          ]
+        },
+        "classes": {
+          "name": "classes",
+          "unique_constraints": [
+            {
+              "columns": [
+                "class_id"
+              ],
+              "constraint_type": "PRIMARY KEY"
+            }
+          ],
+          "columns": [
+            {
+              "name": "class_id",
+              "column_type": "integer",
+              "numeric_precision": 32,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "title",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "teacher_id",
+              "column_type": "integer",
+              "numeric_precision": 32,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": "public",
+              "fk_table": "teachers",
+              "fk_column": "teacher_id"
+            }
+          ]
+        },
+        "students": {
+          "name": "students",
+          "unique_constraints": [
+            {
+              "columns": [
+                "email"
+              ],
+              "constraint_type": "UNIQUE"
+            },
+            {
+              "columns": [
+                "student_id"
+              ],
+              "constraint_type": "PRIMARY KEY"
+            }
+          ],
+          "columns": [
+            {
+              "name": "student_id",
+              "column_type": "integer",
+              "numeric_precision": 32,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "name",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "email",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": true,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            }
+          ]
+        },
+        "enrollments": {
+          "name": "enrollments",
+          "unique_constraints": [
+            {
+              "columns": [
+                "class_id",
+                "student_id"
+              ],
+              "constraint_type": "PRIMARY KEY"
+            }
+          ],
+          "columns": [
+            {
+              "name": "student_id",
+              "column_type": "integer",
+              "numeric_precision": 32,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": "public",
+              "fk_table": "students",
+              "fk_column": "student_id"
+            },
+            {
+              "name": "class_id",
+              "column_type": "integer",
+              "numeric_precision": 32,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": "public",
+              "fk_table": "classes",
+              "fk_column": "class_id"
+            },
+            {
+              "name": "enrolled_on",
+              "column_type": "date",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": true,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            }
+          ]
+        },
+        "grades": {
+          "name": "grades",
+          "unique_constraints": [
+            {
+              "columns": [
+                "class_id",
+                "student_id"
+              ],
+              "constraint_type": "PRIMARY KEY"
+            },
+            {
+              "columns": [
+                "class_id",
+                "grade"
+              ],
+              "constraint_type": "UNIQUE"
+            }
+          ],
+          "columns": [
+            {
+              "name": "student_id",
+              "column_type": "integer",
+              "numeric_precision": 32,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": "public",
+              "fk_table": "enrollments",
+              "fk_column": "class_id"
+            },
+            {
+              "name": "student_id",
+              "column_type": "integer",
+              "numeric_precision": 32,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": "public",
+              "fk_table": "enrollments",
+              "fk_column": "student_id"
+            },
+            {
+              "name": "class_id",
+              "column_type": "integer",
+              "numeric_precision": 32,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": "public",
+              "fk_table": "enrollments",
+              "fk_column": "class_id"
+            },
+            {
+              "name": "class_id",
+              "column_type": "integer",
+              "numeric_precision": 32,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": "public",
+              "fk_table": "enrollments",
+              "fk_column": "student_id"
+            },
+            {
+              "name": "grade",
+              "column_type": "character",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": true,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            }
+          ]
+        }
+      }
+    }
+  }
+}

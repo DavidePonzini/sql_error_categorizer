@@ -40,6 +40,7 @@ class Column:
     '''A database table column, with type and constraints.'''
 
     name: str
+    table_idx: int | None = None  # for tracking tables in referenced_tables
     column_type: str = 'UNKNOWN'
     numeric_precision: int | None = None
     numeric_scale: int | None = None
@@ -56,7 +57,9 @@ class Column:
 
     def __repr__(self, level: int = 0) -> str:
         indent = '  ' * level
-        return f'{indent}Column(name=\'{self.name}\', type=\'{self.column_type}\', is_fk={self.is_fk}, is_nullable={self.is_nullable}, is_constant={self.is_constant})'
+
+        idx_str = f'table_idx={self.table_idx}, ' if self.table_idx is not None else ''
+        return f'{indent}Column(name=\'{self.name}\',\t{idx_str} type=\'{self.column_type}\', is_fk={self.is_fk}, is_nullable={self.is_nullable}, is_constant={self.is_constant})'
 
     def to_dict(self) -> dict:
         '''Converts the Column to a dictionary.'''
@@ -102,6 +105,7 @@ class Table:
     def add_column(self,
                    name: str,
                    column_type: str,
+                   table_idx: int | None = None,
                    numeric_precision: int | None = None,
                    numeric_scale: int | None = None,
                    is_nullable: bool = True,
@@ -112,6 +116,7 @@ class Table:
         '''Adds a column to the table and returns it.'''
         column = Column(name=name,
                         column_type=column_type,
+                        table_idx=table_idx,
                         numeric_precision=numeric_precision,
                         numeric_scale=numeric_scale,
                         is_nullable=is_nullable,
