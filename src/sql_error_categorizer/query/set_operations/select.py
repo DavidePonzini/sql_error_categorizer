@@ -310,39 +310,43 @@ class Select(SetOperation, TokenizedSQL):
         if len(tables) == 0:
             return result
 
-        all_constraints = deepcopy(tables[0].unique_constraints)
-        for constraint in all_constraints:
-            constraint.columns = { f'0.{col}' for col in constraint.columns }
+        all_constraints = [deepcopy(table.unique_constraints) for table in tables]
+        
+        for constraints in all_constraints:
+            messages.debug('table constraints', constraints)
 
-        for table_idx, table in enumerate(tables[1:]):
-            resulting_constraints = []
+        final_constraints = all_constraints[0]
+        for constraint in final_constraints:
+            for col in constraint.columns:
+                col.table_idx = 0
 
-            for constraint in all_constraints:
-                for other_constraint in table.unique_constraints:
-                    columns = { f'{table_idx + 1}.{col}' for col in other_constraint.columns }
+        for table_idx, constraints in enumerate(all_constraints[1:]):
+            constraint_merge_result = []
 
-                    resulting_constraints.append(UniqueConstraint(constraint.columns.union(columns), UniqueConstraintType.UNIQUE))
+            for constraint in final_constraints:
+                for other_constraint in constraints:
+                    for col in other_constraint.columns:
+                        col.table_idx = table_idx + 1
 
-            all_constraints = resulting_constraints
+                    constraint_merge_result.append(UniqueConstraint(constraint.columns.union(other_constraint.columns), UniqueConstraintType.UNIQUE))
+
+            final_constraints = constraint_merge_result
 
         # only keep constraints for which all columns are in the output
         messages.debug('columns', result.columns)
 
-        for constraint in all_constraints:
+        for constraint in final_constraints:
             is_valid = True
             for col in constraint.columns:
-                table_idx, col_name = col.split('.', 1)
-                table_idx = int(table_idx)
-
                 column_found = False
                 for out_col in result.columns:
                     if out_col.table_idx is None:
                         continue
-                    if out_col.table_idx == table_idx and out_col.name == col_name:
+                    if out_col.table_idx == col.table_idx and out_col.name == col.name:
                         column_found = True
                         break
                 if not column_found:
-                    messages.debug(f'Column {col_name} from table index {table_idx} not found in output')
+                    messages.debug(f'Column {col.name} from table index {col.table_idx} not found in output')
                     is_valid = False
                     break
             if is_valid:

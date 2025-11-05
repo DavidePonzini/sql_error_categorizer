@@ -10,9 +10,23 @@ class UniqueConstraintType(Enum):
     PRIMARY_KEY = 'PRIMARY KEY'
     UNIQUE = 'UNIQUE'
 
+@dataclass
+class UniqueConstraintColumn:
+    '''Represents a column that is part of a unique constraint.'''
+    name: str
+    table_idx: int | None = None  # for tracking tables in referenced_tables
+
+    def __hash__(self) -> int:
+        return hash((self.name, self.table_idx))
+
+    def __repr__(self) -> str:
+        if self.table_idx is not None:
+            return f'{self.table_idx}.{self.name}'
+        return self.name
+
 class UniqueConstraint:
     '''A unique constraint on a set of columns in a table.'''
-    def __init__(self, columns: set[str], constraint_type: UniqueConstraintType) -> None:
+    def __init__(self, columns: set[UniqueConstraintColumn], constraint_type: UniqueConstraintType) -> None:
         self.columns = columns
         self.constraint_type = constraint_type
 
@@ -30,6 +44,8 @@ class UniqueConstraint:
     @classmethod
     def from_dict(cls, data: dict) -> 'UniqueConstraint':
         '''Creates a UniqueConstraint from a dictionary.'''
+        return cls(columns={UniqueConstraintColumn(col_name) for col_name in data['columns']},
+                   constraint_type=UniqueConstraintType(data['constraint_type']))
         return cls(columns=set(c.lower() for c in data['columns']),
                    constraint_type=UniqueConstraintType(data['constraint_type']))
 # endregion
@@ -100,7 +116,7 @@ class Table:
 
     def add_unique_constraint(self, columns: set[str], constraint_type: UniqueConstraintType) -> None:
         '''Adds a unique constraint to the table.'''
-        self.unique_constraints.append(UniqueConstraint(columns, constraint_type))
+        self.unique_constraints.append(UniqueConstraint({UniqueConstraintColumn(name=col) for col in columns}, constraint_type))
 
     def add_column(self,
                    name: str,
