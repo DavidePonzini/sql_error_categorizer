@@ -1,5 +1,15 @@
 from sql_error_categorizer.detectors import Detector
-from sql_error_categorizer import load_catalog, SyntaxErrorDetector, SemanticErrorDetector, LogicalErrorDetector, ComplicationDetector
+from sql_error_categorizer import load_catalog, build_catalog, SyntaxErrorDetector, SemanticErrorDetector, LogicalErrorDetector, ComplicationDetector
+
+def make_catalog(src_file: str, dest_file: str) -> None:
+    '''Utility function to build a catalog from a source file'''
+
+    with open(src_file) as f:
+        content = f.read()
+
+    cat = build_catalog(content, hostname='localhost', port=5432, user='postgres', password='password')
+
+    cat.save_json(dest_file)
 
 def t(query_file: str = 'q_q.sql',
       solution_file: str = 'q_s.sql',

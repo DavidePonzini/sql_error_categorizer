@@ -2,7 +2,8 @@ from sql_error_categorizer.query.util import remove_parentheses
 from .set_operation import SetOperation
 from ..tokenized_sql import TokenizedSQL
 from .. import extractors
-from ...catalog import Catalog, Table
+from ...catalog import Catalog, Table, UniqueConstraintType
+from ...catalog.catalog import UniqueConstraint
 from ...util import *
 from ..util import extract_function_name
 from sql_error_categorizer.query.typechecking import get_type, to_res_type
@@ -270,6 +271,31 @@ class Select(SetOperation, TokenizedSQL):
                 # mostly unrecognized expressions (e.g. functions, operations), that result in a column without a specific name
                 res_type = get_type(column, self.referenced_tables)[0]
                 result.add_column(name='', column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
+
+        # Unique constraints
+
+        tables = self.referenced_tables
+
+        if len(tables) == 0:
+            return result
+
+        constraints = tables[0].unique_constraints
+        for constraint in constraints:
+            constraint.columns = { f'{tables[0].name}.{col}' for col in constraint.columns }
+
+        for table in tables[1:]:
+            resulting_constraints = []
+
+            for constraint in constraints:
+                for other_constraint in table.unique_constraints:
+                    columns = { f'{table.name}.{col}' for col in other_constraint.columns }
+
+                    resulting_constraints.append(UniqueConstraint(constraint.columns.union(columns), UniqueConstraintType.UNIQUE))
+
+            constraints = resulting_constraints
+
+        for constraint in constraints:
+            result.unique_constraints = constraints
 
         return result
 
