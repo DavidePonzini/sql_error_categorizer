@@ -940,7 +940,7 @@ class SyntaxErrorDetector(BaseDetector):
         '''
         results: list[DetectedError] = []
 
-        clause_keywords = {'SELECT', 'FROM', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT', 'JOIN', 'ON'}
+        clause_keywords = {'SELECT', 'FROM', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT', 'OFFSET'}
         
         for select in self.query.selects:
             stripped = select.strip_subqueries()

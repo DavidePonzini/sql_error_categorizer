@@ -59,3 +59,13 @@ def test_multiple_duplicates_with_subquery():
     assert has_error(detected_errors, SqlErrors.SYN_24_DUPLICATE_CLAUSE, ('WHERE', 2))
     assert has_error(detected_errors, SqlErrors.SYN_24_DUPLICATE_CLAUSE, ('GROUP BY', 2))
     assert has_error(detected_errors, SqlErrors.SYN_24_DUPLICATE_CLAUSE, ('GROUP BY', 3))
+
+def test_multiple_join_on():
+    query = 'SELECT col1 FROM table1 JOIN table2 ON table1.id = table2.id JOIN table3 ON table2.id = table3.id'
+
+    detected_errors = run_test(
+        query=query,
+        detectors=[SyntaxErrorDetector]
+    )
+
+    assert count_errors(detected_errors, SqlErrors.SYN_24_DUPLICATE_CLAUSE) == 0
