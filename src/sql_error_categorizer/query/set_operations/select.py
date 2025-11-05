@@ -151,7 +151,12 @@ class Select(SetOperation, TokenizedSQL):
     # region Properties
     @property
     def subqueries(self) -> list[tuple['Select', str]]:
-        '''Returns a list of subqueries as TokenizedSQL objects.'''
+        '''
+            Returns a list of subqueries as TokenizedSQL objects.
+        
+            Returns:
+                list[tuple[Select, str]]: A list of tuples containing subquery Select objects and their associated clause.
+        '''
         if self._subqueries is None:
             self._subqueries = []
             # try to find subqueries via sqlglot AST, since it's more reliable

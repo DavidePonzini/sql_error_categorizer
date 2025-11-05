@@ -243,7 +243,26 @@ class ComplicationDetector(BaseDetector):
     
     # TODO: implement
     def com_100_order_by_in_subquery(self) -> list[DetectedError]:
-        return []
+        '''
+        Flags when a subquery contains an ORDER BY clause.
+        Subqueries both ORDER BY and LIMIT are considered valid.
+        '''
+
+        results: list[DetectedError] = []
+
+        # nested subqueries are checked multiple times, so track which have been checked
+        checked_subqueries: set[str] = set()
+
+        for select in self.query.selects:
+            for subquery, clause in select.subqueries:
+                if subquery.sql in checked_subqueries:
+                    continue
+
+                checked_subqueries.add(subquery.sql)
+                if subquery.order_by and not subquery.limit:
+                    results.append(DetectedError(SqlErrors.COM_100_ORDER_BY_IN_SUBQUERY, (subquery.sql,)))
+
+        return results
     
     # TODO: implement
     def com_101_inefficient_having(self) -> list[DetectedError]:
