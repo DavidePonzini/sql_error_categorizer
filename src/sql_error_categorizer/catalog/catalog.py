@@ -313,6 +313,20 @@ class Catalog:
     def from_json(cls, s: str) -> 'Catalog':
         return cls.from_dict(json.loads(s))
 
+    def to_sqlglot_catalog(self) -> dict[str, dict[str, dict[str, DataType.Type]]]:
+        '''Converts to a sqlglot-compatible catalog format.'''
+
+        result: dict[str, dict[str, dict[str, DataType.Type]]] = {}
+
+        for sch_name, sch in self._schemas.items():
+            result[sch_name] = {}
+            for tbl_name, tbl in sch._tables.items():
+                result[sch_name][tbl_name] = {}
+                for col in tbl.columns:
+                    result[sch_name][tbl_name][col.name] = col.column_type
+
+        return result
+
     # Convenience file helpers
     def save_json(self, path: str, *, indent: int | None = 2) -> None:
         with open(path, 'w', encoding='utf-8') as f:
