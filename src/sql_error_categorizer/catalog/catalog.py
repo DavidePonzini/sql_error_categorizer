@@ -313,7 +313,7 @@ class Catalog:
     def from_json(cls, s: str) -> 'Catalog':
         return cls.from_dict(json.loads(s))
 
-    def to_sqlglot_catalog(self) -> dict[str, dict[str, dict[str, DataType.Type]]]:
+    def to_sqlglot_schema(self) -> dict[str, dict[str, dict[str, DataType.Type]]]:
         '''Converts to a sqlglot-compatible catalog format.'''
 
         result: dict[str, dict[str, dict[str, DataType.Type]]] = {}

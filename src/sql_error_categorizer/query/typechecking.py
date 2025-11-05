@@ -434,7 +434,7 @@ def rewrite_expression(expression: exp.Expression, catalog: Catalog, search_path
     Rewrites the expression by annotating types to its nodes based on the referenced tables.
     '''
 
-    schema = catalog.to_sqlglot_catalog()
+    schema = catalog.to_sqlglot_schema()
 
     return annotate_types(qualify(expression, schema=schema, db=search_path), schema)
 
