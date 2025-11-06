@@ -50,8 +50,10 @@ class Select(SetOperation, TokenizedSQL):
 
         try:
             self.ast = sqlglot.parse_one(self.sql)
+            self.typed_ast = rewrite_expression(self.ast, self.catalog, search_path=self.search_path)
         except sqlglot.errors.ParseError:
-            self.ast = None  # Empty expression on parse error        
+            self.ast = None  # Empty expression on parse error  
+            self.typed_ast = None      
         
     # region Auxiliary
     def _get_referenced_tables(self) -> list[Table]:
@@ -200,10 +202,8 @@ class Select(SetOperation, TokenizedSQL):
 
         if not self.ast:
             return result
-
-        typed_ast = rewrite_expression(self.ast, self.catalog, search_path=self.search_path)
-
-        columns = typed_ast.expressions if typed_ast else []
+    
+        columns = self.typed_ast.expressions if self.typed_ast else []
         for col in columns:
             if isinstance(col, exp.Star):
                 # Expand star to all columns from all referenced tables
@@ -215,7 +215,7 @@ class Select(SetOperation, TokenizedSQL):
                 quoted = alias.quoted
                 col_name = alias.this
 
-                res_type = get_type(col.this)
+                res_type = get_type(col.this, self.catalog, self.search_path)
                 result.add_column(name=col_name if quoted else col_name.lower(), column_type=res_type.data_type, is_nullable=res_type.nullable)
 
             elif isinstance(col, exp.Column):
@@ -231,7 +231,7 @@ class Select(SetOperation, TokenizedSQL):
                     col_name = col.alias_or_name
                     name = col_name if col.this.quoted else col_name.lower()
 
-                    res_type = get_type(col)
+                    res_type = get_type(col, self.catalog, self.search_path)
                     result.add_column(name=name, column_type=res_type.data_type, is_nullable=res_type.nullable)
 
             elif isinstance(col, exp.Subquery):
@@ -240,14 +240,14 @@ class Select(SetOperation, TokenizedSQL):
                 # Add the first column of the subquery's output
                 if subquery.output.columns:
                     subquery_col = subquery.output.columns[0]
-                    res_type = get_type(subquery_col)
+                    res_type = get_type(subquery_col, self.catalog, self.search_path)
                     result.add_column(name=subquery_col.name, column_type=res_type.data_type, is_nullable=res_type.nullable)
                 else:
                     result.add_column(name='', column_type='None')
 
             else:
                 # mostly unrecognized expressions (e.g. functions, literals, operations), that result in a column without a specific name
-                res_type = get_type(col)
+                res_type = get_type(col, self.catalog, self.search_path)
                 result.add_column(name='', column_type=res_type.data_type, is_nullable=res_type.nullable)
 
         return result
