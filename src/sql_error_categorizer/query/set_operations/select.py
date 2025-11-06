@@ -195,165 +195,206 @@ class Select(SetOperation, TokenizedSQL):
         
         return self._referenced_tables
     
+
     @property
     def output(self) -> Table:
         '''
-        Returns a list of output column names from the main query, properly normalized.
-        
-        Returns:
-            list[str]: A list of output column names.
+        Returns a Table object representing the output of this SELECT query.
+        It includes inferred columns (name, type, nullability, constancy)
+        and merged unique constraints from referenced tables.
         '''
-
         result = super().output
-
         if not self.ast:
             return result
-        
+
         anonymous_counter = 1
 
-        from dav_tools import messages
+        # ----------------------------------------------------------------------
+        # Helper functions
+        # ----------------------------------------------------------------------
 
-        for column in self.ast.expressions:
-            if isinstance(column, exp.Star):
-                messages.debug('exp.Star')
-                # Expand star to all columns from all referenced tables
-                for idx, table in enumerate(self.referenced_tables):
-                    for column in table.columns:
-                        result.add_column(name=column.name, table_idx=idx, column_type=to_res_type(column.column_type).value, is_nullable=column.is_nullable, is_constant=column.is_constant)
-            elif isinstance(column, exp.Alias):
-                messages.debug('exp.Alias')
-                alias = column.args['alias']
-                quoted = alias.quoted
-                col_name = alias.this
+        def get_anonymous_column_name() -> str:
+            '''Generates a unique anonymous column name.'''
+            nonlocal anonymous_counter
+            name = f'?column_{anonymous_counter}?'
+            anonymous_counter += 1
+            return name
 
-                res_type = get_type(column.this, self.referenced_tables)[0]
-                result.add_column(name=col_name if quoted else col_name.lower(), table_idx=-9999, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
+        def add_star() -> None:
+            '''Expand SELECT * by adding all columns from all referenced tables.'''
+            for idx, table in enumerate(self.referenced_tables):
+                for col in table.columns:
+                    result.add_column(
+                        name=col.name,
+                        table_idx=idx,
+                        column_type=to_res_type(col.column_type).value,
+                        is_nullable=col.is_nullable,
+                        is_constant=col.is_constant
+                    )
 
-            elif isinstance(column, exp.Column):
-                if isinstance(column.this, exp.Star):
-                    # Handle table.* case
-                    messages.debug('exp.Column with Star')
-                    table_name = normalize_ast_column_table(column)
+        def add_alias(column: exp.Alias) -> None:
+            '''Add an expression with an explicit alias (e.g. SELECT expr AS alias).'''
+            alias = column.args['alias']
+            name = alias.this if alias.quoted else alias.this.lower()
+            res_type = get_type(column.this, self.referenced_tables)[0]
 
-                    table_idx, table = next(((idx, t) for idx, t in enumerate(self.referenced_tables) if t.name == table_name), (None, None))
-                    if table is not None and table_idx is not None:
-                        for column in table.columns:
-                            res_type = get_type(column, self.referenced_tables)[0]
-                            result.add_column(name=column.name, table_idx=table_idx, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
-                else:
-                    messages.debug('exp.Column')
-                    col_name = column.alias_or_name
-                    name = col_name if column.this.quoted else col_name.lower()
-                    table_name = normalize_ast_column_table(column)
+            result.add_column(
+                name=name,
+                column_type=res_type.type.value,
+                is_nullable=res_type.nullable,
+                is_constant=res_type.constant
+            )
 
-                    table_idx = None
+        def add_table_star(column: exp.Column) -> None:
+            '''Add all columns from a specific table (SELECT table.*).'''
+            table_name = normalize_ast_column_table(column)
+            table = next((t for t in self.referenced_tables if t.name == table_name), None)
+            if table:
+                for col in table.columns:
+                    res_type = get_type(col, self.referenced_tables)[0]
+                    result.add_column(
+                        name=col.name,
+                        table_idx=self.referenced_tables.index(table),
+                        column_type=res_type.type.value,
+                        is_nullable=res_type.nullable,
+                        is_constant=res_type.constant
+                    )
 
-                    if table_name is not None:
-                        for idx, table in enumerate(self.referenced_tables):
-                            if table.name == table_name:
-                                table_idx = idx
-                                break
-                    else:
-                        for idx, table in enumerate(self.referenced_tables):
-                            for col in table.columns:
-                                if col.name == name:
-                                    table_idx = idx
-                                    break
-                            if table_idx is not None:
-                                break
+        def add_column(column: exp.Column) -> None:
+            '''Add a column reference (SELECT column or table.column).'''
+            table_name = normalize_ast_column_table(column)
+            col_name = column.alias_or_name
+            name = col_name if column.this.quoted else col_name.lower()
 
-                    if table_idx is None:
-                        table_idx = -1  # unknown table
-
-                    res_type = get_type(column, self.referenced_tables)[0]
-                    result.add_column(name=name, table_idx=table_idx, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
-
-            elif isinstance(column, exp.Subquery):
-                messages.debug('exp.Subquery')
-                subquery = Select(remove_parentheses(column.sql()), catalog=self.catalog, search_path=self.search_path)
-
-                # Add the first column of the subquery's output
-                if subquery.output.columns:
-                    subquery_col = subquery.output.columns[0]
-                    res_type = get_type(subquery_col, self.referenced_tables)[0]
-                    result.add_column(name=subquery_col.name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
-                else:
-                    result.add_column(name='', column_type='None')
-            elif isinstance(column, exp.Literal):
-                messages.debug('exp.Literal')
-                # literal value in select clause
-                res_type = get_type(column, self.referenced_tables)[0]
-                
-                name = f'?column_{anonymous_counter}?'
-                anonymous_counter += 1
-                
-                result.add_column(name=name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
-            elif isinstance(column, exp.Func):
-                messages.debug('exp.Func')
-                # anonymous function call in select clause
-                res_type = get_type(column, self.referenced_tables)[0]
-                
-                name = f'?{extract_function_name(column)}_{anonymous_counter}?'
-                anonymous_counter += 1
-
-                result.add_column(name=name, column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
+            # Resolve which table this column belongs to
+            if table_name:
+                table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
             else:
-                messages.debug('other expression')
-                # mostly unrecognized expressions (e.g. functions, operations), that result in a column without a specific name
-                res_type = get_type(column, self.referenced_tables)[0]
+                table_idx = next((i for i, t in enumerate(self.referenced_tables)
+                                if any(c.name == name for c in t.columns)), None)
 
-                result.add_column(name='', column_type=res_type.type.value, is_nullable=res_type.nullable, is_constant=res_type.constant)
+            res_type = get_type(column, self.referenced_tables)[0]
+            
+            result.add_column(
+                name=name,
+                table_idx=table_idx,
+                column_type=res_type.type.value,
+                is_nullable=res_type.nullable,
+                is_constant=res_type.constant
+            )
 
-        # Unique constraints
-        tables = self.referenced_tables
+        def add_subquery(column: exp.Subquery) -> None:
+            '''Add a column derived from a subquery expression (SELECT (SELECT ...)).'''
+            subq = Select(remove_parentheses(column.sql()), catalog=self.catalog, search_path=self.search_path)
+            
+            # Add the first column of the subquery's output
+            if subq.output.columns:
+                first_col = subq.output.columns[0]
+                res_type = get_type(first_col, self.referenced_tables)[0]
+            
+                result.add_column(
+                    name=first_col.name,
+                    column_type=res_type.type.value,
+                    is_nullable=res_type.nullable,
+                    is_constant=res_type.constant
+                )
+            else:
+                result.add_column(name=get_anonymous_column_name(), column_type='None')
 
-        if len(tables) == 0:
-            return result
+        def add_literal(column: exp.Literal | exp.Expression) -> None:
+            '''Add a literal or computed expression as a pseudo-column (e.g. SELECT 1, SELECT a+b).'''
+            res_type = get_type(column, self.referenced_tables)[0]
 
-        all_constraints = [deepcopy(table.unique_constraints) for table in tables]
-        
-        for constraints in all_constraints:
-            messages.debug('table constraints', constraints)
+            result.add_column(
+                name=get_anonymous_column_name(),
+                column_type=res_type.type.value,
+                is_nullable=res_type.nullable,
+                is_constant=res_type.constant
+            )
 
-        final_constraints = all_constraints[0]
-        for constraint in final_constraints:
-            for col in constraint.columns:
-                col.table_idx = 0
+        def add_function(column: exp.Func) -> None:
+            '''Add a function output column (e.g. SELECT MAX(col)).'''
+            res_type = get_type(column, self.referenced_tables)[0]
 
-        for table_idx, constraints in enumerate(all_constraints[1:]):
-            constraint_merge_result = []
+            result.add_column(
+                name=get_anonymous_column_name(),
+                column_type=res_type.type.value,
+                is_nullable=res_type.nullable,
+                is_constant=res_type.constant
+            )
 
+        def merge_unique_constraints() -> None:
+            '''
+            Merge unique constraints from all referenced tables.
+            When multiple tables are joined, constraints are combined
+            by unioning column sets across participating tables.
+            '''
+            tables = self.referenced_tables
+            if not tables:
+                return
+
+            all_constraints = [deepcopy(t.unique_constraints) for t in tables]
+            final_constraints = all_constraints[0]
+
+            # Assign base table index
             for constraint in final_constraints:
-                for other_constraint in constraints:
-                    for col in other_constraint.columns:
-                        col.table_idx = table_idx + 1
+                for constraint_column in constraint.columns:
+                    constraint_column.table_idx = 0
 
-                    constraint_merge_result.append(UniqueConstraint(constraint.columns.union(other_constraint.columns), UniqueConstraintType.UNIQUE))
+            # Combine constraints across tables (Cartesian merge)
+            for table_idx, constraints in enumerate(all_constraints[1:], start=1):
+                merged: list[UniqueConstraint] = []
+                for c1 in final_constraints:
+                    for c2 in constraints:
+                        for constraint_column in c2.columns:
+                            constraint_column.table_idx = table_idx
+                        merged.append(
+                            UniqueConstraint(
+                                c1.columns.union(c2.columns),
+                                UniqueConstraintType.UNIQUE
+                            )
+                        )
+                final_constraints = merged
 
-            final_constraints = constraint_merge_result
+            # Keep only constraints for which all columns appear in the output
+            for unique_constraint in final_constraints:
+                valid = all(
+                    any(output_column.table_idx == constraint_column.table_idx and output_column.name == constraint_column.name
+                        for output_column in result.columns if output_column.table_idx is not None)
+                    for constraint_column in unique_constraint.columns
+                )
+                if valid:
+                    result.unique_constraints.append(unique_constraint)
 
-        # only keep constraints for which all columns are in the output
-        messages.debug('columns', result.columns)
+        # ----------------------------------------------------------------------
+        # Main column extraction loop
+        # ----------------------------------------------------------------------
 
-        for constraint in final_constraints:
-            is_valid = True
-            for col in constraint.columns:
-                column_found = False
-                for out_col in result.columns:
-                    if out_col.table_idx is None:
-                        continue
-                    if out_col.table_idx == col.table_idx and out_col.name == col.name:
-                        column_found = True
-                        break
-                if not column_found:
-                    messages.debug(f'Column {col.name} from table index {col.table_idx} not found in output')
-                    is_valid = False
-                    break
-            if is_valid:
-                messages.info(f'VALID: {constraint}')
-                result.unique_constraints.append(constraint)
+        for expr in self.ast.expressions:
+            if isinstance(expr, exp.Star):
+                add_star()
+            elif isinstance(expr, exp.Alias):
+                add_alias(expr)
+            elif isinstance(expr, exp.Column):
+                # Handle SELECT table.* separately
+                if isinstance(expr.this, exp.Star):
+                    add_table_star(expr)
+                else:
+                    add_column(expr)
+            elif isinstance(expr, exp.Subquery):
+                add_subquery(expr)
+            elif isinstance(expr, exp.Literal):
+                add_literal(expr)
+            elif isinstance(expr, exp.Func):
+                add_function(expr)
             else:
-                messages.warning(f'INVALID: {constraint}')
+                add_literal(expr)  # fallback for other expressions
+
+        # ----------------------------------------------------------------------
+        # Merge and attach unique constraints
+        # ----------------------------------------------------------------------
+        merge_unique_constraints()
+
         return result
 
     @property

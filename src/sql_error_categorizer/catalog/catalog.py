@@ -13,8 +13,12 @@ class UniqueConstraintType(Enum):
 @dataclass
 class UniqueConstraintColumn:
     '''Represents a column that is part of a unique constraint.'''
+    
     name: str
-    table_idx: int | None = None  # for tracking tables in referenced_tables
+    '''Name of the column.'''
+
+    table_idx: int | None = None
+    '''Index of the table in `referenced_tables`. If None, the column is not associated with a specific table in `referenced_tables`.'''
 
     def __hash__(self) -> int:
         return hash((self.name, self.table_idx))
@@ -56,7 +60,9 @@ class Column:
     '''A database table column, with type and constraints.'''
 
     name: str
-    table_idx: int | None = None  # for tracking tables in referenced_tables
+    table_idx: int | None = None
+    '''Index of the table in `referenced_tables`. If None, the column is not associated with a specific table in `referenced_tables`.'''
+
     column_type: str = 'UNKNOWN'
     numeric_precision: int | None = None
     numeric_scale: int | None = None
