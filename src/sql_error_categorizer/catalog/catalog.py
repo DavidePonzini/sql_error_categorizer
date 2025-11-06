@@ -50,8 +50,6 @@ class UniqueConstraint:
         '''Creates a UniqueConstraint from a dictionary.'''
         return cls(columns={UniqueConstraintColumn(col_name) for col_name in data['columns']},
                    constraint_type=UniqueConstraintType(data['constraint_type']))
-        return cls(columns=set(c.lower() for c in data['columns']),
-                   constraint_type=UniqueConstraintType(data['constraint_type']))
 # endregion
 
 # region Column
