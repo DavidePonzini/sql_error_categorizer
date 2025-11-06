@@ -194,7 +194,6 @@ class Table:
         # Columns
         for col_data in (data.get('columns') or []):
             col = Column.from_dict(col_data)
-            # Keep internal store normalized to lowercase
             table.columns.append(col)
         return table
 # endregion
