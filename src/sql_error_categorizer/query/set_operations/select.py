@@ -2,8 +2,7 @@ from ...query.util import remove_parentheses
 from .set_operation import SetOperation
 from ..tokenized_sql import TokenizedSQL
 from .. import extractors
-from ...catalog import Catalog, Table, UniqueConstraintType, UniqueConstraintColumn
-from ...catalog.catalog import UniqueConstraint
+from ...catalog import Catalog, Table, UniqueConstraintType, UniqueConstraintColumn, UniqueConstraint
 from ...util import *
 from ..util import extract_CNF
 from ..typechecking import get_type, to_res_type
