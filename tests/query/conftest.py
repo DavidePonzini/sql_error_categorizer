@@ -6,7 +6,7 @@ DATASET = 'miedema'
 
 @pytest.fixture
 def catalog():
-    return load_catalog(f'datasets/catalogs/cat_{DATASET}.json')
+    return load_catalog(f'datasets/catalogs/{DATASET}.json')
 
 @pytest.fixture
 def make_query(catalog):
