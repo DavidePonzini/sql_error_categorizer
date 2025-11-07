@@ -1,19 +1,19 @@
 from sql_error_categorizer.detectors import Detector
 from sql_error_categorizer import load_catalog, build_catalog, SyntaxErrorDetector, SemanticErrorDetector, LogicalErrorDetector, ComplicationDetector
 
-def make_catalog(src_file: str, dest_file: str) -> None:
+def make_catalog(file: str) -> None:
     '''Utility function to build a catalog from a source file'''
 
-    with open(src_file) as f:
+    with open(f'datasets/sql/{file}.sql') as f:
         content = f.read()
 
-    cat = build_catalog(content, hostname='localhost', port=5432, user='postgres', password='password')
+    cat = build_catalog(content, hostname='localhost', port=5432, user='postgres', password='password', schema=file, create_temp_schema=True)
 
-    cat.save_json(dest_file)
+    cat.save_json(f'datasets/catalogs/{file}.json')
 
 def t(query_file: str = 'q_q.sql',
       solution_file: str = 'q_s.sql',
-      catalog_file: str = 'tests/datasets/cat_miedema.json',
+      catalog_file: str = 'miedema',
       search_path: str | None = None) -> Detector:
     '''Test function, remove before production'''
 
@@ -22,7 +22,7 @@ def t(query_file: str = 'q_q.sql',
     with open(solution_file) as f:
         solution = f.read()
 
-    cat = load_catalog(catalog_file)
+    cat = load_catalog(f'datasets/catalogs/{catalog_file}.json')
 
     if search_path is None:
         search_path = cat.schema_names.pop() or 'public'
@@ -34,5 +34,3 @@ def t(query_file: str = 'q_q.sql',
     det.add_detector(ComplicationDetector)
 
     return det
-
-det = t()
