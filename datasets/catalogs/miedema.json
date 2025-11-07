@@ -4,65 +4,15 @@
     "miedema": {
       "name": "miedema",
       "tables": {
-        "store": {
-          "name": "store",
-          "unique_constraints": [
-            {
-              "columns": [
-                "sid"
-              ],
-              "constraint_type": "PRIMARY KEY"
-            }
-          ],
-          "columns": [
-            {
-              "name": "sid",
-              "column_type": "numeric",
-              "numeric_precision": 5,
-              "numeric_scale": 0,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            {
-              "name": "sname",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            {
-              "name": "street",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            },
-            {
-              "name": "city",
-              "column_type": "character varying",
-              "numeric_precision": null,
-              "numeric_scale": null,
-              "is_nullable": false,
-              "fk_schema": null,
-              "fk_table": null,
-              "fk_column": null
-            }
-          ]
-        },
         "customer": {
           "name": "customer",
           "unique_constraints": [
             {
               "columns": [
-                "cid"
+                {
+                  "name": "cid",
+                  "table_idx": null
+                }
               ],
               "constraint_type": "PRIMARY KEY"
             }
@@ -115,8 +65,14 @@
           "unique_constraints": [
             {
               "columns": [
-                "cid",
-                "pid"
+                {
+                  "name": "cid",
+                  "table_idx": null
+                },
+                {
+                  "name": "pid",
+                  "table_idx": null
+                }
               ],
               "constraint_type": "PRIMARY KEY"
             }
@@ -169,7 +125,10 @@
           "unique_constraints": [
             {
               "columns": [
-                "pid"
+                {
+                  "name": "pid",
+                  "table_idx": null
+                }
               ],
               "constraint_type": "PRIMARY KEY"
             }
@@ -212,8 +171,14 @@
           "unique_constraints": [
             {
               "columns": [
-                "pid",
-                "tid"
+                {
+                  "name": "tid",
+                  "table_idx": null
+                },
+                {
+                  "name": "pid",
+                  "table_idx": null
+                }
               ],
               "constraint_type": "PRIMARY KEY"
             }
@@ -291,14 +256,79 @@
             }
           ]
         },
+        "store": {
+          "name": "store",
+          "unique_constraints": [
+            {
+              "columns": [
+                {
+                  "name": "sid",
+                  "table_idx": null
+                }
+              ],
+              "constraint_type": "PRIMARY KEY"
+            }
+          ],
+          "columns": [
+            {
+              "name": "sid",
+              "column_type": "numeric",
+              "numeric_precision": 5,
+              "numeric_scale": 0,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "sname",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "street",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            },
+            {
+              "name": "city",
+              "column_type": "character varying",
+              "numeric_precision": null,
+              "numeric_scale": null,
+              "is_nullable": false,
+              "fk_schema": null,
+              "fk_table": null,
+              "fk_column": null
+            }
+          ]
+        },
         "inventory": {
           "name": "inventory",
           "unique_constraints": [
             {
               "columns": [
-                "sid",
-                "pid",
-                "date"
+                {
+                  "name": "sid",
+                  "table_idx": null
+                },
+                {
+                  "name": "date",
+                  "table_idx": null
+                },
+                {
+                  "name": "pid",
+                  "table_idx": null
+                }
               ],
               "constraint_type": "PRIMARY KEY"
             }
