@@ -1,22 +1,19 @@
-from sql_error_categorizer.query.util import remove_parentheses
+from ...query.util import remove_parentheses
 from .set_operation import SetOperation
 from ..tokenized_sql import TokenizedSQL
 from .. import extractors
-from ...catalog import Catalog, Table, UniqueConstraintType, Column
+from ...catalog import Catalog, Table, UniqueConstraintType, UniqueConstraintColumn
 from ...catalog.catalog import UniqueConstraint
 from ...util import *
-from ..util import extract_function_name
-from sql_error_categorizer.query.typechecking import get_type, to_res_type
-from copy import deepcopy
-
-from copy import deepcopy
-
+from ..util import extract_CNF
+from ..typechecking import get_type, to_res_type
 
 import sqlglot
 import sqlglot.errors
 from sqlglot import exp
 import re
-
+from copy import deepcopy
+import itertools
 
 class Select(SetOperation, TokenizedSQL):
     '''Represents a single SQL SELECT statement.'''
@@ -149,6 +146,42 @@ class Select(SetOperation, TokenizedSQL):
                 stripped_sql = re.sub(escaped, repl, stripped_sql, count=1)
 
         return Select(stripped_sql, catalog=self.catalog, search_path=self.search_path)
+
+    def get_join_conditions(self) -> list[exp.Expression]:
+        '''Returns a list of join conditions used in the main query.'''
+        if not self.ast:
+            return []
+
+        join_conditions = []
+        for join in self.ast.args.get('joins', []):
+            on_condition = join.args.get('on')
+            if on_condition:
+                join_conditions.append(on_condition)
+        
+        return join_conditions
+    
+    def get_join_equalities(self) -> list[tuple[exp.Column, exp.Column]]:
+        '''Returns a list of join equality conditions used in the main query.'''
+        result: list[tuple[exp.Column, exp.Column]] = []
+
+        def extract_column_equalities(expr: exp.Expression) -> list[tuple[exp.Column, exp.Column]]:
+            equalities = []
+            conjuncts = extract_CNF(expr)
+            for conj in conjuncts:
+                if isinstance(conj, exp.EQ):
+                    left = conj.args.get('this')
+                    right = conj.args.get('expression')
+                    if isinstance(left, exp.Column) and isinstance(right, exp.Column):
+                        equalities.append((left, right))
+            return equalities
+
+        for join_condition in self.get_join_conditions():
+            result.extend(extract_column_equalities(join_condition))
+
+        if self.where:
+            result.extend(extract_column_equalities(self.where))
+
+        return result
 
     # region Properties
     @property
@@ -323,48 +356,167 @@ class Select(SetOperation, TokenizedSQL):
                 is_constant=res_type.constant
             )
 
-        def merge_unique_constraints() -> None:
+        def merge_unique_constraints() -> list[UniqueConstraint]:
             '''
             Merge unique constraints from all referenced tables.
             When multiple tables are joined, constraints are combined
             by unioning column sets across participating tables.
             '''
+            result: list[UniqueConstraint] = []
+
             tables = self.referenced_tables
             if not tables:
-                return
+                return result
 
-            all_constraints = [deepcopy(t.unique_constraints) for t in tables]
-            final_constraints = all_constraints[0]
-
+            all_constraints = [t.unique_constraints for t in tables]
+            
             # Assign base table index
-            for constraint in final_constraints:
+            for constraint in all_constraints[0]:
+                c = UniqueConstraint(set(), UniqueConstraintType.UNIQUE)
+                result.append(c)
+                
                 for constraint_column in constraint.columns:
-                    constraint_column.table_idx = 0
+                    c.columns.add(UniqueConstraintColumn(constraint_column.name, table_idx=0))
+
 
             # Combine constraints across tables (Cartesian merge)
             for table_idx, constraints in enumerate(all_constraints[1:], start=1):
                 merged: list[UniqueConstraint] = []
-                for c1 in final_constraints:
-                    for c2 in constraints:
-                        for constraint_column in c2.columns:
-                            constraint_column.table_idx = table_idx
-                        merged.append(
-                            UniqueConstraint(
-                                c1.columns.union(c2.columns),
-                                UniqueConstraintType.UNIQUE
-                            )
-                        )
-                final_constraints = merged
 
-            # Keep only constraints for which all columns appear in the output
-            for unique_constraint in final_constraints:
+                for c1 in result:
+                    for c2 in constraints:
+                        c = UniqueConstraint(set(), UniqueConstraintType.UNIQUE)
+
+                        for constraint_column in c2.columns:
+                            c.columns.add(UniqueConstraintColumn(constraint_column.name, table_idx=table_idx))
+                        merged.append(UniqueConstraint(c1.columns.union(c.columns), UniqueConstraintType.UNIQUE))
+                
+                result = merged
+
+            return result
+
+        def build_equality_groups(equalities: list[tuple[UniqueConstraintColumn, UniqueConstraintColumn]]) -> list[set[UniqueConstraintColumn]]:
+            '''Given a list of equality pairs, return transitive closure groups.'''
+            parent = {}
+
+            def find(x):
+                while parent[x] != x:
+                    parent[x] = parent[parent[x]]
+                    x = parent[x]
+                return x
+
+            def union(x, y):
+                rx, ry = find(x), find(y)
+                if rx != ry:
+                    parent[ry] = rx
+
+            # Initialize all columns
+            for l, r in equalities:
+                parent.setdefault(l, l)
+                parent.setdefault(r, r)
+
+            # Union connected columns
+            for l, r in equalities:
+                union(l, r)
+
+            # Group by representative
+            groups = {}
+            for col in parent:
+                root = find(col)
+                groups.setdefault(root, set()).add(col)
+
+            return list(groups.values())
+
+        def filter_valid_constraints() -> list[UniqueConstraint]:
+            constraints: list[UniqueConstraint] = []
+
+            if self.distinct:
+                # If DISTINCT is present, the entire output is unique -> add a new constraint, don't discard existing ones
+                
+                uc_cols = { UniqueConstraintColumn(col.name, col.table_idx) for col in result.columns }
+                constraints.append(UniqueConstraint(uc_cols, UniqueConstraintType.UNIQUE))
+
+            all_constraints = merge_unique_constraints()
+            
+            if self.group_by:
+                # If GROUP BY is present, treat grouped columns as unique.
+                # Keep existing constraints that are subsets of the grouped columns.
+
+                group_by_cols: set[UniqueConstraintColumn] = set()
+                for col in self.group_by:
+                    if isinstance(col, exp.Column):
+                        table_name = normalize_ast_column_table(col)
+                        col_name = col.alias_or_name
+                        name = col_name if col.this.quoted else col_name.lower()
+
+                        # Resolve which table this column belongs to
+                        if table_name:
+                            table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
+                        else:
+                            table_idx = next((i for i, t in enumerate(self.referenced_tables)
+                                            if any(c.name == name for c in t.columns)), None)
+                        
+                        group_by_cols.add(UniqueConstraintColumn(name, table_idx))
+
+                # Add GROUP BY constraint
+                all_constraints.append(UniqueConstraint(group_by_cols, UniqueConstraintType.UNIQUE))
+
+            equalities = self.get_join_equalities()
+            if equalities:
+                def resolve(col):
+                    table_name = normalize_ast_column_table(col)
+                    col_name = col.alias_or_name
+                    name = col_name if col.this.quoted else col_name.lower()
+                    if table_name:
+                        table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
+                    else:
+                        table_idx = next((i for i, t in enumerate(self.referenced_tables)
+                                        if any(c.name == name for c in t.columns)), None)
+                    return UniqueConstraintColumn(name, table_idx)
+                
+                # Normalize all equalities as UniqueConstraintColumns
+                uc_equalities = [(resolve(left_col), resolve(right_col)) for left_col, right_col in equalities]
+
+                # Compute transitive closure (equivalence classes)
+                equality_groups = build_equality_groups(uc_equalities)
+
+                from dav_tools import messages
+                messages.debug(f'Equality groups: {equality_groups}')
+
+                # For each constraint, if it contains any member of a group, extend it with the others
+                new_constraints: list[UniqueConstraint] = []
+                for constraint in all_constraints:
+                    expanded_columns = set(constraint.columns)
+                    for group in equality_groups:
+                        if not expanded_columns.isdisjoint(group):
+                            expanded_columns |= group
+                    new_constraints.append(UniqueConstraint(expanded_columns, constraint.constraint_type))
+                all_constraints = new_constraints
+
+                # Merge overlapping sets
+                new_constraints: list[UniqueConstraint] = []
+                for equality_group in equality_groups:
+                    for col in equality_group:
+                        for constraint in all_constraints:
+                            if equality_group.isdisjoint(constraint.columns):
+                                continue
+
+                            # For each column in the equality group, create a new constraint with all equivalences replaced by that column
+                            new_constraints.append(UniqueConstraint(constraint.columns - equality_group | { col }, constraint.constraint_type))
+
+                all_constraints = new_constraints
+
+            # Keep only constraints that are valid for the output columns
+            for unique_constraint in all_constraints:
                 valid = all(
                     any(output_column.table_idx == constraint_column.table_idx and output_column.name == constraint_column.name
                         for output_column in result.columns if output_column.table_idx is not None)
                     for constraint_column in unique_constraint.columns
                 )
                 if valid:
-                    result.unique_constraints.append(unique_constraint)
+                    constraints.append(unique_constraint)
+
+            return constraints
 
         # ----------------------------------------------------------------------
         # Main column extraction loop
@@ -393,10 +545,12 @@ class Select(SetOperation, TokenizedSQL):
         # ----------------------------------------------------------------------
         # Merge and attach unique constraints
         # ----------------------------------------------------------------------
-        merge_unique_constraints()
+
+        result.unique_constraints = filter_valid_constraints()
+
 
         return result
-
+    
     @property
     def where(self) -> exp.Expression | None:
         if not self.ast:
