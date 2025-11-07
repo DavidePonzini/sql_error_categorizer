@@ -1,4 +1,4 @@
-from .constraint import UniqueConstraint, UniqueConstraintType, UniqueConstraintColumn
+from .constraint import UniqueConstraint, UniqueConstraintColumn
 from .column import Column
 
 from dataclasses import dataclass, field
@@ -11,9 +11,9 @@ class Table:
     unique_constraints: list[UniqueConstraint] = field(default_factory=list)
     columns: list[Column] = field(default_factory=list)
 
-    def add_unique_constraint(self, columns: set[str], constraint_type: UniqueConstraintType) -> None:
+    def add_unique_constraint(self, columns: set[str], is_pk: bool) -> None:
         '''Adds a unique constraint to the table.'''
-        self.unique_constraints.append(UniqueConstraint({UniqueConstraintColumn(name=col) for col in columns}, constraint_type))
+        self.unique_constraints.append(UniqueConstraint({UniqueConstraintColumn(name=col) for col in columns}, is_pk=is_pk))
 
     def add_column(self,
                    name: str,
@@ -58,7 +58,7 @@ class Table:
         indent = '  ' * level
 
         columns = '\n'.join([col.__repr__(level + 1) for col in self.columns])
-        if len(self.unique_constraints) < 2:
+        if len(repr(self.unique_constraints)) < 80:
             unique_constraints_str = ', '.join([uc.__repr__(0) for uc in self.unique_constraints])
         else:
             unique_constraints_str = '\n' + '\n'.join([uc.__repr__(level + 1) for uc in self.unique_constraints]) + '\n' + indent

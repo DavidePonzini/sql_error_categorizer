@@ -2,7 +2,7 @@ from ...query.util import remove_parentheses
 from .set_operation import SetOperation
 from ..tokenized_sql import TokenizedSQL
 from .. import extractors
-from ...catalog import Catalog, Table, UniqueConstraintType, UniqueConstraintColumn, UniqueConstraint
+from ...catalog import Catalog, Table, UniqueConstraintColumn, UniqueConstraint
 from ...util import *
 from ..util import extract_CNF
 from ..typechecking import get_type, to_res_type
@@ -371,7 +371,7 @@ class Select(SetOperation, TokenizedSQL):
             
             # Assign base table index
             for constraint in all_constraints[0]:
-                c = UniqueConstraint(set(), UniqueConstraintType.UNIQUE)
+                c = UniqueConstraint()
                 result.append(c)
                 
                 for constraint_column in constraint.columns:
@@ -384,12 +384,12 @@ class Select(SetOperation, TokenizedSQL):
 
                 for c1 in result:
                     for c2 in constraints:
-                        c = UniqueConstraint(set(), UniqueConstraintType.UNIQUE)
+                        c = UniqueConstraint()
 
                         for constraint_column in c2.columns:
                             c.columns.add(UniqueConstraintColumn(constraint_column.name, table_idx=table_idx))
-                        merged.append(UniqueConstraint(c1.columns.union(c.columns), UniqueConstraintType.UNIQUE))
-                
+                        merged.append(UniqueConstraint(c1.columns.union(c.columns)))
+
                 result = merged
 
             return result
@@ -433,7 +433,7 @@ class Select(SetOperation, TokenizedSQL):
                 # If DISTINCT is present, the entire output is unique -> add a new constraint, don't discard existing ones
                 
                 uc_cols = { UniqueConstraintColumn(col.name, col.table_idx) for col in result.columns }
-                constraints.append(UniqueConstraint(uc_cols, UniqueConstraintType.UNIQUE))
+                constraints.append(UniqueConstraint(uc_cols))
 
             all_constraints = merge_unique_constraints()
             
@@ -458,7 +458,7 @@ class Select(SetOperation, TokenizedSQL):
                         group_by_cols.add(UniqueConstraintColumn(name, table_idx))
 
                 # Add GROUP BY constraint
-                all_constraints.append(UniqueConstraint(group_by_cols, UniqueConstraintType.UNIQUE))
+                all_constraints.append(UniqueConstraint(group_by_cols))
 
             equalities = self.get_join_equalities()
             if equalities:
@@ -479,9 +479,6 @@ class Select(SetOperation, TokenizedSQL):
                 # Compute transitive closure (equivalence classes)
                 equality_groups = build_equality_groups(uc_equalities)
 
-                from dav_tools import messages
-                messages.debug(f'Equality groups: {equality_groups}')
-
                 # For each constraint, if it contains any member of a group, extend it with the others
                 new_constraints: list[UniqueConstraint] = []
                 for constraint in all_constraints:
@@ -489,7 +486,7 @@ class Select(SetOperation, TokenizedSQL):
                     for group in equality_groups:
                         if not expanded_columns.isdisjoint(group):
                             expanded_columns |= group
-                    new_constraints.append(UniqueConstraint(expanded_columns, constraint.constraint_type))
+                    new_constraints.append(UniqueConstraint(expanded_columns))
                 all_constraints = new_constraints
 
                 # Merge overlapping sets
@@ -501,7 +498,7 @@ class Select(SetOperation, TokenizedSQL):
                                 continue
 
                             # For each column in the equality group, create a new constraint with all equivalences replaced by that column
-                            new_constraints.append(UniqueConstraint(constraint.columns - equality_group | { col }, constraint.constraint_type))
+                            new_constraints.append(UniqueConstraint(constraint.columns - equality_group | { col }))
 
                 all_constraints = new_constraints
 

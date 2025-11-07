@@ -1,10 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-
-class UniqueConstraintType(Enum):
-    '''Enumeration of unique constraint types.'''
-    PRIMARY_KEY = 'PRIMARY KEY'
-    UNIQUE = 'UNIQUE'
 
 @dataclass(frozen=True)
 class UniqueConstraintColumn:
@@ -46,18 +41,21 @@ class UniqueConstraintColumn:
 class UniqueConstraint:
     '''A unique constraint on a set of columns in a table.'''
 
-    columns: set[UniqueConstraintColumn]
-    constraint_type: UniqueConstraintType
+    columns: set[UniqueConstraintColumn] = field(default_factory=set)
+    is_pk: bool = False
+    '''Whether this unique constraint is a primary key.'''
 
     def __repr__(self, level: int = 0) -> str:
         indent = '  ' * level
-        return f'{indent}UniqueConstraint({self.constraint_type.value}: {self.columns})'
-    
+        if self.is_pk:
+            return f'{indent}PRIMARY KEY({self.columns})'
+        return f'{indent}UNIQUE({self.columns})'
+
     def to_dict(self) -> dict:
         '''Converts the UniqueConstraint to a dictionary.'''
         return {
             'columns': [col.to_dict() for col in self.columns],
-            'constraint_type': self.constraint_type.value,
+            'is_pk': self.is_pk,
         }
 
     @classmethod
@@ -65,5 +63,5 @@ class UniqueConstraint:
         '''Creates a UniqueConstraint from a dictionary.'''
         return cls(
             columns={UniqueConstraintColumn.from_dict(col) for col in data['columns']},
-            constraint_type=UniqueConstraintType(data['constraint_type'])
+            is_pk=data['is_pk']
         )

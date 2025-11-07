@@ -14,7 +14,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             }
           ],
           "columns": [
@@ -74,7 +74,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             }
           ],
           "columns": [
@@ -130,7 +130,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             }
           ],
           "columns": [
@@ -180,7 +180,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             }
           ],
           "columns": [
@@ -266,7 +266,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             }
           ],
           "columns": [
@@ -318,11 +318,11 @@
             {
               "columns": [
                 {
-                  "name": "sid",
+                  "name": "date",
                   "table_idx": null
                 },
                 {
-                  "name": "date",
+                  "name": "sid",
                   "table_idx": null
                 },
                 {
@@ -330,7 +330,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             }
           ],
           "columns": [

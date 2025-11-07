@@ -1,8 +1,8 @@
 {
   "version": 1,
   "schemas": {
-    "sql_error_categorizer_1762426392170026210": {
-      "name": "sql_error_categorizer_1762426392170026210",
+    "constraints": {
+      "name": "constraints",
       "tables": {
         "departments": {
           "name": "departments",
@@ -14,7 +14,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "UNIQUE"
+              "is_pk": false
             },
             {
               "columns": [
@@ -23,7 +23,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             }
           ],
           "columns": [
@@ -63,20 +63,20 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             },
             {
               "columns": [
                 {
-                  "name": "title",
+                  "name": "dept_id",
                   "table_idx": null
                 },
                 {
-                  "name": "dept_id",
+                  "name": "title",
                   "table_idx": null
                 }
               ],
-              "constraint_type": "UNIQUE"
+              "is_pk": false
             }
           ],
           "columns": [
@@ -96,7 +96,7 @@
               "numeric_precision": 32,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1762426392170026210",
+              "fk_schema": "constraints",
               "fk_table": "departments",
               "fk_column": "id"
             },
@@ -132,7 +132,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             }
           ],
           "columns": [
@@ -196,7 +196,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             }
           ],
           "columns": [
@@ -206,7 +206,7 @@
               "numeric_precision": 32,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1762426392170026210",
+              "fk_schema": "constraints",
               "fk_table": "students",
               "fk_column": "id"
             },
@@ -216,7 +216,7 @@
               "numeric_precision": 32,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1762426392170026210",
+              "fk_schema": "constraints",
               "fk_table": "courses",
               "fk_column": "dept_id"
             },
@@ -226,7 +226,7 @@
               "numeric_precision": 32,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1762426392170026210",
+              "fk_schema": "constraints",
               "fk_table": "courses",
               "fk_column": "id"
             },
@@ -236,7 +236,7 @@
               "numeric_precision": 32,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1762426392170026210",
+              "fk_schema": "constraints",
               "fk_table": "courses",
               "fk_column": "dept_id"
             },
@@ -246,7 +246,7 @@
               "numeric_precision": 32,
               "numeric_scale": 0,
               "is_nullable": false,
-              "fk_schema": "sql_error_categorizer_1762426392170026210",
+              "fk_schema": "constraints",
               "fk_table": "courses",
               "fk_column": "id"
             },
@@ -282,7 +282,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "UNIQUE"
+              "is_pk": false
             },
             {
               "columns": [
@@ -291,7 +291,7 @@
                   "table_idx": null
                 }
               ],
-              "constraint_type": "PRIMARY KEY"
+              "is_pk": true
             }
           ],
           "columns": [
@@ -321,7 +321,7 @@
               "numeric_precision": 32,
               "numeric_scale": 0,
               "is_nullable": true,
-              "fk_schema": "sql_error_categorizer_1762426392170026210",
+              "fk_schema": "constraints",
               "fk_table": "departments",
               "fk_column": "id"
             },
