@@ -4,7 +4,7 @@ def test_undefined_table():
     detected_errors = run_test(
         query='SELECT * FROM store;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json'
+        catalog_filename='miedema'
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT) == 1
@@ -14,7 +14,7 @@ def test_defined_table():
     detected_errors = run_test(
         query='SELECT * FROM store;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema'
     )
 

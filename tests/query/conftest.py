@@ -1,12 +1,12 @@
 import pytest
-from sql_error_categorizer.catalog import load_json
+from sql_error_categorizer import load_catalog
 from sql_error_categorizer.query import Query
 
 DATASET = 'miedema'
 
 @pytest.fixture
 def catalog():
-    return load_json(f'tests/datasets/cat_{DATASET}.json')
+    return load_catalog(f'datasets/catalogs/cat_{DATASET}.json')
 
 @pytest.fixture
 def make_query(catalog):

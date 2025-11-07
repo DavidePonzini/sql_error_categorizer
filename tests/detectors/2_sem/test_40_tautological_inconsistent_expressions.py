@@ -62,7 +62,7 @@ def test_redundant_disjunction_strings():
     result = run_test(
         query,
         detectors=[SemanticErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
         debug=True,
     )

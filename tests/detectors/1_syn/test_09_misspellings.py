@@ -4,7 +4,7 @@ def test_misspelling_schema():
     detected_errors = run_test(
         query='SELECT * FROM miedma.store;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
     )
 
@@ -15,7 +15,7 @@ def test_misspelling_table_with_schema():
     detected_errors = run_test(
         query='SELECT * FROM miedema.stor;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
     )
 
@@ -26,7 +26,7 @@ def test_misspelling_table_without_schema():
     detected_errors = run_test(
         query='SELECT * FROM stor;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
     )
 
@@ -38,7 +38,7 @@ def test_misspelling_column():
     detected_errors = run_test(
         query='SELECT sid FROM store WHERE ID = 1;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
     )
 
@@ -49,7 +49,7 @@ def test_misspelling_column_case_no_quotes():
     detected_errors = run_test(
         query='SELECT SID FROM store WHERE sID = 1;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
     )
 
@@ -59,7 +59,7 @@ def test_misspelling_column_case_with_quotes():
     detected_errors = run_test(
         query='SELECT "Sid" FROM store;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
     )
 
@@ -70,7 +70,7 @@ def test_misspelling_table_no_quotes():
     detected_errors = run_test(
         query='SELECT * FROM STORE;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
     )
 
@@ -80,7 +80,7 @@ def test_misspelling_table_with_quotes():
     detected_errors = run_test(
         query='SELECT * FROM "Store";',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
     )
 
@@ -91,7 +91,7 @@ def test_misspelling_schema_no_quotes():
     detected_errors = run_test(
         query='SELECT * FROM MIEDEMA.store;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
     )
 
@@ -101,7 +101,7 @@ def test_misspelling_schema_with_quotes():
     detected_errors = run_test(
         query='SELECT * FROM "MiedeMa".store;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         search_path='miedema',
     )
 

@@ -13,7 +13,7 @@ def test_valid_schema():
     detected_errors = run_test(
         query='SELECT * FROM miedema.store;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json'
+        catalog_filename='miedema'
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_8_INVALID_SCHEMA_NAME) == 0

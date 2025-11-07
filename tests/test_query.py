@@ -1,6 +1,6 @@
 import pytest
 from sql_error_categorizer.query import *
-from sql_error_categorizer.catalog import load_json
+from sql_error_categorizer import load_catalog
 
 # region CTEs
 def test_main_query_no_cte():
@@ -56,7 +56,7 @@ def test_distinct_false():
 
 def test_select_star():
     db = 'miedema'
-    catalog_db = load_json("tests/datasets/cat_miedema.json")
+    catalog_db = load_catalog("datasets/catalogs/miedema.json")
     table = 'store'
 
     sql = f'SELECT * FROM {table}'
@@ -67,7 +67,7 @@ def test_select_star():
 
 def test_select_multiple_stars():
     db = 'miedema'
-    catalog_db = load_json("tests/datasets/cat_miedema.json")
+    catalog_db = load_catalog("datasets/catalogs/miedema.json")
     table = 'store'
 
     sql = f'SELECT *,* FROM {table}'
@@ -78,7 +78,7 @@ def test_select_multiple_stars():
 
 def test_select_star_on_a_cte():
     db = 'miedema'
-    catalog_db = load_json("tests/datasets/cat_miedema.json")
+    catalog_db = load_catalog("datasets/catalogs/miedema.json")
     table = 'store'
     cte_name = 'cte_store'
 
@@ -90,7 +90,7 @@ def test_select_star_on_a_cte():
 
 def test_select_star_on_a_table():
     db = 'miedema'
-    catalog_db = load_json("tests/datasets/cat_miedema.json")
+    catalog_db = load_catalog("datasets/catalogs/miedema.json")
     table = 'store'
     join = 'transaction'
 
@@ -105,7 +105,7 @@ def test_select_star_on_a_table():
 @pytest.mark.skip(reason="Not implemented yet")
 def test_set_operation_order_by_limit_offset_left():
     db = 'miedema'
-    catalog_db = load_json(f"tests/datasets/cat_{db}.json")
+    catalog_db = load_catalog(f"datasets/catalogs/{db}.json")
     sql = "(SELECT sid,sname FROM store WHERE city = 'Breda' ORDER BY sname LIMIT 3 OFFSET 1) EXCEPT SELECT sid, sname FROM store WHERE city = 'Amsterdam';"
 
     query = Query(sql, catalog=catalog_db, search_path=db)
@@ -118,7 +118,7 @@ def test_set_operation_order_by_limit_offset_left():
 @pytest.mark.skip(reason="Not implemented yet")
 def test_set_operation_order_by_limit_offset_right():
     db = 'miedema'
-    catalog_db = load_json(f"tests/datasets/cat_{db}.json")
+    catalog_db = load_catalog(f"datasets/catalogs/{db}.json")
     sql = "SELECT sid,sname FROM store WHERE city = 'Breda' EXCEPT SELECT sid, sname FROM store WHERE city = 'Amsterdam' ORDER BY sname LIMIT 3 OFFSET 1;"
 
     query = Query(sql, catalog=catalog_db, search_path=db)

@@ -4,7 +4,7 @@ def test_having_no_group_by():
     detected_errors = run_test(
         query='SELECT * FROM store HAVING id = 1;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json'
+        catalog_filename='miedema'
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_17_HAVING_WITHOUT_GROUP_BY) == 1
@@ -13,7 +13,7 @@ def test_having_with_group_by():
     detected_errors = run_test(
         query='SELECT * FROM store HAVING id = 1 GROUP BY id;',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json'
+        catalog_filename='miedema'
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_17_HAVING_WITHOUT_GROUP_BY) == 0
@@ -28,7 +28,7 @@ def test_having_no_group_by_subquery():
         ) AS sub
         ''',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json',
+        catalog_filename='miedema',
         debug=True
     )
 
@@ -45,7 +45,7 @@ def test_having_with_group_by_subquery():
         ) AS sub
         ''',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json'
+        catalog_filename='miedema'
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_17_HAVING_WITHOUT_GROUP_BY) == 0
@@ -60,7 +60,7 @@ def test_having_no_group_by_cte():
         SELECT * FROM cte;
         ''',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json'
+        catalog_filename='miedema'
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_17_HAVING_WITHOUT_GROUP_BY) == 1
@@ -75,7 +75,7 @@ def test_having_with_group_by_cte():
         SELECT * FROM cte;
         ''',
         detectors=[SyntaxErrorDetector],
-        catalog_filename='cat_miedema.json'
+        catalog_filename='miedema'
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_17_HAVING_WITHOUT_GROUP_BY) == 0
