@@ -1,7 +1,7 @@
 '''Represents a catalog of database schemas, tables, and columns.'''
 
 # API exports
-from .constraint import UniqueConstraint, UniqueConstraintColumn
+from .constraint import Constraint, ConstraintColumn, ConstraintType
 from .column import Column
 from .table import Table
 from .schema import Schema

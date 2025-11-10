@@ -7,6 +7,8 @@ import sqlparse.keywords
 from typing import Callable
 from sqlglot import exp
 
+from sql_error_categorizer.catalog.constraint import ConstraintType
+
 from .base import BaseDetector, DetectedError
 from ..query import Query
 from ..sql_errors import SqlErrors
@@ -77,11 +79,11 @@ class ComplicationDetector(BaseDetector):
             if not select.distinct:
                 continue
 
-            from dav_tools import messages
-            messages.debug(select.output)
+            # Remove DISTINCT constraint
+            constraints = [c for c in select.output.unique_constraints if c.constraint_type != ConstraintType.DISTINCT]
 
-            # Only one constraint means the DISTINCT is necessary
-            if len(select.output.unique_constraints) > 1:
+
+            if len(constraints) > 0:
                 result.append(DetectedError(SqlErrors.COM_83_UNNECESSARY_DISTINCT_IN_SELECT_CLAUSE, (select.sql,)))
 
         return result

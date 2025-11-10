@@ -1,4 +1,4 @@
-from .constraint import UniqueConstraint, UniqueConstraintColumn
+from .constraint import Constraint, ConstraintColumn
 from .column import Column
 
 from dataclasses import dataclass, field
@@ -8,12 +8,12 @@ class Table:
     '''A database table, with columns and unique constraints. Supports multiple columns with the same name (e.g. from joins).'''
 
     name: str
-    unique_constraints: list[UniqueConstraint] = field(default_factory=list)
+    unique_constraints: list[Constraint] = field(default_factory=list)
     columns: list[Column] = field(default_factory=list)
 
     def add_unique_constraint(self, columns: set[str], is_pk: bool) -> None:
         '''Adds a unique constraint to the table.'''
-        self.unique_constraints.append(UniqueConstraint({UniqueConstraintColumn(name=col) for col in columns}, is_pk=is_pk))
+        self.unique_constraints.append(Constraint({ConstraintColumn(name=col) for col in columns}, is_pk=is_pk))
 
     def add_column(self,
                    name: str,
@@ -82,7 +82,7 @@ class Table:
         table = cls(name=data['name'])
         # Unique constraints first (so Column.is_pk works immediately on repr, etc.)
         for uc_data in data.get('unique_constraints', []):
-            uc = UniqueConstraint.from_dict(uc_data)
+            uc = Constraint.from_dict(uc_data)
             table.unique_constraints.append(uc)
         # Columns
         for col_data in (data.get('columns') or []):

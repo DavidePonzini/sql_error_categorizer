@@ -1,8 +1,14 @@
 from dataclasses import dataclass, field
 from enum import Enum
 
+class ConstraintType(Enum):
+    UNIQUE = 'UNIQUE'
+    PRIMARY_KEY = 'PRIMARY_KEY'
+    GROUP_BY = 'GROUP_BY'
+    DISTINCT = 'DISTINCT'
+
 @dataclass(frozen=True)
-class UniqueConstraintColumn:
+class ConstraintColumn:
     '''Represents a column that is part of a unique constraint.'''
     
     name: str
@@ -24,13 +30,13 @@ class UniqueConstraintColumn:
         }
     
     def __eq__(self, value: object) -> bool:
-        if not isinstance(value, UniqueConstraintColumn):
+        if not isinstance(value, ConstraintColumn):
             return False
 
         return self.name == value.name and self.table_idx == value.table_idx
     
     @classmethod
-    def from_dict(cls, data: dict) -> 'UniqueConstraintColumn':
+    def from_dict(cls, data: dict) -> 'ConstraintColumn':
         '''Creates a UniqueConstraintColumn from a dictionary.'''
         return cls(
             name=data['name'],
@@ -38,18 +44,21 @@ class UniqueConstraintColumn:
         )
 
 @dataclass
-class UniqueConstraint:
+class Constraint:
     '''A unique constraint on a set of columns in a table.'''
 
-    columns: set[UniqueConstraintColumn] = field(default_factory=set)
-    is_pk: bool = False
-    '''Whether this unique constraint is a primary key.'''
+    columns: set[ConstraintColumn] = field(default_factory=set)
+    constraint_type: ConstraintType = ConstraintType.UNIQUE
+    '''The type of the unique constraint.'''
+
+    @property
+    def is_pk(self) -> bool:
+        '''Returns True if the constraint is a primary key.'''
+        return self.constraint_type ==  ConstraintType.PRIMARY_KEY
 
     def __repr__(self, level: int = 0) -> str:
         indent = '  ' * level
-        if self.is_pk:
-            return f'{indent}PRIMARY KEY({self.columns})'
-        return f'{indent}UNIQUE({self.columns})'
+        return f'{indent}{self.constraint_type.value}({self.columns})'
 
     def to_dict(self) -> dict:
         '''Converts the UniqueConstraint to a dictionary.'''
@@ -59,15 +68,15 @@ class UniqueConstraint:
         }
     
     def __eq__(self, value: object) -> bool:
-        if not isinstance(value, UniqueConstraint):
+        if not isinstance(value, Constraint):
             return False
 
         return self.is_pk == value.is_pk and len(self.columns) == len(value.columns) and all(col in value.columns for col in self.columns)
     
     @classmethod
-    def from_dict(cls, data: dict) -> 'UniqueConstraint':
+    def from_dict(cls, data: dict) -> 'Constraint':
         '''Creates a UniqueConstraint from a dictionary.'''
         return cls(
-            columns={UniqueConstraintColumn.from_dict(col) for col in data['columns']},
-            is_pk=data['is_pk']
+            columns={ConstraintColumn.from_dict(col) for col in data['columns']},
+            constraint_type=ConstraintType.PRIMARY_KEY if data['is_pk'] else ConstraintType.UNIQUE
         )

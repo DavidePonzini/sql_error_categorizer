@@ -2,7 +2,7 @@ from ...query.util import remove_parentheses
 from .set_operation import SetOperation
 from ..tokenized_sql import TokenizedSQL
 from .. import extractors
-from ...catalog import Catalog, Table, UniqueConstraintColumn, UniqueConstraint
+from ...catalog import Catalog, Table, ConstraintColumn, Constraint, ConstraintType
 from ...util import *
 from ..util import extract_CNF
 from ..typechecking import get_type, to_res_type
@@ -355,13 +355,13 @@ class Select(SetOperation, TokenizedSQL):
                 is_constant=res_type.constant
             )
 
-        def merge_unique_constraints() -> list[UniqueConstraint]:
+        def merge_unique_constraints() -> list[Constraint]:
             '''
             Merge unique constraints from all referenced tables.
             When multiple tables are joined, constraints are combined
             by unioning column sets across participating tables.
             '''
-            result: list[UniqueConstraint] = []
+            result: list[Constraint] = []
 
             tables = self.referenced_tables
             if not tables:
@@ -371,30 +371,30 @@ class Select(SetOperation, TokenizedSQL):
             
             # Assign base table index
             for constraint in all_constraints[0]:
-                c = UniqueConstraint()
+                c = Constraint()
                 result.append(c)
                 
                 for constraint_column in constraint.columns:
-                    c.columns.add(UniqueConstraintColumn(constraint_column.name, table_idx=0))
+                    c.columns.add(ConstraintColumn(constraint_column.name, table_idx=0))
 
 
             # Combine constraints across tables (Cartesian merge)
             for table_idx, constraints in enumerate(all_constraints[1:], start=1):
-                merged: list[UniqueConstraint] = []
+                merged: list[Constraint] = []
 
                 for c1 in result:
                     for c2 in constraints:
-                        c = UniqueConstraint()
+                        c = Constraint()
 
                         for constraint_column in c2.columns:
-                            c.columns.add(UniqueConstraintColumn(constraint_column.name, table_idx=table_idx))
-                        merged.append(UniqueConstraint(c1.columns.union(c.columns)))
+                            c.columns.add(ConstraintColumn(constraint_column.name, table_idx=table_idx))
+                        merged.append(Constraint(c1.columns.union(c.columns)))
 
                 result = merged
 
             return result
 
-        def build_equality_groups(equalities: list[tuple[UniqueConstraintColumn, UniqueConstraintColumn]]) -> list[set[UniqueConstraintColumn]]:
+        def build_equality_groups(equalities: list[tuple[ConstraintColumn, ConstraintColumn]]) -> list[set[ConstraintColumn]]:
             '''Given a list of equality pairs, return transitive closure groups.'''
             parent = {}
 
@@ -426,14 +426,14 @@ class Select(SetOperation, TokenizedSQL):
 
             return list(groups.values())
 
-        def filter_valid_constraints() -> list[UniqueConstraint]:
-            constraints: list[UniqueConstraint] = []
+        def filter_valid_constraints() -> list[Constraint]:
+            constraints: list[Constraint] = []
 
             if self.distinct:
                 # If DISTINCT is present, the entire output is unique -> add a new constraint, don't discard existing ones
                 
-                uc_cols = { UniqueConstraintColumn(col.name, col.table_idx) for col in result.columns }
-                constraints.append(UniqueConstraint(uc_cols))
+                uc_cols = { ConstraintColumn(col.name, col.table_idx) for col in result.columns }
+                constraints.append(Constraint(uc_cols, constraint_type=ConstraintType.DISTINCT))
 
             all_constraints = merge_unique_constraints()
             
@@ -441,7 +441,7 @@ class Select(SetOperation, TokenizedSQL):
                 # If GROUP BY is present, treat grouped columns as unique.
                 # Keep existing constraints that are subsets of the grouped columns.
 
-                group_by_cols: set[UniqueConstraintColumn] = set()
+                group_by_cols: set[ConstraintColumn] = set()
                 for col in self.group_by:
                     if isinstance(col, exp.Column):
                         table_name = normalize_ast_column_table(col)
@@ -455,10 +455,10 @@ class Select(SetOperation, TokenizedSQL):
                             table_idx = next((i for i, t in enumerate(self.referenced_tables)
                                             if any(c.name == name for c in t.columns)), None)
                         
-                        group_by_cols.add(UniqueConstraintColumn(name, table_idx))
+                        group_by_cols.add(ConstraintColumn(name, table_idx))
 
                 # Add GROUP BY constraint
-                all_constraints.append(UniqueConstraint(group_by_cols))
+                all_constraints.append(Constraint(group_by_cols, constraint_type=ConstraintType.GROUP_BY))
 
             equalities = self.get_join_equalities()
             if equalities:
@@ -471,7 +471,7 @@ class Select(SetOperation, TokenizedSQL):
                     else:
                         table_idx = next((i for i, t in enumerate(self.referenced_tables)
                                         if any(c.name == name for c in t.columns)), None)
-                    return UniqueConstraintColumn(name, table_idx)
+                    return ConstraintColumn(name, table_idx)
                 
                 # Normalize all equalities as UniqueConstraintColumns
                 uc_equalities = [(resolve(left_col), resolve(right_col)) for left_col, right_col in equalities]
@@ -480,17 +480,17 @@ class Select(SetOperation, TokenizedSQL):
                 equality_groups = build_equality_groups(uc_equalities)
 
                 # For each constraint, if it contains any member of a group, extend it with the others
-                new_constraints: list[UniqueConstraint] = []
+                new_constraints: list[Constraint] = []
                 for constraint in all_constraints:
                     expanded_columns = set(constraint.columns)
                     for group in equality_groups:
                         if not expanded_columns.isdisjoint(group):
                             expanded_columns |= group
-                    new_constraints.append(UniqueConstraint(expanded_columns))
+                    new_constraints.append(Constraint(expanded_columns))
                 all_constraints = new_constraints
 
                 # Merge overlapping sets
-                new_constraints: list[UniqueConstraint] = []
+                new_constraints: list[Constraint] = []
                 for equality_group in equality_groups:
                     for col in equality_group:
                         for constraint in all_constraints:
@@ -498,7 +498,7 @@ class Select(SetOperation, TokenizedSQL):
                                 continue
 
                             # For each column in the equality group, create a new constraint with all equivalences replaced by that column
-                            new_constraints.append(UniqueConstraint(constraint.columns - equality_group | { col }))
+                            new_constraints.append(Constraint(constraint.columns - equality_group | { col }))
 
                 all_constraints = new_constraints
 
