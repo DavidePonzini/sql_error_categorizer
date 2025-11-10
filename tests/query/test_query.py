@@ -1,6 +1,7 @@
 import pytest
 from sql_error_categorizer import load_catalog
 from sql_error_categorizer.query import *
+from sql_error_categorizer.catalog import UniqueConstraint, UniqueConstraintColumn
 
 # region CTEs
 def test_main_query_no_cte():
@@ -123,6 +124,7 @@ def test_set_operation_order_by_limit_offset_left():
     query = Query(sql, catalog=catalog_db, search_path=db)
 
     assert isinstance(query.main_query, BinarySetOperation)
+    assert isinstance(query.main_query.left, Select)
     assert query.main_query.left.limit == 3
     assert query.main_query.left.offset == 1
     assert query.main_query.left.order_by == [('sname', 'ASC')]
@@ -199,4 +201,64 @@ def test_query_selects(sql, expected_selects):
 @pytest.mark.skip(reason="Not yet implemented")
 def test_set_operation_properties():
     pass
+# endregion
 
+### Helper function ###
+def constraint(columns: list[tuple[str, int | None]]) -> UniqueConstraint:
+    return UniqueConstraint(columns={ UniqueConstraintColumn(name=name, table_idx=idx) for name, idx in columns })
+#######################
+
+# region Constraints
+@pytest.mark.parametrize('sql, catalog, expected_constraints', [
+    ("SELECT * FROM store WHERE sid > 10;", 'miedema', [
+        constraint([('sid', 0)])
+    ]),
+    ("SELECT street FROM transaction", 'miedema', [
+        # Empy list, no unique constraints on street
+    ]),
+    ("SELECT * FROM customer, store;", 'miedema', [
+        constraint([('cid', 0), ('sid', 1)])
+    ]),
+    ("SELECT * FROM customer c JOIN store s ON c.cid = s.sid;", 'miedema', [
+        constraint([('cid', 0)]), constraint([('sid', 1)])
+    ]),
+    ("SELECT DISTINCT cid, cname FROM customer;", 'miedema', [
+        constraint([('cid', 0)]), constraint([('cid', 0), ('cname', 0)])
+    ]),
+    ("SELECT * FROM departments d JOIN courses c ON d.id = c.dept_id;", 'constraints', [
+        constraint([('id', 1), ('dept_id', 1)]),
+        constraint([('id', 1), ('id', 0)]),
+        constraint([('title', 1), ('dept_id', 1)]),
+        constraint([('title', 1), ('id', 0)]),
+        constraint([('name', 0), ('id', 1), ('dept_id', 1)]),
+        constraint([('name', 0), ('id', 1), ('id', 0)]),
+        constraint([('name', 0), ('title', 1), ('dept_id', 1)]),
+        constraint([('name', 0), ('title', 1), ('id', 0)]),
+    ]),
+    ("SELECT name, dept_id, title FROM departments d JOIN courses c ON d.id = c.dept_id;", 'constraints', [
+        constraint([('title', 1), ('dept_id', 1)]),
+        constraint([('name', 0), ('title', 1), ('dept_id', 1)]),
+    ]),
+    ("SELECT cid, cname, count(distinct cname) FROM customer GROUP BY cid, cname;", 'miedema', [
+        constraint([('cid', 0), ('cname', 0)]),
+        constraint([('cid', 0)]),
+    ]),
+    ("SELECT DISTINCT cid, cname, count(distinct cname) c FROM customer GROUP BY cid, cname;", 'miedema', [
+        constraint([('cid', 0), ('cname', 0), ('c', None)]),
+        constraint([('cid', 0), ('cname', 0)]),
+        constraint([('cid', 0)]),
+    ]),
+    
+])
+def test_query_constraints(sql, catalog, expected_constraints):
+    catalog_db = load_catalog(f'datasets/catalogs/{catalog}.json')
+    query = Query(sql, catalog=catalog_db, search_path=catalog)
+    
+    output_constraints = query.main_query.output.unique_constraints
+    
+    # NOTE: we cannot rely on order of constraints, so we check length and presence
+    assert len(output_constraints) == len(expected_constraints)
+    for expected in expected_constraints:
+        assert expected in output_constraints
+
+# endregion

@@ -28,7 +28,7 @@ class UniqueConstraintColumn:
             return False
 
         return self.name == value.name and self.table_idx == value.table_idx
-
+    
     @classmethod
     def from_dict(cls, data: dict) -> 'UniqueConstraintColumn':
         '''Creates a UniqueConstraintColumn from a dictionary.'''
@@ -57,7 +57,13 @@ class UniqueConstraint:
             'columns': [col.to_dict() for col in self.columns],
             'is_pk': self.is_pk,
         }
+    
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, UniqueConstraint):
+            return False
 
+        return self.is_pk == value.is_pk and len(self.columns) == len(value.columns) and all(col in value.columns for col in self.columns)
+    
     @classmethod
     def from_dict(cls, data: dict) -> 'UniqueConstraint':
         '''Creates a UniqueConstraint from a dictionary.'''
