@@ -66,35 +66,25 @@ class ComplicationDetector(BaseDetector):
 
         return results
 
-    # TODO: refactor
     def com_83_unnecessary_distinct_in_select_clause(self) -> list[DetectedError]:
         '''
-        Flags the unnecessary use of DISTINCT by comparing the proposed query
-        against the correct solution.
+        Flags a SELECT DISTINCT clause that is unnecessary because the selected
+        columns are already unique due to existing constraints.
         '''
-        return []
+        result: list[DetectedError] = []
 
-        results = []
-        if not self.q_ast or not self.s_ast:
-            return results
+        for select in self.query.selects:
+            if not select.distinct:
+                continue
 
-        # Check if the proposed query has a DISTINCT clause.
-        # This can be a boolean `True` or a Dictionary node for `DISTINCT(...)`.
-        q_args = self.q_ast.get('args', {})
-        q_has_distinct = q_args.get('distinct') not in [None, False]
+            from dav_tools import messages
+            messages.debug(select.output)
 
-        # Check if the correct solution has a DISTINCT clause.
-        s_args = self.s_ast.get('args', {})
-        s_has_distinct = s_args.get('distinct') not in [None, False]
+            # Only one constraint means the DISTINCT is necessary
+            if len(select.output.unique_constraints) > 1:
+                result.append(DetectedError(SqlErrors.COM_83_UNNECESSARY_DISTINCT_IN_SELECT_CLAUSE, (select.sql,)))
 
-        # If the user's query has DISTINCT but the solution doesn't, it's unnecessary.
-        if q_has_distinct and not s_has_distinct:
-            results.append((
-                SqlErrors.COM_83_UNNECESSARY_DISTINCT_IN_SELECT_CLAUSE,
-                "The DISTINCT keyword is used unnecessarily and is not present in the optimal solution."
-            ))
-            
-        return results
+        return result
 
     # TODO: refactor
     def com_84_unnecessary_join(self) -> list[DetectedError]:

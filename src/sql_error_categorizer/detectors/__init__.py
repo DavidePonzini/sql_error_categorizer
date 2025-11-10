@@ -77,6 +77,18 @@ class Detector:
             print('===== Query =====')
             print(self.query.sql)
 
+            print('===== search_path =====')
+            print(self.search_path)
+
+            print('===== solution_search_path =====')
+            print(self.solution_search_path)
+
+            print('===== Solutions =====')
+            print('\n-----\n'.join(sol.sql for sol in self.solutions))
+
+            print('===== Catalog =====')
+            print(self.catalog)
+
         results: list[DetectedError] = []
 
         for detector in self.detectors:
