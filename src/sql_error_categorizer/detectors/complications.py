@@ -217,6 +217,8 @@ class ComplicationDetector(BaseDetector):
         results: list[DetectedError] = []
 
         for select in self.query.selects:
+            select = select.strip_subqueries()
+
             if not select.group_by:
                 continue
 
