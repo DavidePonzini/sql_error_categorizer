@@ -114,6 +114,22 @@ class Select(SetOperation, TokenizedSQL):
 
         return result
 
+    def _get_table_idx_for_column(self, column: exp.Column) -> int | None:
+        '''Returns the index of the table that contains the given column.'''
+
+        table_name = normalize_ast_column_table(column)
+        col_name = column.alias_or_name
+        name = col_name if column.this.quoted else col_name.lower()
+
+        # Resolve which table this column belongs to
+        if table_name:
+            table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
+        else:
+            table_idx = next((i for i, t in enumerate(self.referenced_tables)
+                            if any(c.name == name for c in t.columns)), None)
+        
+        return table_idx
+
     def _get_output_table(self) -> Table:
         '''
         Returns a Table object representing the output of this SELECT query.
@@ -181,17 +197,9 @@ class Select(SetOperation, TokenizedSQL):
 
             def add_column(column: exp.Column) -> None:
                 '''Add a column reference (SELECT column or table.column).'''
-                table_name = normalize_ast_column_table(column)
                 col_name = column.alias_or_name
                 name = col_name if column.this.quoted else col_name.lower()
-
-                # Resolve which table this column belongs to
-                if table_name:
-                    table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
-                else:
-                    table_idx = next((i for i, t in enumerate(self.referenced_tables)
-                                    if any(c.name == name for c in t.columns)), None)
-
+                table_idx = self._get_table_idx_for_column(column)
                 res_type = get_type(column, self.referenced_tables)[0]
                 
                 result.add_column(
@@ -287,16 +295,11 @@ class Select(SetOperation, TokenizedSQL):
 
                 equalities = self.get_join_equalities()
                 if equalities:
-                    def resolve(col):
-                        table_name = normalize_ast_column_table(col)
-                        col_name = col.alias_or_name
-                        name = col_name if col.this.quoted else col_name.lower()
-                        if table_name:
-                            table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
-                        else:
-                            table_idx = next((i for i, t in enumerate(self.referenced_tables)
-                                            if any(c.name == name for c in t.columns)), None)
-                        return ConstraintColumn(name, table_idx)
+                    def resolve(col: exp.Column) -> ConstraintColumn:
+                        col_name = normalize_ast_column_real_name(col)
+                        table_idx = self._get_table_idx_for_column(col)
+
+                        return ConstraintColumn(col_name, table_idx)
                     
                     # Normalize all equalities as UniqueConstraintColumns
                     uc_equalities = [(resolve(left_col), resolve(right_col)) for left_col, right_col in equalities]
@@ -533,19 +536,12 @@ class Select(SetOperation, TokenizedSQL):
                 group_by_cols: set[ConstraintColumn] = set()
                 for col in self.group_by:
                     if isinstance(col, exp.Column):
-                        table_name = normalize_ast_column_table(col)
-                        col_name = col.alias_or_name
-                        name = col_name if col.this.quoted else col_name.lower()
+                        col_name = normalize_ast_column_real_name(col)
 
                         # Resolve which table this column belongs to
-                        if table_name:
-                            table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
-                        else:
-                            table_idx = next((i for i, t in enumerate(self.referenced_tables)
-                                            if any(c.name == name for c in t.columns)), None)
+                        table_idx = self._get_table_idx_for_column(col)
                         
-                        group_by_cols.add(ConstraintColumn(name, table_idx))
-
+                        group_by_cols.add(ConstraintColumn(col_name, table_idx))
                 # Add GROUP BY constraint
                 self._all_constraints.append(Constraint(group_by_cols, constraint_type=ConstraintType.GROUP_BY))
 
@@ -601,15 +597,10 @@ class Select(SetOperation, TokenizedSQL):
                 equalities = self.get_join_equalities()
                 if equalities:
                     def resolve(col):
-                        table_name = normalize_ast_column_table(col)
-                        col_name = col.alias_or_name
-                        name = col_name if col.this.quoted else col_name.lower()
-                        if table_name:
-                            table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
-                        else:
-                            table_idx = next((i for i, t in enumerate(self.referenced_tables)
-                                            if any(c.name == name for c in t.columns)), None)
-                        return ConstraintColumn(name, table_idx)
+                        col_name = normalize_ast_column_real_name(col)
+                        table_idx = self._get_table_idx_for_column(col)
+                        
+                        return ConstraintColumn(col_name, table_idx)
                     
                     # Normalize all equalities as UniqueConstraintColumns
                     uc_equalities = [(resolve(left_col), resolve(right_col)) for left_col, right_col in equalities]

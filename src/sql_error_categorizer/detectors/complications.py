@@ -13,6 +13,7 @@ from .base import BaseDetector, DetectedError
 from ..query import Query
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
+from ..util import normalize_ast_column_real_name, normalize_ast_column_table
 
 
 class ComplicationDetector(BaseDetector):
@@ -81,7 +82,6 @@ class ComplicationDetector(BaseDetector):
 
             # Remove DISTINCT constraint
             constraints = [c for c in select.output.unique_constraints if c.constraint_type != ConstraintType.DISTINCT]
-
 
             if len(constraints) > 0:
                 result.append(DetectedError(SqlErrors.COM_83_UNNECESSARY_DISTINCT_IN_SELECT_CLAUSE, (select.sql,)))
@@ -213,9 +213,44 @@ class ComplicationDetector(BaseDetector):
     def com_96_group_by_with_only_a_single_group(self) -> list[DetectedError]:
         return []
     
-    # TODO: implement
     def com_97_group_by_can_be_replaced_by_distinct(self) -> list[DetectedError]:
-        return []
+        results: list[DetectedError] = []
+
+        for select in self.query.selects:
+            if not select.group_by:
+                continue
+
+            if not select.ast:
+                continue
+
+            has_agg_func = False
+            for expression in select.ast.expressions:
+                if list(expression.find_all(exp.AggFunc)):
+                    has_agg_func = True
+                    break
+
+            if has_agg_func:
+                continue
+
+            select_columns: list[exp.Column] = []
+            for expression in select.ast.expressions:
+                columns = list(expression.find_all(exp.Column))
+                select_columns.extend(columns)
+            
+            group_by_columns: list[exp.Column] = []
+            for expression in select.group_by:
+                columns = list(expression.find_all(exp.Column))
+                group_by_columns.extend(columns)
+
+            select_col_names = {(normalize_ast_column_real_name(col), select._get_table_idx_for_column(col)) for col in select_columns}
+            group_by_col_names = {(normalize_ast_column_real_name(col), select._get_table_idx_for_column(col)) for col in group_by_columns}
+
+            if select_col_names == group_by_col_names:
+                results.append(DetectedError(SqlErrors.COM_97_GROUP_BY_CAN_BE_REPLACED_WITH_DISTINCT, (select_col_names,)))
+
+        return results
+                        
+
     
     # TODO: implement
     def com_98_union_can_be_replaced_by_or(self) -> list[DetectedError]:
