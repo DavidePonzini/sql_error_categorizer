@@ -1,7 +1,7 @@
 import pytest
 from sql_error_categorizer import load_catalog
 from sql_error_categorizer.query import *
-from sql_error_categorizer.catalog import UniqueConstraint, UniqueConstraintColumn
+from sql_error_categorizer.catalog import Constraint, ConstraintColumn
 
 # region CTEs
 def test_main_query_no_cte():
@@ -204,8 +204,8 @@ def test_set_operation_properties():
 # endregion
 
 ### Helper function ###
-def constraint(columns: list[tuple[str, int | None]]) -> UniqueConstraint:
-    return UniqueConstraint(columns={ UniqueConstraintColumn(name=name, table_idx=idx) for name, idx in columns })
+def constraint(columns: list[tuple[str, int | None]]) -> Constraint:
+    return Constraint(columns={ ConstraintColumn(name=name, table_idx=idx) for name, idx in columns })
 #######################
 
 # region Constraints

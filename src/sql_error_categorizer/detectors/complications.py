@@ -188,9 +188,26 @@ class ComplicationDetector(BaseDetector):
     def com_94_unnecessary_group_by_in_exists_subquery(self) -> list[DetectedError]:
         return []
     
-    # TODO: implement
     def com_95_group_by_with_singleton_groups(self) -> list[DetectedError]:
-        return []
+        results: list[DetectedError] = []
+
+        for select in self.query.selects:
+            if not select.group_by:
+                continue
+
+            group_by_constraint = next((c for c in select.all_constraints if c.constraint_type == ConstraintType.GROUP_BY), None)
+            if not group_by_constraint:
+                # No GROUP BY constraint found, meaning GROUP BY clause in invalid. Skip.
+                continue
+
+            constraints = [c for c in select.all_constraints if c.constraint_type == ConstraintType.UNIQUE]
+
+            for constraint in constraints:
+                if constraint.columns.issubset(group_by_constraint.columns):
+                    results.append(DetectedError(SqlErrors.COM_95_GROUP_BY_WITH_SINGLETON_GROUPS, (group_by_constraint, constraint)))
+                    break        
+
+        return results
     
     # TODO: implement
     def com_96_group_by_with_only_a_single_group(self) -> list[DetectedError]:

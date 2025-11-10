@@ -43,9 +43,12 @@ class Select(SetOperation, TokenizedSQL):
         
         self.search_path = search_path
 
-        self._subqueries = None
-        self._referenced_tables = None
-        '''Catalog representing tables that are read by this query.'''
+        # Initialize cached properties
+        self._subqueries: list[tuple[Select, str]] | None = None
+        self._referenced_tables: list[Table] | None = None
+        self._all_constraints: list[Constraint] | None = None
+        self._output_table: Table | None = None # half-computed output table, missing constraints
+        self._output: Table | None = None       # fully computed output table with constraints
 
         try:
             self.ast = sqlglot.parse_one(self.sql)
@@ -111,6 +114,258 @@ class Select(SetOperation, TokenizedSQL):
 
         return result
 
+    def _get_output_table(self) -> Table:
+        '''
+        Returns a Table object representing the output of this SELECT query.
+        Constraints are not yet computed.
+        '''
+
+        if self._output_table is None:
+            result = super().output
+            if not self.ast:
+                self._output_table = result
+                return self._output_table
+
+            anonymous_counter = 1
+
+            # ----------------------------------------------------------------------
+            # Helper functions
+            # ----------------------------------------------------------------------
+
+            def get_anonymous_column_name() -> str:
+                '''Generates a unique anonymous column name.'''
+                nonlocal anonymous_counter
+                name = f'?column_{anonymous_counter}?'
+                anonymous_counter += 1
+                return name
+
+            def add_star() -> None:
+                '''Expand SELECT * by adding all columns from all referenced tables.'''
+                for idx, table in enumerate(self.referenced_tables):
+                    for col in table.columns:
+                        result.add_column(
+                            name=col.name,
+                            table_idx=idx,
+                            column_type=to_res_type(col.column_type).value,
+                            is_nullable=col.is_nullable,
+                            is_constant=col.is_constant
+                        )
+
+            def add_alias(column: exp.Alias) -> None:
+                '''Add an expression with an explicit alias (e.g. SELECT expr AS alias).'''
+                alias = column.args['alias']
+                name = alias.this if alias.quoted else alias.this.lower()
+                res_type = get_type(column.this, self.referenced_tables)[0]
+
+                result.add_column(
+                    name=name,
+                    column_type=res_type.type.value,
+                    is_nullable=res_type.nullable,
+                    is_constant=res_type.constant
+                )
+
+            def add_table_star(column: exp.Column) -> None:
+                '''Add all columns from a specific table (SELECT table.*).'''
+                table_name = normalize_ast_column_table(column)
+                table = next((t for t in self.referenced_tables if t.name == table_name), None)
+                if table:
+                    for col in table.columns:
+                        res_type = get_type(col, self.referenced_tables)[0]
+                        result.add_column(
+                            name=col.name,
+                            table_idx=self.referenced_tables.index(table),
+                            column_type=res_type.type.value,
+                            is_nullable=res_type.nullable,
+                            is_constant=res_type.constant
+                        )
+
+            def add_column(column: exp.Column) -> None:
+                '''Add a column reference (SELECT column or table.column).'''
+                table_name = normalize_ast_column_table(column)
+                col_name = column.alias_or_name
+                name = col_name if column.this.quoted else col_name.lower()
+
+                # Resolve which table this column belongs to
+                if table_name:
+                    table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
+                else:
+                    table_idx = next((i for i, t in enumerate(self.referenced_tables)
+                                    if any(c.name == name for c in t.columns)), None)
+
+                res_type = get_type(column, self.referenced_tables)[0]
+                
+                result.add_column(
+                    name=name,
+                    table_idx=table_idx,
+                    column_type=res_type.type.value,
+                    is_nullable=res_type.nullable,
+                    is_constant=res_type.constant
+                )
+
+            def add_subquery(column: exp.Subquery) -> None:
+                '''Add a column derived from a subquery expression (SELECT (SELECT ...)).'''
+                subq = Select(remove_parentheses(column.sql()), catalog=self.catalog, search_path=self.search_path)
+                
+                # Add the first column of the subquery's output
+                if subq.output.columns:
+                    first_col = subq.output.columns[0]
+                    res_type = get_type(first_col, self.referenced_tables)[0]
+                
+                    result.add_column(
+                        name=first_col.name,
+                        column_type=res_type.type.value,
+                        is_nullable=res_type.nullable,
+                        is_constant=res_type.constant
+                    )
+                else:
+                    result.add_column(name=get_anonymous_column_name(), column_type='None')
+
+            def add_literal(column: exp.Literal | exp.Expression) -> None:
+                '''Add a literal or computed expression as a pseudo-column (e.g. SELECT 1, SELECT a+b).'''
+                res_type = get_type(column, self.referenced_tables)[0]
+
+                result.add_column(
+                    name=get_anonymous_column_name(),
+                    column_type=res_type.type.value,
+                    is_nullable=res_type.nullable,
+                    is_constant=res_type.constant
+                )
+
+            def add_function(column: exp.Func) -> None:
+                '''Add a function output column (e.g. SELECT MAX(col)).'''
+                res_type = get_type(column, self.referenced_tables)[0]
+
+                result.add_column(
+                    name=get_anonymous_column_name(),
+                    column_type=res_type.type.value,
+                    is_nullable=res_type.nullable,
+                    is_constant=res_type.constant
+                )
+
+            def build_equality_groups(equalities: list[tuple[ConstraintColumn, ConstraintColumn]]) -> list[set[ConstraintColumn]]:
+                '''Given a list of equality pairs, return transitive closure groups.'''
+                parent = {}
+
+                def find(x):
+                    while parent[x] != x:
+                        parent[x] = parent[parent[x]]
+                        x = parent[x]
+                    return x
+
+                def union(x, y):
+                    rx, ry = find(x), find(y)
+                    if rx != ry:
+                        parent[ry] = rx
+
+                # Initialize all columns
+                for l, r in equalities:
+                    parent.setdefault(l, l)
+                    parent.setdefault(r, r)
+
+                # Union connected columns
+                for l, r in equalities:
+                    union(l, r)
+
+                # Group by representative
+                groups = {}
+                for col in parent:
+                    root = find(col)
+                    groups.setdefault(root, set()).add(col)
+
+                return list(groups.values())
+
+            def filter_valid_constraints() -> list[Constraint]:
+                constraints: list[Constraint] = []
+
+                if self.distinct:
+                    # If DISTINCT is present, the entire output is unique -> add a new constraint, don't discard existing ones
+                    
+                    uc_cols = { ConstraintColumn(col.name, col.table_idx) for col in result.columns }
+                    constraints.append(Constraint(uc_cols, constraint_type=ConstraintType.DISTINCT))
+
+                all_constraints = self.all_constraints
+
+                equalities = self.get_join_equalities()
+                if equalities:
+                    def resolve(col):
+                        table_name = normalize_ast_column_table(col)
+                        col_name = col.alias_or_name
+                        name = col_name if col.this.quoted else col_name.lower()
+                        if table_name:
+                            table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
+                        else:
+                            table_idx = next((i for i, t in enumerate(self.referenced_tables)
+                                            if any(c.name == name for c in t.columns)), None)
+                        return ConstraintColumn(name, table_idx)
+                    
+                    # Normalize all equalities as UniqueConstraintColumns
+                    uc_equalities = [(resolve(left_col), resolve(right_col)) for left_col, right_col in equalities]
+
+                    # Compute transitive closure (equivalence classes)
+                    equality_groups = build_equality_groups(uc_equalities)
+
+                    # For each constraint, if it contains any member of a group, extend it with the others
+                    new_constraints: list[Constraint] = []
+                    for constraint in all_constraints:
+                        expanded_columns = set(constraint.columns)
+                        for group in equality_groups:
+                            if not expanded_columns.isdisjoint(group):
+                                expanded_columns |= group
+                        new_constraints.append(Constraint(expanded_columns))
+                    all_constraints = new_constraints
+
+                    # Merge overlapping sets
+                    new_constraints: list[Constraint] = []
+                    for equality_group in equality_groups:
+                        for col in equality_group:
+                            for constraint in all_constraints:
+                                if equality_group.isdisjoint(constraint.columns):
+                                    continue
+
+                                # For each column in the equality group, create a new constraint with all equivalences replaced by that column
+                                new_constraints.append(Constraint(constraint.columns - equality_group | { col }))
+
+                    all_constraints = new_constraints
+
+                # Keep only constraints that are valid for the output columns
+                for unique_constraint in all_constraints:
+                    valid = all(
+                        any(output_column.table_idx == constraint_column.table_idx and output_column.name == constraint_column.name
+                            for output_column in result.columns if output_column.table_idx is not None)
+                        for constraint_column in unique_constraint.columns
+                    )
+                    if valid:
+                        constraints.append(unique_constraint)
+
+                return constraints
+
+            # ----------------------------------------------------------------------
+            # Main column extraction loop
+            # ----------------------------------------------------------------------
+
+            for expr in self.ast.expressions:
+                if isinstance(expr, exp.Star):
+                    add_star()
+                elif isinstance(expr, exp.Alias):
+                    add_alias(expr)
+                elif isinstance(expr, exp.Column):
+                    # Handle SELECT table.* separately
+                    if isinstance(expr.this, exp.Star):
+                        add_table_star(expr)
+                    else:
+                        add_column(expr)
+                elif isinstance(expr, exp.Subquery):
+                    add_subquery(expr)
+                elif isinstance(expr, exp.Literal):
+                    add_literal(expr)
+                elif isinstance(expr, exp.Func):
+                    add_function(expr)
+                else:
+                    add_literal(expr)  # fallback for other expressions
+                
+            self._output_table = result
+
+        return self._output_table
     # endregion
 
     def strip_subqueries(self, replacement: str = 'NULL') -> 'Select':
@@ -183,6 +438,8 @@ class Select(SetOperation, TokenizedSQL):
         return result
 
     # region Properties
+    
+    # NOTE: should this return a SetOp? What if the subquery is a UNION?
     @property
     def subqueries(self) -> list[tuple['Select', str]]:
         '''
@@ -227,152 +484,26 @@ class Select(SetOperation, TokenizedSQL):
         
         return self._referenced_tables
     
-
     @property
-    def output(self) -> Table:
+    def all_constraints(self) -> list[Constraint]:
         '''
-        Returns a Table object representing the output of this SELECT query.
-        It includes inferred columns (name, type, nullability, constancy)
-        and merged unique constraints from referenced tables.
+        Merge unique constraints from all referenced tables.
+        When multiple tables are joined, constraints are combined
+        by unioning column sets across participating tables.
         '''
-        result = super().output
-        if not self.ast:
-            return result
-
-        anonymous_counter = 1
-
-        # ----------------------------------------------------------------------
-        # Helper functions
-        # ----------------------------------------------------------------------
-
-        def get_anonymous_column_name() -> str:
-            '''Generates a unique anonymous column name.'''
-            nonlocal anonymous_counter
-            name = f'?column_{anonymous_counter}?'
-            anonymous_counter += 1
-            return name
-
-        def add_star() -> None:
-            '''Expand SELECT * by adding all columns from all referenced tables.'''
-            for idx, table in enumerate(self.referenced_tables):
-                for col in table.columns:
-                    result.add_column(
-                        name=col.name,
-                        table_idx=idx,
-                        column_type=to_res_type(col.column_type).value,
-                        is_nullable=col.is_nullable,
-                        is_constant=col.is_constant
-                    )
-
-        def add_alias(column: exp.Alias) -> None:
-            '''Add an expression with an explicit alias (e.g. SELECT expr AS alias).'''
-            alias = column.args['alias']
-            name = alias.this if alias.quoted else alias.this.lower()
-            res_type = get_type(column.this, self.referenced_tables)[0]
-
-            result.add_column(
-                name=name,
-                column_type=res_type.type.value,
-                is_nullable=res_type.nullable,
-                is_constant=res_type.constant
-            )
-
-        def add_table_star(column: exp.Column) -> None:
-            '''Add all columns from a specific table (SELECT table.*).'''
-            table_name = normalize_ast_column_table(column)
-            table = next((t for t in self.referenced_tables if t.name == table_name), None)
-            if table:
-                for col in table.columns:
-                    res_type = get_type(col, self.referenced_tables)[0]
-                    result.add_column(
-                        name=col.name,
-                        table_idx=self.referenced_tables.index(table),
-                        column_type=res_type.type.value,
-                        is_nullable=res_type.nullable,
-                        is_constant=res_type.constant
-                    )
-
-        def add_column(column: exp.Column) -> None:
-            '''Add a column reference (SELECT column or table.column).'''
-            table_name = normalize_ast_column_table(column)
-            col_name = column.alias_or_name
-            name = col_name if column.this.quoted else col_name.lower()
-
-            # Resolve which table this column belongs to
-            if table_name:
-                table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
-            else:
-                table_idx = next((i for i, t in enumerate(self.referenced_tables)
-                                if any(c.name == name for c in t.columns)), None)
-
-            res_type = get_type(column, self.referenced_tables)[0]
-            
-            result.add_column(
-                name=name,
-                table_idx=table_idx,
-                column_type=res_type.type.value,
-                is_nullable=res_type.nullable,
-                is_constant=res_type.constant
-            )
-
-        def add_subquery(column: exp.Subquery) -> None:
-            '''Add a column derived from a subquery expression (SELECT (SELECT ...)).'''
-            subq = Select(remove_parentheses(column.sql()), catalog=self.catalog, search_path=self.search_path)
-            
-            # Add the first column of the subquery's output
-            if subq.output.columns:
-                first_col = subq.output.columns[0]
-                res_type = get_type(first_col, self.referenced_tables)[0]
-            
-                result.add_column(
-                    name=first_col.name,
-                    column_type=res_type.type.value,
-                    is_nullable=res_type.nullable,
-                    is_constant=res_type.constant
-                )
-            else:
-                result.add_column(name=get_anonymous_column_name(), column_type='None')
-
-        def add_literal(column: exp.Literal | exp.Expression) -> None:
-            '''Add a literal or computed expression as a pseudo-column (e.g. SELECT 1, SELECT a+b).'''
-            res_type = get_type(column, self.referenced_tables)[0]
-
-            result.add_column(
-                name=get_anonymous_column_name(),
-                column_type=res_type.type.value,
-                is_nullable=res_type.nullable,
-                is_constant=res_type.constant
-            )
-
-        def add_function(column: exp.Func) -> None:
-            '''Add a function output column (e.g. SELECT MAX(col)).'''
-            res_type = get_type(column, self.referenced_tables)[0]
-
-            result.add_column(
-                name=get_anonymous_column_name(),
-                column_type=res_type.type.value,
-                is_nullable=res_type.nullable,
-                is_constant=res_type.constant
-            )
-
-        def merge_unique_constraints() -> list[Constraint]:
-            '''
-            Merge unique constraints from all referenced tables.
-            When multiple tables are joined, constraints are combined
-            by unioning column sets across participating tables.
-            '''
-            result: list[Constraint] = []
+        if self._all_constraints is None:
+            self._all_constraints = []
 
             tables = self.referenced_tables
             if not tables:
-                return result
+                return self._all_constraints
 
             all_constraints = [t.unique_constraints for t in tables]
             
             # Assign base table index
             for constraint in all_constraints[0]:
                 c = Constraint()
-                result.append(c)
+                self._all_constraints.append(c)
                 
                 for constraint_column in constraint.columns:
                     c.columns.add(ConstraintColumn(constraint_column.name, table_idx=0))
@@ -382,7 +513,7 @@ class Select(SetOperation, TokenizedSQL):
             for table_idx, constraints in enumerate(all_constraints[1:], start=1):
                 merged: list[Constraint] = []
 
-                for c1 in result:
+                for c1 in self._all_constraints:
                     for c2 in constraints:
                         c = Constraint()
 
@@ -390,57 +521,15 @@ class Select(SetOperation, TokenizedSQL):
                             c.columns.add(ConstraintColumn(constraint_column.name, table_idx=table_idx))
                         merged.append(Constraint(c1.columns.union(c.columns)))
 
-                result = merged
+                self._all_constraints = merged
 
-            return result
-
-        def build_equality_groups(equalities: list[tuple[ConstraintColumn, ConstraintColumn]]) -> list[set[ConstraintColumn]]:
-            '''Given a list of equality pairs, return transitive closure groups.'''
-            parent = {}
-
-            def find(x):
-                while parent[x] != x:
-                    parent[x] = parent[parent[x]]
-                    x = parent[x]
-                return x
-
-            def union(x, y):
-                rx, ry = find(x), find(y)
-                if rx != ry:
-                    parent[ry] = rx
-
-            # Initialize all columns
-            for l, r in equalities:
-                parent.setdefault(l, l)
-                parent.setdefault(r, r)
-
-            # Union connected columns
-            for l, r in equalities:
-                union(l, r)
-
-            # Group by representative
-            groups = {}
-            for col in parent:
-                root = find(col)
-                groups.setdefault(root, set()).add(col)
-
-            return list(groups.values())
-
-        def filter_valid_constraints() -> list[Constraint]:
-            constraints: list[Constraint] = []
-
+            # If DISTINCT is present, the entire output is unique
             if self.distinct:
-                # If DISTINCT is present, the entire output is unique -> add a new constraint, don't discard existing ones
-                
-                uc_cols = { ConstraintColumn(col.name, col.table_idx) for col in result.columns }
-                constraints.append(Constraint(uc_cols, constraint_type=ConstraintType.DISTINCT))
+                uc_cols = { ConstraintColumn(col.name, col.table_idx) for col in self._get_output_table().columns }
+                self._all_constraints.append(Constraint(uc_cols, constraint_type=ConstraintType.DISTINCT))
 
-            all_constraints = merge_unique_constraints()
-            
+            # If GROUP BY is present, treat grouped columns as unique.
             if self.group_by:
-                # If GROUP BY is present, treat grouped columns as unique.
-                # Keep existing constraints that are subsets of the grouped columns.
-
                 group_by_cols: set[ConstraintColumn] = set()
                 for col in self.group_by:
                     if isinstance(col, exp.Column):
@@ -458,94 +547,119 @@ class Select(SetOperation, TokenizedSQL):
                         group_by_cols.add(ConstraintColumn(name, table_idx))
 
                 # Add GROUP BY constraint
-                all_constraints.append(Constraint(group_by_cols, constraint_type=ConstraintType.GROUP_BY))
+                self._all_constraints.append(Constraint(group_by_cols, constraint_type=ConstraintType.GROUP_BY))
 
-            equalities = self.get_join_equalities()
-            if equalities:
-                def resolve(col):
-                    table_name = normalize_ast_column_table(col)
-                    col_name = col.alias_or_name
-                    name = col_name if col.this.quoted else col_name.lower()
-                    if table_name:
-                        table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
-                    else:
-                        table_idx = next((i for i, t in enumerate(self.referenced_tables)
-                                        if any(c.name == name for c in t.columns)), None)
-                    return ConstraintColumn(name, table_idx)
-                
-                # Normalize all equalities as UniqueConstraintColumns
-                uc_equalities = [(resolve(left_col), resolve(right_col)) for left_col, right_col in equalities]
-
-                # Compute transitive closure (equivalence classes)
-                equality_groups = build_equality_groups(uc_equalities)
-
-                # For each constraint, if it contains any member of a group, extend it with the others
-                new_constraints: list[Constraint] = []
-                for constraint in all_constraints:
-                    expanded_columns = set(constraint.columns)
-                    for group in equality_groups:
-                        if not expanded_columns.isdisjoint(group):
-                            expanded_columns |= group
-                    new_constraints.append(Constraint(expanded_columns))
-                all_constraints = new_constraints
-
-                # Merge overlapping sets
-                new_constraints: list[Constraint] = []
-                for equality_group in equality_groups:
-                    for col in equality_group:
-                        for constraint in all_constraints:
-                            if equality_group.isdisjoint(constraint.columns):
-                                continue
-
-                            # For each column in the equality group, create a new constraint with all equivalences replaced by that column
-                            new_constraints.append(Constraint(constraint.columns - equality_group | { col }))
-
-                all_constraints = new_constraints
-
-            # Keep only constraints that are valid for the output columns
-            for unique_constraint in all_constraints:
-                valid = all(
-                    any(output_column.table_idx == constraint_column.table_idx and output_column.name == constraint_column.name
-                        for output_column in result.columns if output_column.table_idx is not None)
-                    for constraint_column in unique_constraint.columns
-                )
-                if valid:
-                    constraints.append(unique_constraint)
-
-            return constraints
-
-        # ----------------------------------------------------------------------
-        # Main column extraction loop
-        # ----------------------------------------------------------------------
-
-        for expr in self.ast.expressions:
-            if isinstance(expr, exp.Star):
-                add_star()
-            elif isinstance(expr, exp.Alias):
-                add_alias(expr)
-            elif isinstance(expr, exp.Column):
-                # Handle SELECT table.* separately
-                if isinstance(expr.this, exp.Star):
-                    add_table_star(expr)
-                else:
-                    add_column(expr)
-            elif isinstance(expr, exp.Subquery):
-                add_subquery(expr)
-            elif isinstance(expr, exp.Literal):
-                add_literal(expr)
-            elif isinstance(expr, exp.Func):
-                add_function(expr)
-            else:
-                add_literal(expr)  # fallback for other expressions
-
-        # ----------------------------------------------------------------------
-        # Merge and attach unique constraints
-        # ----------------------------------------------------------------------
-
-        result.unique_constraints = filter_valid_constraints()
+        return self._all_constraints
 
 
-        return result
+    @property
+    def output(self) -> Table:
+        '''
+        Returns a Table object representing the output of this SELECT query.
+        It includes inferred columns (name, type, nullability, constancy)
+        and merged unique constraints from referenced tables.
+        '''
+        if self._output is None:
+            result = self._get_output_table()
+            
+            def build_equality_groups(equalities: list[tuple[ConstraintColumn, ConstraintColumn]]) -> list[set[ConstraintColumn]]:
+                '''Given a list of equality pairs, return transitive closure groups.'''
+                parent = {}
+
+                def find(x):
+                    while parent[x] != x:
+                        parent[x] = parent[parent[x]]
+                        x = parent[x]
+                    return x
+
+                def union(x, y):
+                    rx, ry = find(x), find(y)
+                    if rx != ry:
+                        parent[ry] = rx
+
+                # Initialize all columns
+                for l, r in equalities:
+                    parent.setdefault(l, l)
+                    parent.setdefault(r, r)
+
+                # Union connected columns
+                for l, r in equalities:
+                    union(l, r)
+
+                # Group by representative
+                groups = {}
+                for col in parent:
+                    root = find(col)
+                    groups.setdefault(root, set()).add(col)
+
+                return list(groups.values())
+
+            def filter_valid_constraints() -> list[Constraint]:
+                constraints: list[Constraint] = []
+                all_constraints = self.all_constraints
+
+                equalities = self.get_join_equalities()
+                if equalities:
+                    def resolve(col):
+                        table_name = normalize_ast_column_table(col)
+                        col_name = col.alias_or_name
+                        name = col_name if col.this.quoted else col_name.lower()
+                        if table_name:
+                            table_idx = next((i for i, t in enumerate(self.referenced_tables) if t.name == table_name), None)
+                        else:
+                            table_idx = next((i for i, t in enumerate(self.referenced_tables)
+                                            if any(c.name == name for c in t.columns)), None)
+                        return ConstraintColumn(name, table_idx)
+                    
+                    # Normalize all equalities as UniqueConstraintColumns
+                    uc_equalities = [(resolve(left_col), resolve(right_col)) for left_col, right_col in equalities]
+
+                    # Compute transitive closure (equivalence classes)
+                    equality_groups = build_equality_groups(uc_equalities)
+
+                    # For each constraint, if it contains any member of a group, extend it with the others
+                    new_constraints: list[Constraint] = []
+                    for constraint in all_constraints:
+                        expanded_columns = set(constraint.columns)
+                        for group in equality_groups:
+                            if not expanded_columns.isdisjoint(group):
+                                expanded_columns |= group
+                        new_constraints.append(Constraint(expanded_columns))
+                    all_constraints = new_constraints
+
+                    # Merge overlapping sets
+                    new_constraints: list[Constraint] = []
+                    for equality_group in equality_groups:
+                        for col in equality_group:
+                            for constraint in all_constraints:
+                                if equality_group.isdisjoint(constraint.columns):
+                                    continue
+
+                                # For each column in the equality group, create a new constraint with all equivalences replaced by that column
+                                new_constraints.append(Constraint(constraint.columns - equality_group | { col }))
+
+                    all_constraints = new_constraints
+
+                # Keep only constraints that are valid for the output columns
+                for unique_constraint in all_constraints:
+                    valid = all(
+                        any(output_column.table_idx == constraint_column.table_idx and output_column.name == constraint_column.name
+                            for output_column in result.columns)
+                        for constraint_column in unique_constraint.columns
+                    )
+                    if valid:
+                        constraints.append(unique_constraint)
+
+                return constraints
+
+            # ----------------------------------------------------------------------
+            # Merge and attach unique constraints
+            # ----------------------------------------------------------------------
+
+            result.unique_constraints = filter_valid_constraints()
+            self._output = result
+
+        return self._output
     
     @property
     def where(self) -> exp.Expression | None:
