@@ -1,9 +1,18 @@
 import pytest
 from sql_error_categorizer.query.typechecking import get_type
+from sql_error_categorizer import load_catalog
+from sql_error_categorizer.query import Query
+
+@pytest.fixture
+def make_query():
+    def _make_query(sql: str, catalog: str):
+        return Query(sql, catalog=load_catalog(f'datasets/catalogs/{catalog}.json'), search_path=catalog)
+    return _make_query
+
 
 def test_primitive_types(make_query):
     sql = "SELECT 'hello' AS str_col, 123 AS num_col, TRUE AS bool_col, NULL AS null_col, DATE '2020-01-01' AS date_col;"
-    query = make_query(sql)
+    query = make_query(sql, 'miedema')
     result = []
     for exp in query.main_query.ast.expressions:
         col_type = get_type(exp, query.main_query.referenced_tables)[0]
@@ -12,7 +21,7 @@ def test_primitive_types(make_query):
 
 def test_type_columns(make_query):
     sql = "SELECT * FROM store;"
-    query = make_query(sql)
+    query = make_query(sql, 'miedema')
     result = []
     for col in query.main_query.output.columns:
         result.append(col.column_type)
@@ -27,7 +36,7 @@ def test_type_columns(make_query):
 
 ])
 def test_expression_types(sql, expected_types, make_query):
-    query = make_query(sql)
+    query = make_query(sql, 'miedema')
     result = []
     for exp in query.main_query.ast.expressions:
         col_type = get_type(exp, query.main_query.referenced_tables)[0]
