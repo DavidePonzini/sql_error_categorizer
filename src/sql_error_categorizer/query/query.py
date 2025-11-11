@@ -49,17 +49,50 @@ class Query(TokenizedSQL):
 
             # Collect CTE names and their corresponding SQL
             if isinstance(token, sqlparse.sql.IdentifierList):
+                # Multiple CTEs
                 cte_tokens.extend(token.get_identifiers())
 
             elif isinstance(token, sqlparse.sql.Identifier):
+                # Single CTE
                 cte_tokens.append(token)
 
-        for cte_token in cte_tokens:
-            cte_name = cte_token.get_name()
-            
-            cte_parenthesis = next(cte_token.get_sublists())
-            if not cte_parenthesis:
-                continue
+            elif isinstance(token, sqlparse.sql.Parenthesis) or token.ttype is sqlparse.tokens.Keyword:
+                # CTE using a keyword as name (e.g., "WITH temp AS (...)")
+                cte_tokens.append(token)
+
+        current_token_index = 0
+        while current_token_index < len(cte_tokens):
+            cte_token = cte_tokens[current_token_index]
+            current_token_index += 1
+
+            if isinstance(cte_token, sqlparse.sql.Identifier):
+                # Standard CTE name
+                cte_name = str(cte_token.get_name())
+                
+                cte_parenthesis = next(cte_token.get_sublists())
+                if not cte_parenthesis:
+                    continue
+            else:
+                # Fallback for non-standard CTE definitions (e.g., using keywords)
+
+                # In this case we have:
+                #  - Keyword (CTE name)             -> use as CTE name    
+                #  - Keyword (AS)                   -> skip
+                #  - Parenthesis (CTE query)        -> parse as CTE query
+                cte_name = str(cte_token)
+
+                # Skip AS token
+                if current_token_index < len(cte_tokens) and str(cte_tokens[current_token_index]).upper() == 'AS':
+                    current_token_index += 1
+
+                if current_token_index >= len(cte_tokens):
+                    continue
+
+                cte_parenthesis = cte_tokens[current_token_index]
+                current_token_index += 1
+
+                if not isinstance(cte_parenthesis, sqlparse.sql.Parenthesis):
+                    continue
 
             cte_parenthesis_str = str(cte_parenthesis)[1:-1]  # Remove surrounding parentheses
             cte = create_set_operation_tree(cte_parenthesis_str)
