@@ -7,13 +7,13 @@ import sqlparse.keywords
 from typing import Callable
 from sqlglot import exp
 
-from sql_error_categorizer.catalog.constraint import ConstraintType
+from sql_error_categorizer.catalog import ConstraintType, ConstraintColumn, Constraint
 
 from .base import BaseDetector, DetectedError
 from ..query import Query
 from ..sql_errors import SqlErrors
 from ..catalog import Catalog
-from ..util import normalize_ast_column_real_name, normalize_ast_column_table
+from ..util import normalize_ast_column_real_name
 
 
 class ComplicationDetector(BaseDetector):
@@ -176,11 +176,58 @@ class ComplicationDetector(BaseDetector):
     def com_91_unnecessary_aggregate_function(self) -> list[DetectedError]:
         return []
     
-    # TODO: implement
     def com_92_unnecessary_distinct_in_aggregate_function(self) -> list[DetectedError]:
-        return []
+        '''MIN and MAX never require DISTINCT. For other aggregate functions, DISTINCT is unnecessary if the argument is unique.'''
+
+        results: list[DetectedError] = []
+
+        from dav_tools import messages
+
+        for select in self.query.selects:
+            select = select.strip_subqueries()
+
+            if not select.ast:
+                continue
+
+            for agg_func in select.ast.find_all(exp.AggFunc):
+                if not isinstance(agg_func.this, exp.Distinct):
+                    messages.debug(f"Skipping aggregate function without DISTINCT: {agg_func}")
+                    continue
+
+                messages.debug(f"Examining aggregate function: {agg_func}")
+                
+                if isinstance(agg_func, (exp.Min, exp.Max)):
+                    results.append(DetectedError(SqlErrors.COM_92_UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION, (str(agg_func),)))
+                    continue
+
+                arg_expr = agg_func.this.expressions   # `.this` is the DISTINCT, `.expressions` are the arguments
+                if not arg_expr:
+                    messages.debug(f"Skipping aggregate function with DISTINCT but no arguments: {agg_func}")
+                    continue
+
+                for expr in arg_expr:
+                    messages.debug(f"Examining argument of aggregate function: {expr}")
+
+                    # Check if the argument is a constant literal
+                    if isinstance(expr, exp.Literal):
+                        messages.debug(f"Argument is a constant literal: {expr}")
+                        results.append(DetectedError(SqlErrors.COM_92_UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION, (str(agg_func),)))
+                        continue
+
+                    # Check if the argument is a column
+                    if isinstance(expr, exp.Column):
+                        messages.debug(f"Examining column argument of aggregate function: {expr}")
+                        column_name = normalize_ast_column_real_name(expr)
+
+                        # Check if the column has a UNIQUE constraint
+                        unique_constraints = [c for c in select.all_constraints if c.constraint_type == ConstraintType.UNIQUE]
+                        for constraint in unique_constraints:
+                            messages.debug(f"Checking unique constraint: {constraint}")
+                            if { ConstraintColumn(column_name, table_idx=select._get_table_idx_for_column(expr)) } == constraint.columns:
+                                results.append(DetectedError(SqlErrors.COM_92_UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION, (str(agg_func),)))
+                                break
+        return results
     
-    # TODO: implement
     def com_93_unnecessary_argument_of_count(self) -> list[DetectedError]:
         return []
     
@@ -189,6 +236,10 @@ class ComplicationDetector(BaseDetector):
         return []
     
     def com_95_group_by_with_singleton_groups(self) -> list[DetectedError]:
+        '''
+        Flags GROUP BY clauses on singleton groups due to the presence
+        of UNIQUE constraints on the grouped columns.
+        '''
         results: list[DetectedError] = []
 
         for select in self.query.selects:
@@ -214,6 +265,11 @@ class ComplicationDetector(BaseDetector):
         return []
     
     def com_97_group_by_can_be_replaced_by_distinct(self) -> list[DetectedError]:
+        '''
+        Flags GROUP BY clauses that can be replaced by SELECT DISTINCT.
+        This occurs when all selected columns are included in the GROUP BY clause
+        and there are no aggregate functions in the SELECT list.
+        '''
         results: list[DetectedError] = []
 
         for select in self.query.selects:
