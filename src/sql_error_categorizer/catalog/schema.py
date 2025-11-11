@@ -55,6 +55,6 @@ class Schema:
         '''Creates a Schema from a dictionary.'''
         schema = cls(name=data['name'])
         for _, tbl_data in (data.get('tables') or {}).items():
-            tbl = Table.from_dict(tbl_data)
+            tbl = Table.from_dict(tbl_data, schema_name=schema.name)
             schema._tables[tbl.name] = tbl
         return schema

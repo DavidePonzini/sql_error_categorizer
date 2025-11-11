@@ -1,5 +1,6 @@
 from . import queries
 from ..catalog import Catalog
+from ..constraint import ConstraintType
 import psycopg2
 import time
 
@@ -43,11 +44,11 @@ def build_catalog(sql_string: str, *, hostname: str, port: int, user: str, passw
     cur.execute(queries.UNIQUE_COLUMNS(schema_name))
     unique_constraints_info = cur.fetchall()
     for constraint in unique_constraints_info:
-        schema_name, table_name, constraint_type, columns = constraint
+        schema_name, table_name, constraint_type_str, columns = constraint
         columns = set(columns.strip('{}').split(','))  # Postgres returns {col1,col2,...}
-        is_pk = constraint_type == 'PRIMARY KEY'
+        constraint_type = ConstraintType.PRIMARY_KEY if constraint_type_str == 'PRIMARY KEY' else ConstraintType.UNIQUE
 
-        result[schema_name][table_name].add_unique_constraint(columns, is_pk=is_pk)
+        result[schema_name][table_name].add_unique_constraint(columns, constraint_type=constraint_type)
 
     # Clean up
     if create_temp_schema:

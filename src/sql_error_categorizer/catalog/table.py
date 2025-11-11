@@ -1,4 +1,4 @@
-from .constraint import Constraint, ConstraintColumn
+from .constraint import Constraint, ConstraintColumn, ConstraintType
 from .column import Column
 
 from dataclasses import dataclass, field
@@ -8,12 +8,18 @@ class Table:
     '''A database table, with columns and unique constraints. Supports multiple columns with the same name (e.g. from joins).'''
 
     name: str
+    real_name: str = field(init=False)
+    schema_name: str | None = None
+    cte_idx: int | None = None
     unique_constraints: list[Constraint] = field(default_factory=list)
     columns: list[Column] = field(default_factory=list)
 
-    def add_unique_constraint(self, columns: set[str], is_pk: bool) -> None:
+    def __post_init__(self):
+        self.real_name = self.name
+
+    def add_unique_constraint(self, columns: set[str], constraint_type: ConstraintType = ConstraintType.UNIQUE) -> None:
         '''Adds a unique constraint to the table.'''
-        self.unique_constraints.append(Constraint({ConstraintColumn(name=col) for col in columns}, is_pk=is_pk))
+        self.unique_constraints.append(Constraint({ConstraintColumn(name=col) for col in columns}, constraint_type=constraint_type))
 
     def add_column(self,
                    name: str,
@@ -65,8 +71,17 @@ class Table:
         
         if len(self.columns) > 0:
             columns = '\n' + columns + '\n' + indent
+
+        cte_idx = f'cte_idx={self.cte_idx}, ' if self.cte_idx is not None else ''
+        schema_name = f'schema_name=\'{self.schema_name}\', ' if self.schema_name is not None else ''
         
-        return f'{indent}Table(name=\'{self.name}\', columns=[{columns}], unique_constraints=[{unique_constraints_str}])'
+        return f'{indent}Table(' \
+                f'name=\'{self.name}\', ' \
+                f'real_name=\'{self.real_name}\', ' \
+                f'{schema_name}' \
+                f'{cte_idx}' \
+                f'columns=[{columns}], ' \
+                f'unique_constraints=[{unique_constraints_str}])'
 
     def to_dict(self) -> dict:
         '''Converts the Table to a dictionary.'''
@@ -77,9 +92,9 @@ class Table:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'Table':
+    def from_dict(cls, data: dict, schema_name: str | None = None) -> 'Table':
         '''Creates a Table from a dictionary.'''
-        table = cls(name=data['name'])
+        table = cls(name=data['name'], schema_name=schema_name)
         # Unique constraints first (so Column.is_pk works immediately on repr, etc.)
         for uc_data in data.get('unique_constraints', []):
             uc = Constraint.from_dict(uc_data)

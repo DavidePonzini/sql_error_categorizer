@@ -95,14 +95,18 @@ class Query(TokenizedSQL):
                     continue
 
             cte_parenthesis_str = str(cte_parenthesis)[1:-1]  # Remove surrounding parentheses
-            cte = create_set_operation_tree(cte_parenthesis_str)
+            cte = create_set_operation_tree(cte_parenthesis_str, search_path=self.search_path, catalog=self.catalog)
 
             self.ctes.append(cte)
 
             # Add CTE output columns to catalog
             output = cte.output
             output.name = cte_name
-            self.catalog[''][cte_name] = output
+            output.real_name = cte_name
+            output.cte_idx = len(self.ctes) - 1
+            output.schema_name = self.search_path
+
+            self.catalog[output.schema_name][cte_name] = output
 
         main_query_sql = ''.join(str(token) for token in main_query_tokens).strip()
         self.main_query = create_set_operation_tree(main_query_sql, catalog=self.catalog, search_path=self.search_path)
