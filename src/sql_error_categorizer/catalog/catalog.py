@@ -3,7 +3,6 @@ import json
 from typing import Self
 from enum import Enum
 from copy import deepcopy
-from sql_error_categorizer.catalog.types import DataType, resolve_type
 
 # region UniqueConstraint
 class UniqueConstraintType(Enum):
@@ -35,7 +34,7 @@ class UniqueConstraint:
 @dataclass
 class Column:
     name: str
-    column_type: DataType.Type = DataType.Type.UNKNOWN
+    column_type: str = "unknown"
     numeric_precision: int | None = None
     numeric_scale: int | None = None
     is_nullable: bool = True
@@ -101,7 +100,7 @@ class Table:
     def add_column(self, name: str, column_type: str, numeric_precision: int | None = None, numeric_scale: int | None = None,
                    is_nullable: bool = True, fk_schema: str | None = None, fk_table: str | None = None, fk_column: str | None = None) -> Column:
         column = Column(name=name,
-                        column_type=resolve_type(column_type), numeric_precision=numeric_precision, numeric_scale=numeric_scale,
+                        column_type=column_type, numeric_precision=numeric_precision, numeric_scale=numeric_scale,
                         is_nullable=is_nullable,
                         fk_schema=fk_schema, fk_table=fk_table, fk_column=fk_column)
         self.columns.append(column)
@@ -258,7 +257,7 @@ class Catalog:
         '''Adds a column to the catalog, creating the schema and table if they do not exist.'''
 
         self[schema_name][table_name].add_column(name=column_name,
-                                                 column_type=resolve_type(column_type), numeric_precision=numeric_precision, numeric_scale=numeric_scale,
+                                                 column_type=column_type, numeric_precision=numeric_precision, numeric_scale=numeric_scale,
                                                  is_nullable=is_nullable,
                                                  fk_schema=fk_schema, fk_table=fk_table, fk_column=fk_column)
         
@@ -313,10 +312,10 @@ class Catalog:
     def from_json(cls, s: str) -> 'Catalog':
         return cls.from_dict(json.loads(s))
 
-    def to_sqlglot_schema(self) -> dict[str, dict[str, dict[str, DataType.Type]]]:
+    def to_sqlglot_schema(self) -> dict[str, dict[str, dict[str, str]]]:
         '''Converts to a sqlglot-compatible catalog format.'''
 
-        result: dict[str, dict[str, dict[str, DataType.Type]]] = {}
+        result: dict[str, dict[str, dict[str, str]]] = {}
 
         for sch_name, sch in self._schemas.items():
             result[sch_name] = {}

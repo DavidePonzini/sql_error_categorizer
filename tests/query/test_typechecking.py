@@ -1,12 +1,12 @@
 import pytest
-from sql_error_categorizer.query.typechecking import collect_errors, get_type, rewrite_expression
+from sql_error_categorizer.query.typechecking import collect_errors, get_type
 
 def test_primitive_types(make_query):
     sql = "SELECT 'hello' AS str_col, 123 AS num_col, TRUE AS bool_col, NULL AS null_col, DATE '2020-01-01' AS date_col;"
     query = make_query(sql)
     result = []
     for col in query.main_query.output.columns:
-        result.append(col.column_type.value.lower())
+        result.append(col.column_type.lower())
     assert result == ["varchar", "int", "boolean", "null", "date"]
 
 def test_type_columns(make_query):
@@ -14,7 +14,7 @@ def test_type_columns(make_query):
     query = make_query(sql)
     result = []
     for col in query.main_query.output.columns:
-        result.append(col.column_type.value.lower())
+        result.append(col.column_type.lower())
     
     assert result == ['decimal', 'varchar', 'varchar', 'varchar']
 
@@ -55,7 +55,7 @@ def test_function_types(make_query):
 
     result = []
     for col in query.main_query.output.columns:
-        result.append(col.column_type.value.lower())
+        result.append(col.column_type.lower())
 
     assert result == ['bigint', 'double', 'decimal', 'varchar', 'decimal', 'varchar', 'null']
 
@@ -105,11 +105,11 @@ def test_in_operator_errors(sql, expected_errors, make_query):
     found_messages = [msg for msg, _ in result]
     assert found_messages == expected_errors
 
-# @pytest.mark.parametrize('sql, expected_errors', [
-#     ("WITH t AS (SELECT * FROM store) SELECT sname FROM t WHERE sname LIKE 5;", ["Invalid right operand type. Expected type string, but found type int."])
-# ])
-# def test_complex_typechecking(sql, expected_errors, make_query):
-#     query = make_query(sql)
-#     result = collect_errors(query.main_query.typed_ast, query.catalog, query.search_path)
-#     found_messages = [msg for msg, _ in result]
-#     assert found_messages == expected_errors
+@pytest.mark.parametrize('sql, expected_errors', [
+    ("WITH t AS (SELECT * FROM store) SELECT sname FROM t WHERE sname LIKE 5;", ["Invalid right operand type. Expected type string, but found type int."])
+])
+def test_complex_typechecking(sql, expected_errors, make_query):
+    query = make_query(sql)
+    result = collect_errors(query.main_query.typed_ast, query.catalog, query.search_path)
+    found_messages = [msg for msg, _ in result]
+    assert found_messages == expected_errors

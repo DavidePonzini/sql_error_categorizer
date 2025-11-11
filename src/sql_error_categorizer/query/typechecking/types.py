@@ -33,7 +33,7 @@ class AtomicType(ResultType):
             return other.data_type in DataType.TEMPORAL_TYPES
 
         return self.data_type == other.data_type
-
+    
 @dataclass
 class TupleType(ResultType):
 
@@ -48,10 +48,3 @@ class TupleType(ResultType):
         if not isinstance(other, TupleType):
             return False
         return self.types == other.types
-    
-
-def resolve_type(type_str: str) -> DataType.Type:
-    '''
-    Resolves a string representation of a type to a Type object.
-    '''
-    return DataType.build(type_str, udt=True).this
