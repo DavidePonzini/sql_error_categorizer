@@ -9,7 +9,7 @@ class Table:
 
     name: str
     real_name: str = field(init=False)
-    schema_name: str | None = None
+    schema_name: str
     cte_idx: int | None = None
     unique_constraints: list[Constraint] = field(default_factory=list)
     columns: list[Column] = field(default_factory=list)

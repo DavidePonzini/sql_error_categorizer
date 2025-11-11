@@ -104,7 +104,6 @@ class Query(TokenizedSQL):
             output.name = cte_name
             output.real_name = cte_name
             output.cte_idx = len(self.ctes) - 1
-            output.schema_name = self.search_path
 
             self.catalog[output.schema_name][cte_name] = output
 
