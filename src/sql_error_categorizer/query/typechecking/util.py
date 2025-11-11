@@ -33,8 +33,8 @@ def is_string(target: DataType.Type):
 def is_date(target: DataType.Type):
     return target in DataType.TEMPORAL_TYPES
 
-def error_message(expression: exp.Expression, found: ResultType | str, expected: ResultType | str | None = None) -> tuple[str | None, str, str]:
-    '''Return an error message tuple containing (expected_type, found_type, sql_snippet)'''
+def error_message(expression: exp.Expression | str, found: ResultType | str, expected: ResultType | str | None = None) -> tuple[str, str, str | None]:
+    '''Return an error message tuple containing (sql_snippet, found_type, expected_type).'''
     if expected is not None:
         if isinstance(expected, ResultType):
             expected = expected.data_type_str
@@ -44,4 +44,7 @@ def error_message(expression: exp.Expression, found: ResultType | str, expected:
         found = found.data_type_str
     found = found.lower()
 
-    return (expected, found, expression.sql())
+    if isinstance(expression, exp.Expression):
+        expression = expression.sql()
+
+    return (expression, found, expected)

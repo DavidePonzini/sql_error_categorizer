@@ -17,5 +17,5 @@ def rewrite_expression(expression: exp.Expression, catalog: Catalog, search_path
     return annotate_types(qualify(expression, schema=schema, db=search_path, validate_qualify_columns=False), schema)
 
 # This function needs to be called on a typed expression
-def collect_errors(expression: exp.Expression, catalog: Catalog, search_path: str = 'public') -> list[tuple[str | None, str, str]]:
+def collect_errors(expression: exp.Expression, catalog: Catalog, search_path: str = 'public') -> list[tuple[str, str, str | None]]:
     return get_type(expression, catalog, search_path).messages

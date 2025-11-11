@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ResultType:
-    messages: list[tuple[str | None, str, str]] = field(default_factory=list)
+    messages: list[tuple[str, str, str | None]] = field(default_factory=list)
     '''List of error messages as tuples containing (expected_type, found_type, sql_snippet)'''
     
     data_type: DataType.Type = DataType.Type.UNKNOWN

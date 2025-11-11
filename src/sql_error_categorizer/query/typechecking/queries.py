@@ -16,7 +16,7 @@ def _(expression: exp.Select, catalog: Catalog, search_path: str) -> ResultType:
         types.append(col_type)
 
     if not types:
-        old_messages.append(error_message(expression, "SELECT with no columns"))
+        old_messages.append(error_message(expression, "No columns selected"))
 
     where = expression.args.get("where")
     if where:

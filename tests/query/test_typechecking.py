@@ -13,26 +13,23 @@ def make_query():
 def test_primitive_types(make_query):
     sql = "SELECT 'hello' AS str_col, 123 AS num_col, TRUE AS bool_col, NULL AS null_col, DATE '2020-01-01' AS date_col;"
     query = make_query(sql, 'miedema')
-    result = []
-    for col in query.main_query.output.columns:
-        result.append(col.column_type.lower())
+    result = [col.column_type  for col in query.main_query.output.columns]
+
     assert result == ["varchar", "int", "boolean", "null", "date"]
 
 def test_type_columns(make_query):
     sql = "SELECT * FROM store;"
     query = make_query(sql, 'miedema')
-    result = []
-    for col in query.main_query.output.columns:
-        result.append(col.column_type.lower())
+    result = [col.column_type for col in query.main_query.output.columns]
     
     assert result == ['decimal', 'varchar', 'varchar', 'varchar']
 
 def test_wrong_column_reference(make_query):
-    sql = "SELECT unknown_col FROM store;"
+    sql = "SELECT pippo FROM store;"
     query = make_query(sql, 'miedema')
 
     messages = collect_errors(query.main_query.typed_ast, query.catalog, query.search_path)
-    assert messages == [(None,"Unknown column type.", "unknown_col")]
+    assert messages == [("pippo", "unknown column type", None)]
 
 @pytest.mark.parametrize('sql, expected_types', [
     ("SELECT 1 + (2 - '4') AS sum_col;", []),
@@ -46,29 +43,23 @@ def test_expression_types(sql, expected_types, make_query):
     assert messages == expected_types
 
 @pytest.mark.parametrize('sql, expected_error', [
-    ("SELECT 1 + TRUE AS invalid_sum;", ('numeric','boolean')),
-    ("SELECT sname FROM store WHERE sname > 5;", ['Type mismatch in comparison.']),
-    ("SELECT MIN(TRUE) FROM store;", ["Invalid MIN operand type."]),
-    ("SELECT MAX(sname > 'A') FROM store;", ["Invalid MAX operand type."])
+    ("SELECT 1 + TRUE AS invalid_sum;", [("boolean", "numeric")]),
+    ("SELECT sname FROM store WHERE sname > 5;", [("varchar & int",None)]),
+    ("SELECT MIN(TRUE) FROM store;", [("boolean", None)]),
+    ("SELECT MAX(sname > 'A') FROM store;", [("boolean", None)])
 ])
 def test_expression_type_errors(sql, expected_error, make_query):
     query = make_query(sql, 'miedema')
-    errors = collect_errors(query.main_query.typed_ast, query.catalog, query.search_path)
-    collected_messages = [(expected, found) for expected, found, expression in errors]
+    messages = [(found, expected) for _, found, expected in collect_errors(query.main_query.typed_ast, query.catalog, query.search_path)]
 
-    from dav_tools import messages
-    messages.debug(collected_messages)
-    
-    assert any(expected_error == msg for msg in collected_messages)
+    assert messages == expected_error
 
 # functions
 def test_function_types(make_query):
     sql = "SELECT COUNT(DISTINCT sname), AVG(sid), SUM(sid), MIN(sname), MAX(sid), CONCAT(NULL,NULL,1), CONCAT(NULL) FROM store;"
     query = make_query(sql, 'miedema')
 
-    result = []
-    for col in query.main_query.output.columns:
-        result.append(col.column_type.lower())
+    result = [col.column_type for col in query.main_query.output.columns]
 
     assert result == ['bigint', 'double', 'decimal', 'varchar', 'decimal', 'varchar', 'null']
 
@@ -90,39 +81,36 @@ def test_logical_operator(sql, expected_types, make_query):
     assert result == expected_types
 
 @pytest.mark.parametrize('sql, expected_errors', [
-    ("SELECT sname FROM store WHERE sname LIKE 5;", ["Invalid right operand type. Expected type string, but found type int."]),
-    ("SELECT sname FROM store WHERE sid IS TRUE;", ["Invalid left operand type. Expected type boolean, but found type decimal."]),
-    ("SELECT sname FROM store WHERE sid BETWEEN 'A' AND TRUE;", ["Invalid low bound type. Expected type decimal, but found type varchar.","Invalid high bound type. Expected type decimal, but found type boolean."])
+    ("SELECT sname FROM store WHERE sname LIKE 5;", [("int", "string")]),
+    ("SELECT sname FROM store WHERE sid IS TRUE;", [("decimal", "boolean")]),
+    ("SELECT sname FROM store WHERE sid BETWEEN 'A' AND TRUE;", [("varchar", "decimal"), ("boolean", "decimal")])
 ])
 def test_logical_operator_errors(sql, expected_errors, make_query):
     query = make_query(sql, 'miedema')
     typed_ast_where = query.main_query.typed_ast.args.get('where').this
-    result = collect_errors(typed_ast_where, query.catalog, query.search_path)
-    found_messages = [msg for msg, _ in result]
-    assert found_messages == expected_errors
+    messages = [(found, expected) for _, found, expected in collect_errors(typed_ast_where, query.catalog, query.search_path)]
+    assert messages == expected_errors
 
 
 @pytest.mark.parametrize('sql, expected_errors', [
-    ("SELECT sname FROM store WHERE sid IN ('A', 'B', 2);", ["Invalid item type. Expected type decimal, but found type varchar."]*2),
+    ("SELECT sname FROM store WHERE sid IN ('A', 'B', 2);", [("varchar", "decimal")]*2),
     ("SELECT sname FROM store WHERE sid IN (1,2,3);", []),
-    ("SELECT sname FROM store WHERE sid IN (SELECT 'a');", ["Invalid right operand type. Expected type decimal, but found type varchar."]),
+    ("SELECT sname FROM store WHERE sid IN (SELECT 'a');", [("varchar", "decimal")]),
     ("SELECT sname FROM store WHERE sid IN (SELECT 1);", []),
-    ("SELECT sname FROM store WHERE sid IN (SELECT 1,2);", ["Invalid right operand type. Expected type decimal, but found type list."]),
+    ("SELECT sname FROM store WHERE sid IN (SELECT 1,2);", [("list", "decimal")]),
     ("SELECT sid FROM store WHERE sid IN (SELECT sid FROM transaction);", []),
-    ("SELECT sid FROM store WHERE sid IN (SELECT sname FROM transaction);", ["Invalid right operand type. Expected type decimal, but found type varchar."])
+    ("SELECT sid FROM store WHERE sid IN (SELECT sname FROM transaction);", [("varchar", "decimal")])
 ])
 def test_in_operator_errors(sql, expected_errors, make_query):
     query = make_query(sql, 'miedema')
     typed_ast_where = query.main_query.typed_ast.args.get('where').this
-    result = collect_errors(typed_ast_where, query.catalog, query.search_path)
-    found_messages = [msg for msg, _ in result]
-    assert found_messages == expected_errors
+    messages = [(found, expected) for _, found, expected in collect_errors(typed_ast_where, query.catalog, query.search_path)]
+    assert messages == expected_errors
 
 @pytest.mark.parametrize('sql, expected_errors', [
-    ("WITH t AS (SELECT * FROM store) SELECT sname FROM t WHERE sname LIKE 5;", ["Invalid right operand type. Expected type string, but found type int."])
+    ("WITH t AS (SELECT * FROM store) SELECT sname FROM t WHERE sname LIKE 5;", [("int", "string")])
 ])
 def test_complex_typechecking(sql, expected_errors, make_query):
     query = make_query(sql, 'miedema')
-    result = collect_errors(query.main_query.typed_ast, query.catalog, query.search_path)
-    found_messages = [msg for msg, _ in result]
-    assert found_messages == expected_errors
+    messages = [(found, expected) for _, found, expected in collect_errors(query.main_query.typed_ast, query.catalog, query.search_path)]
+    assert messages == expected_errors

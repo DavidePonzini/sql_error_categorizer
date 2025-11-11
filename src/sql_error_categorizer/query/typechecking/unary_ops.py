@@ -11,7 +11,7 @@ def _(expression: exp.Neg, catalog: Catalog, search_path: str) -> ResultType:
     old_messages = inner_type.messages
 
     if not is_number(expression.type.this):
-        old_messages.append(error_message(expression, inner_type, 'NUMERIC'))
+        old_messages.append(error_message(expression, 'numeric', inner_type))
     
     return AtomicType(data_type=expression.type.this, nullable=inner_type.nullable, constant=inner_type.constant, messages=old_messages, value=inner_type.value)
 
@@ -22,7 +22,7 @@ def _(expression: exp.Not, catalog: Catalog, search_path: str) -> ResultType:
     old_messages = inner_type.messages
 
     if inner_type.data_type != DataType.Type.BOOLEAN:
-        old_messages.append(error_message(expression, inner_type, 'BOOLEAN'))
+        old_messages.append(error_message(expression, 'boolean', inner_type))
 
     return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
 
@@ -39,6 +39,6 @@ def _(expression: exp.Alias, catalog: Catalog, search_path: str) -> ResultType:
 def _(expression: exp.Distinct, catalog: Catalog, search_path: str) -> ResultType:
     
     if len(expression.expressions) != 1:
-        return AtomicType(messages=[error_message(expression, 'DISTINCT value')])
+        return AtomicType(messages=[error_message(expression, 'To many arguments')])
 
     return get_type(expression.expressions[0], catalog, search_path)

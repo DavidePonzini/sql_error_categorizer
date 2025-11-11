@@ -19,14 +19,14 @@ def _(expression: exp.Binary, catalog: Catalog, search_path: str) -> ResultType:
     if left_type != right_type:
 
         if not to_number(left_type) and left_type.data_type != DataType.Type.NULL:
-            old_messages.append(error_message(expression, left_type, "NUMERIC"))
+            old_messages.append(error_message(expression, left_type, "numeric"))
 
         if not to_number(right_type) and right_type.data_type != DataType.Type.NULL:
-            old_messages.append(error_message(expression, right_type, "NUMERIC"))
+            old_messages.append(error_message(expression, right_type, "numeric"))
 
     elif not is_number(left_type.data_type) and not is_number(right_type.data_type):
         if left_type.data_type != DataType.Type.NULL or right_type.data_type != DataType.Type.NULL:
-            old_messages.append(error_message(expression, left_type, "NUMERIC"))
+            old_messages.append(error_message(expression, left_type, "numeric"))
 
     return AtomicType(data_type=expression.type.this, nullable=left_type.nullable or right_type.nullable, constant=left_type.constant and right_type.constant, messages=old_messages)
 
@@ -36,7 +36,7 @@ def typecheck_comparisons(left_type: ResultType, right_type: ResultType, express
     # for boolean comparisons we can have only equality/inequality
     if DataType.Type.BOOLEAN == left_type.data_type == right_type.data_type:
         if not isinstance(expression, (exp.EQ, exp.NEQ)):
-            old_messages.append(error_message(expression, left_type, "BOOLEAN"))
+            old_messages.append(error_message(expression, left_type, "boolean"))
 
     if left_type != right_type and left_type.data_type != DataType.Type.NULL and right_type.data_type != DataType.Type.NULL:
         
@@ -47,7 +47,7 @@ def typecheck_comparisons(left_type: ResultType, right_type: ResultType, express
         if to_date(left_type) and to_date(right_type):
             return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)
 
-        old_messages.append(error_message(expression, str((left_type, right_type)), "comparison"))
+        old_messages.append(error_message(expression, left_type.data_type_str + " & " + right_type.data_type_str))
 
     # Always returns boolean
     return AtomicType(data_type=expression.type.this, nullable=False, constant=True, messages=old_messages)

@@ -28,7 +28,7 @@ def _(expression: exp.Tuple, catalog: Catalog, search_path: str) -> ResultType:
         types.append(item_type)
 
     if not types:
-        old_messages.append(error_message(expression, "Empty tuple type."))
+        old_messages.append(error_message(expression, "Empty arguments"))
 
     return TupleType(types=types, messages=old_messages, nullable=any(t.nullable for t in types), constant=all(t.constant for t in types))
 
@@ -42,7 +42,7 @@ def _(expression: exp.Cast, catalog: Catalog, search_path: str) -> ResultType:
     old_messages = original_type.messages
 
     if new_type in (DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
-        old_messages.append(error_message(expression, "Invalid cast type."))
+        old_messages.append(error_message(expression, "Invalid type."))
 
     # handle cast to numeric types
     if is_number(new_type) and not to_number(original_type):
@@ -64,7 +64,7 @@ def _(expression: exp.CurrentTimestamp, catalog: Catalog, search_path: str) -> R
 @get_type.register
 def _(expression: exp.Column, catalog: Catalog, search_path: str) -> ResultType:
     if expression.type.this in (DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
-        return AtomicType(messages=[error_message(expression, "Unknown column type.")])
+        return AtomicType(messages=[error_message(expression.name, "Unknown column type")])
     else:
         schema = expression.args.get("db") or search_path
         table = expression.args.get("table")
