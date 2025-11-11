@@ -16,7 +16,7 @@ class Schema:
     def __getitem__(self, table_name: str) -> Table:
         '''Gets a table from the schema, creating it if it does not exist.'''
         if table_name not in self._tables:
-            self._tables[table_name] = Table(table_name)
+            self._tables[table_name] = Table(table_name, self.name)
         return self._tables[table_name]
 
     def __setitem__(self, table_name: str, table: Table) -> None:

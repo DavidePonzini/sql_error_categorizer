@@ -1,18 +1,18 @@
-from ...query.util import remove_parentheses
 from .set_operation import SetOperation
-from ..tokenized_sql import TokenizedSQL
 from .. import extractors
+from ..tokenized_sql import TokenizedSQL
+from ..typechecking import get_type, rewrite_expression
+from ..util import extract_CNF
 from ...catalog import Catalog, Table, ConstraintColumn, Constraint, ConstraintType
 from ...util import *
-from ..util import extract_CNF
-from ..typechecking import get_type, to_res_type
+from ...query.util import remove_parentheses
 
 import sqlglot
 import sqlglot.errors
 from sqlglot import exp
 import re
 from copy import deepcopy
-import itertools
+
 
 class Select(SetOperation, TokenizedSQL):
     '''Represents a single SQL SELECT statement.'''
@@ -52,8 +52,10 @@ class Select(SetOperation, TokenizedSQL):
 
         try:
             self.ast = sqlglot.parse_one(self.sql)
+            self.typed_ast = rewrite_expression(deepcopy(self.ast), self.catalog, search_path=self.search_path)
         except sqlglot.errors.ParseError:
-            self.ast = None  # Empty expression on parse error        
+            self.ast = None  # Empty expression on parse error  
+            self.typed_ast = None      
         
     # region Auxiliary
     def _get_referenced_tables(self) -> list[Table]:
@@ -138,7 +140,7 @@ class Select(SetOperation, TokenizedSQL):
 
         if self._output_table is None:
             result = Table('', schema_name=self.search_path)
-            if not self.ast:
+            if not self.typed_ast:
                 self._output_table = result
                 return self._output_table
 
@@ -162,7 +164,7 @@ class Select(SetOperation, TokenizedSQL):
                         result.add_column(
                             name=col.name,
                             table_idx=idx,
-                            column_type=to_res_type(col.column_type).value,
+                            column_type=col.column_type,
                             is_nullable=col.is_nullable,
                             is_constant=col.is_constant
                         )
@@ -171,11 +173,18 @@ class Select(SetOperation, TokenizedSQL):
                 '''Add an expression with an explicit alias (e.g. SELECT expr AS alias).'''
                 alias = column.args['alias']
                 name = alias.this if alias.quoted else alias.this.lower()
-                res_type = get_type(column.this, self.referenced_tables)[0]
+
+                if isinstance(column.this, exp.Column):
+                    # If the aliased expression is a column, resolve its table index
+                    table_idx = self._get_table_idx_for_column(column.this)
+                else:
+                    table_idx = None
+                res_type = get_type(column.this, catalog=self.catalog, search_path=self.search_path)
 
                 result.add_column(
                     name=name,
-                    column_type=res_type.type.value,
+                    table_idx=table_idx,
+                    column_type=res_type.data_type_str,
                     is_nullable=res_type.nullable,
                     is_constant=res_type.constant
                 )
@@ -186,11 +195,12 @@ class Select(SetOperation, TokenizedSQL):
                 table = next((t for t in self.referenced_tables if t.name == table_name), None)
                 if table:
                     for col in table.columns:
-                        res_type = get_type(col, self.referenced_tables)[0]
+                        res_type = get_type(col, catalog=self.catalog, search_path=self.search_path)
+
                         result.add_column(
                             name=col.name,
                             table_idx=self.referenced_tables.index(table),
-                            column_type=res_type.type.value,
+                            column_type=res_type.data_type_str,
                             is_nullable=res_type.nullable,
                             is_constant=res_type.constant
                         )
@@ -200,12 +210,12 @@ class Select(SetOperation, TokenizedSQL):
                 col_name = column.alias_or_name
                 name = col_name if column.this.quoted else col_name.lower()
                 table_idx = self._get_table_idx_for_column(column)
-                res_type = get_type(column, self.referenced_tables)[0]
+                res_type = get_type(column, catalog=self.catalog, search_path=self.search_path)
                 
                 result.add_column(
                     name=name,
                     table_idx=table_idx,
-                    column_type=res_type.type.value,
+                    column_type=res_type.data_type_str,
                     is_nullable=res_type.nullable,
                     is_constant=res_type.constant
                 )
@@ -217,11 +227,11 @@ class Select(SetOperation, TokenizedSQL):
                 # Add the first column of the subquery's output
                 if subq.output.columns:
                     first_col = subq.output.columns[0]
-                    res_type = get_type(first_col, self.referenced_tables)[0]
+                    res_type = get_type(first_col, catalog=self.catalog, search_path=self.search_path)
                 
                     result.add_column(
                         name=first_col.name,
-                        column_type=res_type.type.value,
+                        column_type=res_type.data_type_str,
                         is_nullable=res_type.nullable,
                         is_constant=res_type.constant
                     )
@@ -230,123 +240,31 @@ class Select(SetOperation, TokenizedSQL):
 
             def add_literal(column: exp.Literal | exp.Expression) -> None:
                 '''Add a literal or computed expression as a pseudo-column (e.g. SELECT 1, SELECT a+b).'''
-                res_type = get_type(column, self.referenced_tables)[0]
+                res_type = get_type(column, catalog=self.catalog, search_path=self.search_path)
 
                 result.add_column(
                     name=get_anonymous_column_name(),
-                    column_type=res_type.type.value,
+                    column_type=res_type.data_type_str,
                     is_nullable=res_type.nullable,
                     is_constant=res_type.constant
                 )
 
             def add_function(column: exp.Func) -> None:
                 '''Add a function output column (e.g. SELECT MAX(col)).'''
-                res_type = get_type(column, self.referenced_tables)[0]
+                res_type = get_type(column, catalog=self.catalog, search_path=self.search_path)
 
                 result.add_column(
                     name=get_anonymous_column_name(),
-                    column_type=res_type.type.value,
+                    column_type=res_type.data_type_str,
                     is_nullable=res_type.nullable,
                     is_constant=res_type.constant
                 )
-
-            def build_equality_groups(equalities: list[tuple[ConstraintColumn, ConstraintColumn]]) -> list[set[ConstraintColumn]]:
-                '''Given a list of equality pairs, return transitive closure groups.'''
-                parent = {}
-
-                def find(x):
-                    while parent[x] != x:
-                        parent[x] = parent[parent[x]]
-                        x = parent[x]
-                    return x
-
-                def union(x, y):
-                    rx, ry = find(x), find(y)
-                    if rx != ry:
-                        parent[ry] = rx
-
-                # Initialize all columns
-                for l, r in equalities:
-                    parent.setdefault(l, l)
-                    parent.setdefault(r, r)
-
-                # Union connected columns
-                for l, r in equalities:
-                    union(l, r)
-
-                # Group by representative
-                groups = {}
-                for col in parent:
-                    root = find(col)
-                    groups.setdefault(root, set()).add(col)
-
-                return list(groups.values())
-
-            def filter_valid_constraints() -> list[Constraint]:
-                constraints: list[Constraint] = []
-
-                if self.distinct:
-                    # If DISTINCT is present, the entire output is unique -> add a new constraint, don't discard existing ones
-                    
-                    uc_cols = { ConstraintColumn(col.name, col.table_idx) for col in result.columns }
-                    constraints.append(Constraint(uc_cols, constraint_type=ConstraintType.DISTINCT))
-
-                all_constraints = self.all_constraints
-
-                equalities = self.get_join_equalities()
-                if equalities:
-                    def resolve(col: exp.Column) -> ConstraintColumn:
-                        col_name = normalize_ast_column_real_name(col)
-                        table_idx = self._get_table_idx_for_column(col)
-
-                        return ConstraintColumn(col_name, table_idx)
-                    
-                    # Normalize all equalities as UniqueConstraintColumns
-                    uc_equalities = [(resolve(left_col), resolve(right_col)) for left_col, right_col in equalities]
-
-                    # Compute transitive closure (equivalence classes)
-                    equality_groups = build_equality_groups(uc_equalities)
-
-                    # For each constraint, if it contains any member of a group, extend it with the others
-                    new_constraints: list[Constraint] = []
-                    for constraint in all_constraints:
-                        expanded_columns = set(constraint.columns)
-                        for group in equality_groups:
-                            if not expanded_columns.isdisjoint(group):
-                                expanded_columns |= group
-                        new_constraints.append(Constraint(expanded_columns))
-                    all_constraints = new_constraints
-
-                    # Merge overlapping sets
-                    new_constraints: list[Constraint] = []
-                    for equality_group in equality_groups:
-                        for col in equality_group:
-                            for constraint in all_constraints:
-                                if equality_group.isdisjoint(constraint.columns):
-                                    continue
-
-                                # For each column in the equality group, create a new constraint with all equivalences replaced by that column
-                                new_constraints.append(Constraint(constraint.columns - equality_group | { col }))
-
-                    all_constraints = new_constraints
-
-                # Keep only constraints that are valid for the output columns
-                for unique_constraint in all_constraints:
-                    valid = all(
-                        any(output_column.table_idx == constraint_column.table_idx and output_column.name == constraint_column.name
-                            for output_column in result.columns if output_column.table_idx is not None)
-                        for constraint_column in unique_constraint.columns
-                    )
-                    if valid:
-                        constraints.append(unique_constraint)
-
-                return constraints
 
             # ----------------------------------------------------------------------
             # Main column extraction loop
             # ----------------------------------------------------------------------
 
-            for expr in self.ast.expressions:
+            for expr in self.typed_ast.expressions:
                 if isinstance(expr, exp.Star):
                     add_star()
                 elif isinstance(expr, exp.Alias):
@@ -547,7 +465,6 @@ class Select(SetOperation, TokenizedSQL):
 
         return self._all_constraints
 
-
     @property
     def output(self) -> Table:
         '''
@@ -692,7 +609,6 @@ class Select(SetOperation, TokenizedSQL):
 
         return order.expressions
 
-
     @property
     def limit(self) -> int | None:
         if not self.ast:
@@ -716,30 +632,18 @@ class Select(SetOperation, TokenizedSQL):
             return int(offset_exp.expression.this)
         except ValueError:
             return None
-
-    # def get_output_types(self, catalog: Catalog = Catalog()) -> list[str]:
-    #     '''
-    #     Returns a list of output column types from the main query.
-        
-    #     Returns:
-    #         list[str]: A list of output column types.
-    #     '''
-    #     columns = self.ast.expressions if self.ast else []
-
-    #     types = []
-    #     for col in columns:
+    
+    @property
+    def selects(self) -> list['Select']:
+        return [self] + [subquery for subquery, _ in self.subqueries]
 
     # endregion
 
-
+    # region Methods
     def print_tree(self, pre: str = '') -> None:
         if self.parsed:
             self.parsed._pprint_tree(_pre=pre)
 
     def __repr__(self, pre: str = '') -> str:
         return f'{pre}{self.__class__.__name__}(SQL="{self.sql.splitlines()[0]}{"..." if len(self.sql.splitlines()) > 1 else ""}")'
-    
-    @property
-    def selects(self) -> list['Select']:
-        return [self] + [subquery for subquery, _ in self.subqueries]
-
+    # endregion

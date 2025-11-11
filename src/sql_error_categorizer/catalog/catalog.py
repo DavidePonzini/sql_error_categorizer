@@ -115,6 +115,24 @@ class Catalog:
         '''Creates a Catalog from a JSON string.'''
         return cls.from_dict(json.loads(s))
 
+    def to_sqlglot_schema(self) -> dict[str, dict[str, dict[str, str]]]:
+        '''Converts to a sqlglot-compatible catalog format.'''
+
+        result: dict[str, dict[str, dict[str, str]]] = {}
+
+        for sch_name, sch in self._schemas.items():
+            result[sch_name] = {}
+            for tbl_name, tbl in sch._tables.items():
+                if not tbl.columns:
+                    continue
+                result[sch_name][tbl_name] = {}
+                for col in tbl.columns:
+                    result[sch_name][tbl_name][col.name] = col.column_type
+            if not result[sch_name]:
+                del result[sch_name]
+
+        return result
+
     # Convenience file helpers
     def save_json(self, path: str, *, indent: int | None = 2) -> None:
         '''Saves the Catalog to a JSON file.'''
