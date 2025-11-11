@@ -181,8 +181,6 @@ class ComplicationDetector(BaseDetector):
 
         results: list[DetectedError] = []
 
-        from dav_tools import messages
-
         for select in self.query.selects:
             select = select.strip_subqueries()
 
@@ -191,38 +189,29 @@ class ComplicationDetector(BaseDetector):
 
             for agg_func in select.ast.find_all(exp.AggFunc):
                 if not isinstance(agg_func.this, exp.Distinct):
-                    messages.debug(f"Skipping aggregate function without DISTINCT: {agg_func}")
                     continue
 
-                messages.debug(f"Examining aggregate function: {agg_func}")
-                
                 if isinstance(agg_func, (exp.Min, exp.Max)):
                     results.append(DetectedError(SqlErrors.COM_92_UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION, (str(agg_func),)))
                     continue
 
                 arg_expr = agg_func.this.expressions   # `.this` is the DISTINCT, `.expressions` are the arguments
                 if not arg_expr:
-                    messages.debug(f"Skipping aggregate function with DISTINCT but no arguments: {agg_func}")
                     continue
 
                 for expr in arg_expr:
-                    messages.debug(f"Examining argument of aggregate function: {expr}")
-
                     # Check if the argument is a constant literal
                     if isinstance(expr, exp.Literal):
-                        messages.debug(f"Argument is a constant literal: {expr}")
                         results.append(DetectedError(SqlErrors.COM_92_UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION, (str(agg_func),)))
                         continue
 
                     # Check if the argument is a column
                     if isinstance(expr, exp.Column):
-                        messages.debug(f"Examining column argument of aggregate function: {expr}")
                         column_name = normalize_ast_column_real_name(expr)
 
                         # Check if the column has a UNIQUE constraint
                         unique_constraints = [c for c in select.all_constraints if c.constraint_type == ConstraintType.UNIQUE]
                         for constraint in unique_constraints:
-                            messages.debug(f"Checking unique constraint: {constraint}")
                             if { ConstraintColumn(column_name, table_idx=select._get_table_idx_for_column(expr)) } == constraint.columns:
                                 results.append(DetectedError(SqlErrors.COM_92_UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION, (str(agg_func),)))
                                 break
