@@ -321,9 +321,13 @@ class Catalog:
         for sch_name, sch in self._schemas.items():
             result[sch_name] = {}
             for tbl_name, tbl in sch._tables.items():
+                if not tbl.columns:
+                    continue
                 result[sch_name][tbl_name] = {}
                 for col in tbl.columns:
                     result[sch_name][tbl_name][col.name] = col.column_type
+            if not result[sch_name]:
+                del result[sch_name]
 
         return result
 

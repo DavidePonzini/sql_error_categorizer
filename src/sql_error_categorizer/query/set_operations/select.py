@@ -50,7 +50,7 @@ class Select(SetOperation, TokenizedSQL):
 
         try:
             self.ast = sqlglot.parse_one(self.sql)
-            self.typed_ast = rewrite_expression(self.ast, self.catalog, search_path=self.search_path)
+            self.typed_ast = rewrite_expression(deepcopy(self.ast), self.catalog, search_path=self.search_path)
         except sqlglot.errors.ParseError:
             self.ast = None  # Empty expression on parse error  
             self.typed_ast = None      

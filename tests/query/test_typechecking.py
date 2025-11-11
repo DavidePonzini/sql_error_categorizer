@@ -104,3 +104,12 @@ def test_in_operator_errors(sql, expected_errors, make_query):
     result = collect_errors(typed_ast_where, query.catalog, query.search_path)
     found_messages = [msg for msg, _ in result]
     assert found_messages == expected_errors
+
+# @pytest.mark.parametrize('sql, expected_errors', [
+#     ("WITH t AS (SELECT * FROM store) SELECT sname FROM t WHERE sname LIKE 5;", ["Invalid right operand type. Expected type string, but found type int."])
+# ])
+# def test_complex_typechecking(sql, expected_errors, make_query):
+#     query = make_query(sql)
+#     result = collect_errors(query.main_query.typed_ast, query.catalog, query.search_path)
+#     found_messages = [msg for msg, _ in result]
+#     assert found_messages == expected_errors
