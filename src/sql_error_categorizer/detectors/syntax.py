@@ -294,7 +294,13 @@ class SyntaxErrorDetector(BaseDetector):
         results: list[DetectedError] = []
 
         # standard_functions = {
-        known_aggregate_functions = {'SUM', 'AVG', 'COUNT', 'MIN', 'MAX', 'IN', 'EXISTS', 'ANY', 'ALL', 'COALESCE', 'NULLIF', 'CAST', 'CONVERT'}
+        known_aggregate_functions = {
+            'SUM', 'AVG', 'COUNT', 'MIN', 'MAX',
+            'IN', 'EXISTS', 'ANY', 'ALL',
+            'COALESCE', 'NULLIF', 'CAST', 'CONVERT',
+            'UPPER', 'LOWER', 'LENGTH', 'SUBSTRING',
+            'NOW', 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP',
+        }
         user_defined_functions = set() # TODO: self.catalog.functions
 
         all_functions = known_aggregate_functions.union(user_defined_functions)
