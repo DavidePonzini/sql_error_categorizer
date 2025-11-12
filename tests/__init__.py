@@ -5,7 +5,7 @@ from sql_error_categorizer import SyntaxErrorDetector, SemanticErrorDetector, Lo
 
 def run_test(query: str, *,
              catalog_filename: str | None = None,
-             search_path: str = 'public', 
+             search_path: str | None = None, 
              detectors: list[type[BaseDetector]],
              solutions: list[str] = [],
              debug: bool = False
@@ -15,6 +15,9 @@ def run_test(query: str, *,
         catalog = load_catalog(f'datasets/catalogs/{catalog_filename}.json')
     else:
         catalog = Catalog()
+
+    if search_path is None:
+        search_path = 'public'
 
     detector = Detector(
         query=query,
