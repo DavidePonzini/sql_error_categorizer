@@ -52,10 +52,16 @@ class Select(SetOperation, TokenizedSQL):
 
         try:
             self.ast = sqlglot.parse_one(self.sql)
-            self.typed_ast = rewrite_expression(deepcopy(self.ast), self.catalog, search_path=self.search_path)
         except sqlglot.errors.ParseError:
-            self.ast = None  # Empty expression on parse error  
-            self.typed_ast = None      
+            self.ast = None  # Empty expression on parse error
+
+        if self.ast is not None:
+            try:
+                self.typed_ast = rewrite_expression(deepcopy(self.ast), self.catalog, search_path=self.search_path)
+            except sqlglot.errors.OptimizeError:
+                self.typed_ast = None
+        else:
+            self.typed_ast = None        
         
     # region Auxiliary
     def _get_referenced_tables(self) -> list[Table]:

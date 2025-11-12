@@ -1,61 +1,38 @@
 from tests import *
+import pytest
 
-def test_undefined_table():
+@pytest.mark.parametrize('query,objects,schema', [
+    ('SELECT * FROM store;', ('store',), None),
+    ('SELECT * FROM customer c JOIN orders o ON c.cid = o.cid;', ['orders AS o'], 'miedema'),
+    ('SELECT * FROM products p WHERE p.pid IN (SELECT pid FROM my_table);', ['products AS p', 'my_table'], 'miedema'),
+    ('WITH temp AS (SELECT * FROM employees) SELECT * FROM temp;', ['employees'], None),
+    ('WITH temp AS (SELECT * FROM unknown_table) SELECT * FROM temp2 WHERE id > 5;', ['unknown_table', 'temp2'], None),
+])
+def test_wrong(query, objects, schema):
     detected_errors = run_test(
-        query='SELECT * FROM store;',
+        query=query,
         detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema'
+        catalog_filename=schema,
+        search_path=schema,
+        debug=True,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT, ('store',))
+    assert count_errors(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT) == len(objects)
+    for obj in objects:
+        assert has_error(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT, (obj,))
 
-def test_defined_table():
+@pytest.mark.parametrize('query,schema', [
+    ('SELECT * FROM store;', 'miedema'),
+    ('SELECT * FROM customer c JOIN store s ON c.cid = s.sid;', 'miedema'),
+    ('SELECT * FROM customer c WHERE c.sid IN (SELECT sid FROM store);', 'miedema'),
+    ('WITH temp AS (SELECT * FROM store) SELECT * FROM temp;', 'miedema'),
+])
+def test_correct(query, schema):
     detected_errors = run_test(
-        query='SELECT * FROM store;',
+        query=query,
         detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema'
+        catalog_filename=schema,
+        search_path=schema,
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT) == 0
-    assert not has_error(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT, ('store',))
-
-
-def test_undefined_table_cte_name_found():
-    detected_errors = run_test(
-        query='''
-        WITH cte AS (SELECT 1 AS id)
-        SELECT * FROM cte;
-        ''',
-        detectors=[SyntaxErrorDetector],
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT) == 0
-    assert not has_error(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT, ('cte',))
-
-
-def test_undefined_table_cte_name_not_found():
-    detected_errors = run_test(
-        query='''
-        WITH cte AS (SELECT 1 AS id)
-        SELECT * FROM cte2;
-        ''',
-        detectors=[SyntaxErrorDetector],
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT, ('cte2',))
-
-def test_undefined_table_cte():
-    detected_errors = run_test(
-        query='''
-        WITH cte AS (SELECT 1 FROM not_a_table)
-        SELECT * FROM store;
-        ''',
-        detectors=[SyntaxErrorDetector],
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT) == 2
-    assert has_error(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT, ('not_a_table',))
-    assert has_error(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT, ('store',))

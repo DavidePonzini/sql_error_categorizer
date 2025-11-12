@@ -210,6 +210,8 @@ class SyntaxErrorDetector(BaseDetector):
         results: list[DetectedError] = []
 
         for select in self.query.selects:
+            select = select.strip_subqueries()
+
             if select.ast is None:
                 continue
 
@@ -247,12 +249,8 @@ class SyntaxErrorDetector(BaseDetector):
 
         results: list[DetectedError] = []
 
-        from dav_tools import messages
-
         for select in self.query.selects:
             select = select.strip_subqueries()
-
-            messages.debug(f'Checking SELECT:\n{select}')
 
             if select.ast is None:
                 continue
@@ -276,9 +274,7 @@ class SyntaxErrorDetector(BaseDetector):
                     # Unqualified column (column)
                     for table in select.referenced_tables:
                         for possible_match in table.columns:
-                            messages.debug(f'Checking column {column_name} against table {table.name} column {possible_match.name}')
                             if possible_match.name == column_name:
-                                messages.debug(f'Found match for column {column_name} in table {table.name}')
                                 possible_matches.append(f'{table.name}.{column_name}')
 
                 if len(possible_matches) == 0:
