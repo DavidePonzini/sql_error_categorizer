@@ -22,7 +22,7 @@ class Select(SetOperation, TokenizedSQL):
                  *,
                  catalog: Catalog = Catalog(),
                  search_path: str = 'public',
-                 subquery_level: int = 0,
+                 parent_query: 'Select | None' = None,
         ) -> None:
         '''
         Initializes a SelectStatement object.
@@ -35,7 +35,7 @@ class Select(SetOperation, TokenizedSQL):
             parent (TokenizedSQL | None): The parent TokenizedSQL object if this is a subquery.
         '''
 
-        SetOperation.__init__(self, query, subquery_level=subquery_level)
+        SetOperation.__init__(self, query, parent_query=parent_query)
         TokenizedSQL.__init__(self, query)
 
         self.catalog = catalog
@@ -320,7 +320,7 @@ class Select(SetOperation, TokenizedSQL):
             if n == 0:
                 stripped_sql = re.sub(escaped, repl, stripped_sql, count=1)
 
-        return Select(stripped_sql, catalog=self.catalog, search_path=self.search_path)
+        return Select(stripped_sql, catalog=self.catalog, search_path=self.search_path, parent_query=self.parent_query)
 
     def get_join_conditions(self) -> list[exp.Expression]:
         '''Returns a list of join conditions used in the main query.'''
@@ -384,7 +384,13 @@ class Select(SetOperation, TokenizedSQL):
             subquery_sqls = extractors.extract_subqueries_tokens(self.sql)
 
             for subquery_sql, clause in subquery_sqls:
-                subquery = Select(subquery_sql, catalog=self.catalog, search_path=self.search_path)
+                updated_catalog = self.catalog.copy()
+                # Include selected tables from the main query into the subquery's catalog (i.e. for correlated subqueries)
+                for table in self.referenced_tables:
+                    if not updated_catalog.has_table(schema_name=table.schema_name, table_name=table.name):
+                        updated_catalog[self.search_path][table.name] = table
+
+                subquery = Select(subquery_sql, catalog=updated_catalog, search_path=self.search_path, parent_query=self)
                 self._subqueries.append((subquery, clause))
     
         return self._subqueries
@@ -402,6 +408,12 @@ class Select(SetOperation, TokenizedSQL):
 
         if self._referenced_tables is None:
             self._referenced_tables = self._get_referenced_tables()
+
+            if self.parent_query is not None:
+                # Include tables from parent query (for correlated subqueries)
+                for table in self.parent_query.referenced_tables:
+                    if not any(t.name == table.name and t.schema_name == table.schema_name for t in self._referenced_tables):
+                        self._referenced_tables.append(table)
         
         return self._referenced_tables
     

@@ -12,12 +12,12 @@ class SetOperation(ABC):
     Abstract base class for SQL set operations (i.e., SELECT, UNION, INTERSECT, EXCEPT).
     '''
 
-    def __init__(self, sql: str, subquery_level: int = 0):
+    def __init__(self, sql: str, parent_query: 'Select | None' = None):
         self.sql = sql
         '''The SQL string representing the operation.'''
         
-        self.subquery_level = subquery_level
-        '''The level of subquery nesting.'''
+        self.parent_query = parent_query
+        '''The parent Select if this is a subquery.'''
 
     @property
     @abstractmethod
