@@ -24,8 +24,10 @@ def test_wrong(query, value, schema):
 @pytest.mark.parametrize('query,schema', [
     ('SELECT * FROM table WHERE id = 5;', None),
     ('SELECT * FROM table WHERE name = \'John\';', None),
+    # subqueries
     ('SELECT * FROM table WHERE age > (SELECT MAX(age) FROM table);', None),
     ('SELECT * FROM employees WHERE dept = \'Sales\';', None),
+    # CTEs
     ('WITH temp AS (SELECT * FROM employees WHERE position = \'Manager\') SELECT * FROM temp;', None),
 ])
 def test_correct(query, schema):
