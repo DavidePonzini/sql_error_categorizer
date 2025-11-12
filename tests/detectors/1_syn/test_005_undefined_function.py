@@ -5,7 +5,9 @@ import pytest
     ('SELECT notafunction() FROM store;', 'notafunction', 'SELECT', None),
     ('SELECT anotherfunc(col1, col2) FROM store;', 'anotherfunc', 'SELECT', None),
     ('SELECT * FROM store WHERE invalid_func(col1) > 10;', 'invalid_func', 'WHERE', None),
+    # subqueries
     ('''SELECT * FROM store WHERE col1 IN (SELECT unknown_func(col2) FROM other_table);''', 'unknown_func', 'SELECT', None),
+    # CTEs
     ('''WITH temp AS (SELECT invalid_func(col) FROM store) SELECT * FROM temp;''', 'invalid_func', 'SELECT', None),
 ])
 def test_wrong(query, func, clause, schema):
@@ -26,7 +28,9 @@ def test_wrong(query, func, clause, schema):
     ('SELECT cid FROM customer WHERE LENGTH(cname) > 5;', None),
     ('SELECT cid FROM customer GROUP BY cid HAVING COUNT(order_id) > 2;', None),
     ('SELECT NOW();', None),
+    # subqueries
     ('SELECT * FROM store WHERE sid >= (SELECT MAX(col1) FROM store);', None),
+    # CTEs
     ('''WITH temp AS (SELECT MAX(col1) FROM store) SELECT * FROM temp;''', None),
 ])
 def test_correct(query, schema):

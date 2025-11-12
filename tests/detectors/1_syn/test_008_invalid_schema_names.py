@@ -5,7 +5,9 @@ import pytest
     ('SELECT * FROM notaschema.store;', 'notaschema.store', None, 'public'),
     ('SELECT * FROM miedema.store;', 'miedema.store', None, 'public'),
     ('SELECT * FROM miedema.store;', 'miedema.store', None, 'miedema'),
+    # subqueries
     ('SELECT * FROM (SELECT 1 AS id) AS subquery WHERE id IN (SELECT id FROM unknownschema.table);', 'unknownschema.table', None, 'public'),
+    # CTEs
     ('WITH temp AS (SELECT * FROM notaschema.customer) SELECT * FROM temp', 'notaschema.customer', 'miedema', 'public'),
 ])
 def test_wrong(query, value, schema, search_path):
@@ -23,7 +25,9 @@ def test_wrong(query, value, schema, search_path):
 @pytest.mark.parametrize('query,schema,search_path', [
     ('SELECT * FROM miedema.store;', 'miedema', 'public'),
     ('SELECT * FROM miedema.store;', 'miedema', 'miedema'),
+    # subqueries
     ('SELECT * FROM (SELECT 1 AS id) AS subquery WHERE id IN (SELECT cid FROM miedema.customer);', 'miedema', 'public'),
+    # CTEs
     ('WITH temp AS (SELECT * FROM miedema.customer) SELECT * FROM temp', 'miedema', 'public'),
     ('WITH temp AS (SELECT * FROM miedema.employees) SELECT * FROM temp', 'miedema', 'public'),
 ])

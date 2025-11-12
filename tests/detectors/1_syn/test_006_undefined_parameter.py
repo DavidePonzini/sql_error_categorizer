@@ -5,7 +5,9 @@ import pytest
     ('SELECT * FROM table WHERE id = :id;', ':id', None),
     ('SELECT * FROM table WHERE name = @name;', '@name', None),
     ('SELECT * FROM table WHERE age = ?;', '?', None),
+    # subqueries
     ('SELECT * FROM table WHERE salary > (SELECT AVG(salary) FROM employees WHERE dept = :dept);', ':dept', None),
+    # CTEs
     ('WITH temp AS (SELECT * FROM employees WHERE position = @position) SELECT * FROM temp;', '@position', None),
 ])
 def test_wrong(query, value, schema):

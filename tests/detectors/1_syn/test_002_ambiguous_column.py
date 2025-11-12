@@ -5,7 +5,9 @@ import itertools
 @pytest.mark.parametrize('query,column,table_aliases,schema', [
     ('SELECT street FROM store s, customer c;', 'street', ['s.street', 'c.street'], 'miedema'),
     ('SELECT s.street FROM store s, customer c WHERE street = c.street;', 'street', ['s.street', 'c.street'], 'miedema'),
+    # subqueries
     ('SELECT * FROM store s, customer c WHERE cid IN (SELECT street FROM store s2, customer c2);', 'street', ['s.street', 'c.street', 's2.street', 'c2.street'], 'miedema'),
+    # CTEs
     ('WITH temp AS (SELECT street FROM store s, customer c) SELECT street FROM temp;', 'street', ['s.street', 'c.street'], 'miedema'),
 ])
 def test_wrong(query, column, table_aliases, schema):
@@ -22,7 +24,9 @@ def test_wrong(query, column, table_aliases, schema):
 
 @pytest.mark.parametrize('query,schema', [
     ('SELECT s.street FROM store s, customer c;', 'miedema'),
+    # subqueries
     ('SELECT * FROM store s, customer c WHERE cid IN (SELECT s2.street FROM store s2, customer c2);', 'miedema'),
+    # CTEs
     ('WITH temp AS (SELECT s.street FROM store s, customer c) SELECT street FROM temp;', 'miedema'),
 ])
 def test_correct(query, schema):
