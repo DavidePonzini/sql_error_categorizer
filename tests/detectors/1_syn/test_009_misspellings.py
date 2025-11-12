@@ -1,109 +1,40 @@
 from tests import *
+import pytest
 
-def test_misspelling_schema():
+@pytest.mark.parametrize('query,expected_corrections', [
+    ('SELECT * FROM miedma.store;', [('miedma.store', '"miedema"."store"')]),
+    ('SELECT * FROM miedema.stor;', [('miedema.stor', '"miedema"."store"')]),
+    ('SELECT * FROM stor;', [('stor', '"store"')]),
+    ('SELECT sid FROM store WHERE ID = 1;', [('ID', '"sid"')]),
+    ('SELECT "Sid" FROM store;', [('"Sid"', '"sid"')]),
+    ('SELECT * FROM "Store";', [('"Store"', '"store"')]),
+    ('SELECT * FROM "MiedeMa".store;', [('"MiedeMa".store', '"miedema"."store"')]),
+])
+def test_wrong(query, expected_corrections):
     detected_errors = run_test(
-        query='SELECT * FROM miedma.store;',
+        query=query,
         detectors=[SyntaxErrorDetector],
         catalog_filename='miedema',
         search_path='miedema',
+        debug=True,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_9_MISSPELLINGS, ('miedma.store', '"miedema"."store"'))
+    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == len(expected_corrections)
+    for correction in expected_corrections:
+        assert has_error(detected_errors, SqlErrors.SYN_9_MISSPELLINGS, correction)
 
-def test_misspelling_table_with_schema():
+@pytest.mark.parametrize('query', [
+    'SELECT SID FROM store;',
+    'SELECT SID FROM store WHERE sID = 1;',
+    'SELECT * FROM STORE;',
+    'SELECT * FROM MIEDEMA.store;',
+])
+def test_correct(query):
     detected_errors = run_test(
-        query='SELECT * FROM miedema.stor;',
-        detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema',
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_9_MISSPELLINGS, ('miedema.stor', '"miedema"."store"'))
-
-def test_misspelling_table_without_schema():
-    detected_errors = run_test(
-        query='SELECT * FROM stor;',
-        detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema',
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_9_MISSPELLINGS, ('stor', '"store"'))
-
-
-def test_misspelling_column():
-    detected_errors = run_test(
-        query='SELECT sid FROM store WHERE ID = 1;',
-        detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema',
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_9_MISSPELLINGS, ('ID', '"sid"'))
-
-def test_misspelling_column_case_no_quotes():
-    detected_errors = run_test(
-        query='SELECT SID FROM store WHERE sID = 1;',
+        query=query,
         detectors=[SyntaxErrorDetector],
         catalog_filename='miedema',
         search_path='miedema',
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 0
-
-def test_misspelling_column_case_with_quotes():
-    detected_errors = run_test(
-        query='SELECT "Sid" FROM store;',
-        detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema',
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_9_MISSPELLINGS, ('"Sid"', '"sid"'))
-
-def test_misspelling_table_no_quotes():
-    detected_errors = run_test(
-        query='SELECT * FROM STORE;',
-        detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema',
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 0
-
-def test_misspelling_table_with_quotes():
-    detected_errors = run_test(
-        query='SELECT * FROM "Store";',
-        detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema',
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_9_MISSPELLINGS, ('"Store"', '"store"'))
-
-def test_misspelling_schema_no_quotes():
-    detected_errors = run_test(
-        query='SELECT * FROM MIEDEMA.store;',
-        detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema',
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 0
-
-def test_misspelling_schema_with_quotes():
-    detected_errors = run_test(
-        query='SELECT * FROM "MiedeMa".store;',
-        detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema',
-    )
-
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_9_MISSPELLINGS, ('"MiedeMa".store', '"miedema"."store"'))
