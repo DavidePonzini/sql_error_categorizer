@@ -1,6 +1,8 @@
 import sqlparse
 import sqlparse.tokens
 
+from sql_error_categorizer.query.set_operations.binary_set_operation import BinarySetOperation
+
 
 from .set_operations import SetOperation, Select, create_set_operation_tree
 from ..catalog import Catalog
@@ -125,6 +127,20 @@ class Query(TokenizedSQL):
         result.extend(self.main_query.selects)
 
         return result
+    
+
+    @property
+    def main_selects(self) -> list[Select]:
+
+        def _gather_selects_from_set_operation(so: SetOperation) -> list[Select]:
+            if isinstance(so, Select):
+                return [so]
+            elif isinstance(so, BinarySetOperation):
+                return _gather_selects_from_set_operation(so.left) + _gather_selects_from_set_operation(so.right)
+            else:
+                return []
+
+        return _gather_selects_from_set_operation(self.main_query)        
     
     # endregion   
 

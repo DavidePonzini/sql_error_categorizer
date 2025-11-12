@@ -6,6 +6,8 @@ import sqlparse
 import sqlparse.keywords
 from typing import Callable
 
+from sql_error_categorizer.query.set_operations.select import Select
+
 from .base import BaseDetector, DetectedError
 from ..query import Query
 from ..sql_errors import SqlErrors
@@ -393,8 +395,32 @@ class LogicalErrorDetector(BaseDetector):
                 
         return results
     
-    # TODO: implement
     def log_72_missing_distinct_from_select(self) -> list[DetectedError]:
+        '''Flags when DISTINCT is missing from a SELECT that requires it.'''
+
+        # ensure all solutions are simple SELECTs with DISTINCT
+        requires_distinct = True
+        for sol in self.solutions:
+            main_query = sol.main_query
+            if not isinstance(main_query, Select):
+                requires_distinct = False
+                break
+            if not main_query.distinct:
+                requires_distinct = False
+                break
+
+        # At least one solution doesn't require DISTINCT, so it's not necessary for the query
+        # Skip this check
+        if not requires_distinct:
+            return []
+        
+        main_query = self.query.main_query
+        if not isinstance(main_query, Select):
+            return [DetectedError(SqlErrors.LOG_72_MISSING_DISTINCT_FROM_SELECT)]
+        
+        if not main_query.distinct:
+            return [DetectedError(SqlErrors.LOG_72_MISSING_DISTINCT_FROM_SELECT)]
+        
         return []
 
     # TODO: implement
