@@ -341,6 +341,8 @@ class SyntaxErrorDetector(BaseDetector):
         results: set[DetectedError] = set()     # use a set to avoid applying the same correction multiple times
 
         for select in self.query.selects:
+            select = select.strip_subqueries()
+
             if select.ast is None:
                 continue
 
@@ -396,6 +398,8 @@ class SyntaxErrorDetector(BaseDetector):
         results: set[DetectedError] = set()    # use a set to avoid applying the same correction multiple times
 
         for select in self.query.selects:
+            select = select.strip_subqueries()
+
             if select.ast is None:
                 continue
 
