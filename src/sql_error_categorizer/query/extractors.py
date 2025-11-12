@@ -114,6 +114,8 @@ def extract_subqueries_tokens(sql: str) -> list[tuple[str, str]]:
             # Update clause context when we see a keyword
             if tok.ttype is Keyword or tok.ttype is DML:
                 current_clause = tok.normalized.upper()
+            if isinstance(tok, sqlparse.sql.Identifier) and tok.value.upper() in ('ALL', 'ANY'):
+                current_clause = 'ALL/ANY'
             elif tok.ttype is sqlparse.tokens.Comparison:
                 current_clause = 'COMPARISON'
 
