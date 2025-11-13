@@ -29,7 +29,6 @@ def test_having_no_group_by_subquery():
         ''',
         detectors=[SyntaxErrorDetector],
         catalog_filename='miedema',
-        debug=True
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_17_HAVING_WITHOUT_GROUP_BY) == 1

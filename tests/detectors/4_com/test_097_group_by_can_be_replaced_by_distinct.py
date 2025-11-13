@@ -21,7 +21,6 @@ def test_error(query, expected):
         search_path='miedema',
         catalog_filename='miedema',
         detectors=[ComplicationDetector],
-        debug=True
     )
 
     assert count_errors(result, SqlErrors.COM_97_GROUP_BY_CAN_BE_REPLACED_WITH_DISTINCT) == 1

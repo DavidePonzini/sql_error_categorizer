@@ -16,7 +16,6 @@ def test_wrong(query, value, schema, search_path):
         detectors=[SyntaxErrorDetector],
         catalog_filename=schema,
         search_path=search_path,
-        debug=True,
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_8_INVALID_SCHEMA_NAME) == 1

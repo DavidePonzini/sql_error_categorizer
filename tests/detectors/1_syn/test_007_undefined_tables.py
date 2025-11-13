@@ -16,7 +16,6 @@ def test_wrong(query, objects, schema):
         detectors=[SyntaxErrorDetector],
         catalog_filename=schema,
         search_path=schema,
-        debug=True,
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT) == len(objects)

@@ -5,7 +5,6 @@ def test_in():
     query = f'SELECT col1, col2 FROM main WHERE col3 IN ({subquery})'
 
     detected_errors = run_test(
-        debug=True,
         query=query,
         detectors=[SyntaxErrorDetector]
     )

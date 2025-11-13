@@ -6,7 +6,6 @@ def test_star_no_solutions():
     result = run_test(
         query,
         detectors=[SemanticErrorDetector],
-        debug=True
     )
 
     assert count_errors(result, SqlErrors.SEM_44_INCORRECT_WILDCARD) == 1

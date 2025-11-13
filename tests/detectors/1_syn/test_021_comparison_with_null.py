@@ -37,7 +37,6 @@ def test_comparison_in_subquery():
         );
         ''',
         detectors=[SyntaxErrorDetector],
-        debug=True
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_21_COMPARISON_WITH_NULL) == 1

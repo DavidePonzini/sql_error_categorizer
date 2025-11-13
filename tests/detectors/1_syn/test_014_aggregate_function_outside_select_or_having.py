@@ -15,7 +15,6 @@ def test_wrong(query, errors):
     detected_errors = run_test(
         query=query,
         detectors=[SyntaxErrorDetector],
-        debug=True,
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_14_USING_AGGREGATE_FUNCTION_OUTSIDE_SELECT_OR_HAVING) == len(errors)
