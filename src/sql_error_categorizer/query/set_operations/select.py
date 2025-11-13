@@ -179,9 +179,11 @@ class Select(SetOperation, TokenizedSQL):
                 '''Add an expression with an explicit alias (e.g. SELECT expr AS alias).'''
                 alias = column.args['alias']
                 name = alias.this if alias.quoted else alias.this.lower()
+                real_name = None
 
                 if isinstance(column.this, exp.Column):
                     # If the aliased expression is a column, resolve its table index
+                    real_name = normalize_ast_column_real_name(column.this)
                     table_idx = self._get_table_idx_for_column(column.this)
                 else:
                     table_idx = None
@@ -189,6 +191,7 @@ class Select(SetOperation, TokenizedSQL):
 
                 result.add_column(
                     name=name,
+                    real_name=real_name,
                     table_idx=table_idx,
                     column_type=res_type.data_type_str,
                     is_nullable=res_type.nullable,
@@ -410,8 +413,6 @@ class Select(SetOperation, TokenizedSQL):
     
     @property
     def referenced_tables(self) -> list[Table]:
-        '''Returns a list of tables that are referenced in the SQL query.'''
-
         if self._referenced_tables is None:
             self._referenced_tables = self._get_referenced_tables()
 

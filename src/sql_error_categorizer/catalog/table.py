@@ -24,6 +24,7 @@ class Table:
     def add_column(self,
                    name: str,
                    column_type: str,
+                   real_name: str | None = None,
                    table_idx: int | None = None,
                    numeric_precision: int | None = None,
                    numeric_scale: int | None = None,
@@ -43,6 +44,10 @@ class Table:
                         fk_schema=fk_schema,
                         fk_table=fk_table,
                         fk_column=fk_column)
+        
+        if real_name is not None:
+            column.real_name = real_name
+            
         self.columns.append(column)
         return column
     

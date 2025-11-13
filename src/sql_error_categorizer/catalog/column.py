@@ -1,10 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
 class Column:
     '''A database table column, with type and constraints.'''
 
     name: str
+    real_name: str = field(init=False)
     table_idx: int | None = None
     '''Index of the table in `referenced_tables`. If None, the column is not associated with a specific table in `referenced_tables`.'''
 
@@ -17,16 +18,27 @@ class Column:
     fk_table: str | None = None
     fk_column: str | None = None
 
+    def __post_init__(self):
+        self.real_name = self.name
+
     @property
     def is_fk(self) -> bool:
         '''Returns True if the column is a foreign key.'''
         return all([self.fk_schema, self.fk_table, self.fk_column])
 
-    def __repr__(self, level: int = 0) -> str:
+    def __repr__(self, level: int = 0, max_col_len: int = 20) -> str:
         indent = '  ' * level
 
         idx_str = f'table_idx={self.table_idx}, ' if self.table_idx is not None else ''
-        return f'{indent}Column(name=\'{self.name}\',\t{idx_str} type=\'{self.column_type}\', is_fk={self.is_fk}, is_nullable={self.is_nullable}, is_constant={self.is_constant})'
+        return f'{indent}Column(' \
+                    f'name=\'{self.name}\',{" " * (max_col_len - len(self.name))} ' \
+                    f'real_name=\'{self.real_name}\',{" " * (max_col_len - len(self.real_name))} ' \
+                    f'{idx_str}' \
+                    f'is_fk={self.is_fk}, ' \
+                    f'is_nullable={self.is_nullable}, ' \
+                    f'is_constant={self.is_constant}, ' \
+                    f'type=\'{self.column_type}\'' \
+                f')'
 
     def to_dict(self) -> dict:
         '''Converts the Column to a dictionary.'''

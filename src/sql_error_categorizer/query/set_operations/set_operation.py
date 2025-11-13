@@ -24,6 +24,12 @@ class SetOperation(ABC):
     def output(self) -> Table:
         '''Returns the output table schema of the set operation.'''
         pass
+
+    @property
+    @abstractmethod
+    def referenced_tables(self) -> list[Table]:
+        '''Returns a list of tables that are referenced in the SQL query.'''
+        pass
     
     def __repr__(self, pre: str = '') -> str:
         return f'{pre}{self.__class__.__name__}'

@@ -57,6 +57,10 @@ class BinarySetOperation(SetOperation, ABC):
             result.unique_constraints.append(Constraint(all_columns, ConstraintType.ALL))
 
         return result
+    
+    @property
+    def referenced_tables(self) -> list[Table]:
+        return self.left.referenced_tables
 
     
     def print_tree(self, pre: str = '') -> None:
