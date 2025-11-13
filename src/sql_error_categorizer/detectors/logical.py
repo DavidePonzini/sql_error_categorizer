@@ -227,7 +227,7 @@ class LogicalErrorDetector(BaseDetector):
             for extra_table in actual_tables - all_expected_tables:
                 results.append(DetectedError(SqlErrors.LOG_59_JOIN_WHEN_JOIN_NEEDS_TO_BE_OMITTED, (extra_table.table, extra_table.column)))
         else:
-            for wrong_table in actual_tables - common_expected_tables:
+            for wrong_table in actual_tables - all_expected_tables:
                 results.append(DetectedError(SqlErrors.LOG_58_JOIN_ON_INCORRECT_TABLE, (wrong_table.table, wrong_table.column)))
 
         return results
