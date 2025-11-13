@@ -37,11 +37,9 @@ class LogicalErrorDetector(BaseDetector):
             self.log_55_substituting_existance_negation_with_less_more_than,
             self.log_56_putting_not_in_front_of_incorrect_in_exists,
             self.log_57_incorrect_comparison_operator_or_value,
-            self.log_58_join_on_incorrect_table,
-            self.log_59_join_when_join_needs_to_be_omitted,
+            self.log_58_log_59_log_62_join_errors,
             self.log_60_join_on_incorrect_column,
             self.log_61_join_with_incorrect_comparison_operator,
-            self.log_62_missing_join,
             self.log_63_improper_nesting_of_expressions,
             self.log_64_improper_nesting_of_subqueries,
             self.log_65_extraneous_quotes,
@@ -236,23 +234,11 @@ class LogicalErrorDetector(BaseDetector):
 
     
     # TODO: implement
-    def log_58_join_on_incorrect_table(self) -> list[DetectedError]:
-        return []
-    
-    # TODO: implement
-    def log_59_join_when_join_needs_to_be_omitted(self) -> list[DetectedError]:
-        return []
-    
-    # TODO: implement
     def log_60_join_on_incorrect_column(self) -> list[DetectedError]:
         return []
     
     # TODO: implement
     def log_61_join_with_incorrect_comparison_operator(self) -> list[DetectedError]:
-        return []
-
-    # TODO: implement
-    def log_62_missing_join(self) -> list[DetectedError]:
         return []
 
     # TODO: implement
