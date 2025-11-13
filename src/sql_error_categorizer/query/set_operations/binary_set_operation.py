@@ -1,8 +1,9 @@
-from ...catalog import Table, Column
+from ...catalog import Table, Column, Constraint, ConstraintType, ConstraintColumn
 from ...util import *
 from .set_operation import SetOperation
 
 from abc import ABC
+from copy import deepcopy
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -41,8 +42,22 @@ class BinarySetOperation(SetOperation, ABC):
 
     @property
     def output(self) -> Table:
-        # Assuming both sides have the same schema for simplicity
-        return self.left.output
+        # Assume the output schema is the same as the left input
+        result = deepcopy(self.left.output)
+
+        # Remove ALL constraints
+        result.unique_constraints = [
+            constraint for constraint in result.unique_constraints
+            if constraint.constraint_type != ConstraintType.ALL
+        ]
+
+        # If ALL is False, duplicates are not allowed
+        if not self.all:
+            all_columns = { ConstraintColumn(col.name, col.table_idx) for col in result.columns }
+            result.unique_constraints.append(Constraint(all_columns, ConstraintType.ALL))
+
+        return result
+
     
     def print_tree(self, pre: str = '') -> None:
         print(f'{pre}{self.__class__.__name__} (ALL={self.all})')
@@ -74,6 +89,19 @@ class Union(BinarySetOperation):
     '''Represents a SQL UNION operation.'''
     def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False):
         super().__init__(sql, left, right, all=all)
+
+    @property
+    def output(self) -> Table:
+        # Get output table with ALL constraints
+        result = super().output
+
+        # Remove all other constraints, since UNION only guarantees uniqueness based on ALL
+        result.unique_constraints = [
+            constraint for constraint in result.unique_constraints
+            if constraint.constraint_type == ConstraintType.ALL
+        ]
+
+        return result
 
 class Intersect(BinarySetOperation):
     '''Represents a SQL INTERSECT operation.'''

@@ -6,6 +6,7 @@ class ConstraintType(Enum):
     PRIMARY_KEY = 'PRIMARY_KEY'
     GROUP_BY = 'GROUP_BY'
     DISTINCT = 'DISTINCT'
+    ALL = 'ALL'
 
 @dataclass(frozen=True)
 class ConstraintColumn:
