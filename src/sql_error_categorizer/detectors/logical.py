@@ -1,5 +1,6 @@
 '''Detector for logical errors in SQL queries.'''
 
+from dataclasses import dataclass
 import difflib
 import re
 import sqlparse
@@ -171,6 +172,68 @@ class LogicalErrorDetector(BaseDetector):
                         f"Incorrect value in comparison for column '{q_col}'. Found '{q_val}' but expected '{s_val}'."
                     ))
         return results
+    
+    def log_58_log_59_log_62_join_errors(self) -> list[DetectedError]:
+        '''
+            Detects join-related errors by comparing the tables used in the proposed query
+            against those in the correct solutions.
+
+            This function identifies three types of join errors:
+            1. Missing Join: A required table is not included in the proposed query.
+            2. Extraneous Join: An unnecessary table is included in the proposed query.
+            3. Incorrect Join: A table is included, but it is not the correct one needed for the join.
+        '''
+                
+        if not self.solutions:
+            return []
+
+        @dataclass(frozen=True)
+        class TableCol:
+            table: str
+            column: str
+
+        results: list[DetectedError] = []
+
+        expected_tables: list[set[TableCol]] = []
+        actual_tables: set[TableCol] = set()
+
+        # Compute expected tables from solutions
+        # NOTE: We expect each solution to use the same set of tables, but we compute
+        #       them separately to handle any discrepancies.
+        for solution in self.solutions:
+            solution_tables: set[TableCol] = set()
+
+            for select in solution.selects:
+                for table in select.referenced_tables:
+                    if table.cte_idx is not None:
+                        continue
+                    solution_tables.add(TableCol(table.schema_name, table.real_name))
+
+            expected_tables.append(solution_tables)
+
+        # Compute actual tables from the proposed query
+        for select in self.query.selects:
+            for table in select.referenced_tables:
+                if table.cte_idx is not None:
+                    continue
+                actual_tables.add(TableCol(table.schema_name, table.real_name))
+
+        # Check for missing joins (expected tables not in actual)
+        common_expected_tables = expected_tables[0].intersection(*expected_tables[1:])
+        all_expected_tables = expected_tables[0].union(*expected_tables[1:])
+
+        if len(actual_tables) < len(common_expected_tables):
+            for missing_table in common_expected_tables - actual_tables:
+                results.append(DetectedError(SqlErrors.LOG_62_MISSING_JOIN, (missing_table.table, missing_table.column)))
+        elif len(actual_tables) > len(all_expected_tables):
+            for extra_table in actual_tables - all_expected_tables:
+                results.append(DetectedError(SqlErrors.LOG_59_JOIN_WHEN_JOIN_NEEDS_TO_BE_OMITTED, (extra_table.table, extra_table.column)))
+        else:
+            for wrong_table in actual_tables - common_expected_tables:
+                results.append(DetectedError(SqlErrors.LOG_58_JOIN_ON_INCORRECT_TABLE, (wrong_table.table, wrong_table.column)))
+
+        return results
+
     
     # TODO: implement
     def log_58_join_on_incorrect_table(self) -> list[DetectedError]:
