@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from sqlglot import exp
 
-@dataclass
+@dataclass(frozen=True)
 class OrderByColumn:
     '''Represents a single column in an ORDER BY clause, with its sorting direction.'''
     column: str
