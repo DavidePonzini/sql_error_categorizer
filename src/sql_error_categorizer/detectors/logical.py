@@ -380,9 +380,26 @@ class LogicalErrorDetector(BaseDetector):
         
         return []
 
-    # TODO: implement
     def log_73_missing_as_from_select(self) -> list[DetectedError]:
-        return []
+        results: list[DetectedError] = []
+
+        # ensure we have the correct columns in both amount and source
+        extraneous_columns = self.log_70_extraneous_column_in_select()
+        missing_columns = self.log_71_missing_column_from_select()
+
+        if extraneous_columns or missing_columns:
+            return results  # skip AS check if column count is already wrong
+
+        expected_aliases: set[str] = set.intersection(*[set(col.name for col in sol.main_query.output.columns) for sol in self.solutions])
+        provided_aliases: set[str] = set(col.name for col in self.query.main_query.output.columns)
+
+        missing_aliases = expected_aliases - provided_aliases
+
+        for alias in missing_aliases:
+            results.append(DetectedError(SqlErrors.LOG_73_MISSING_AS_FROM_SELECT, (alias,)))
+
+        return results
+
 
     # TODO: refactor
     def log_74_missing_column_from_order_by(self) -> list[DetectedError]:
