@@ -11,8 +11,8 @@ def make_catalog(file: str) -> None:
 
     cat.save_json(f'datasets/catalogs/{file}.json')
 
-def t(query_file: str = 'q_q.sql',
-      solution_file: str = 'q_s.sql',
+def t(query_file: str = 'test_q.sql',
+      solution_file: str = 'test_s1.sql',
       catalog_file: str = 'miedema',
       search_path: str | None = None) -> Detector:
     '''Test function, remove before production'''
