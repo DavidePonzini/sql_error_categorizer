@@ -27,6 +27,9 @@ class Query(TokenizedSQL):
         self.search_path = search_path
         '''The search path for resolving unqualified table names.'''
 
+        self._output_columns_source_cache: set[tuple[str, str | None, str]] | None = None
+        '''Cache for output_columns_source property.'''
+
         # Extract CTEs and main query
         self.ctes: list[SetOperation] = []
         cte_tokens = []
@@ -140,11 +143,14 @@ class Query(TokenizedSQL):
         return _gather_selects_from_set_operation(self.main_query)        
     
     @property
-    def output_columns_source(self) -> set[tuple[str, str, str]]:
+    def output_columns_source(self) -> set[tuple[str, str | None, str]]:
         '''Returns a set of (schema, table, column) tuples representing the source columns for the output of the main query.'''
 
-        def _output_columns_source_recursive(so: SetOperation) -> set[tuple[str, str, str]]:
-            result: set[tuple[str, str, str]] = set()
+        if self._output_columns_source_cache is not None:
+            return self._output_columns_source_cache
+
+        def _output_columns_source_recursive(so: SetOperation) -> set[tuple[str, str | None, str]]:
+            result: set[tuple[str, str | None, str]] = set()
 
             if isinstance(so, BinarySetOperation):
                 result.update(_output_columns_source_recursive(so.left))
@@ -187,7 +193,11 @@ class Query(TokenizedSQL):
                                 result.update(_output_columns_source_recursive(cte))
                             else:
                                 result.add((table.schema_name, table.real_name, column_name))
+                        else:
+                            # Table not found; assume search path
+                            result.add((so.search_path, table_name if table_name is not None else None, column_name))
             
+            self._output_columns_source_cache = result
             return result
 
         return _output_columns_source_recursive(self.main_query)

@@ -1,17 +1,11 @@
 '''Detector for logical errors in SQL queries.'''
 
-import difflib
-import re
-import sqlparse
-import sqlparse.keywords
 from typing import Callable
-
-from sql_error_categorizer.query.set_operations.select import Select
 
 from .base import BaseDetector, DetectedError
 from ..query import Query
 from ..sql_errors import SqlErrors
-from ..catalog import Catalog
+from ..query import Select, SetOperation
 
 
 class LogicalErrorDetector(BaseDetector):
@@ -315,110 +309,73 @@ class LogicalErrorDetector(BaseDetector):
     def log_69_expression_on_incorrect_clause(self) -> list[DetectedError]:
         return []
 
-    # TODO: refactor
     def log_70_extraneous_column_in_select(self) -> list[DetectedError]:
         '''
-        Flags when an extraneous column is included in the SELECT clause,
-        with a special check for inappropriate use of 'SELECT *'.
+        Flags when an extraneous column is included in the SELECT clause.
         '''
-        return []
-    
-        results = []
-        if not self.q_ast or not self.s_ast:
-            return results
 
-        # First, check specifically for the misuse of 'SELECT *'
-        user_selects_star = self._selects_star(self.q_ast)
-        solution_selects_star = self._selects_star(self.s_ast)
+        results: list[DetectedError] = []
 
-        if user_selects_star and not solution_selects_star:
-            results.append((
-                SqlErrors.LOG_70_EXTRANEOUS_COLUMN_IN_SELECT,
-                "Using 'SELECT *' is not correct for this query. Please select only the required columns."
-            ))
-            return results
+        # First, check if the number of columns exceeds the maximum required by any solution
+        column_number_required_max = max(len(sol.main_query.output.columns) for sol in self.solutions)
+        column_number_provided = len(self.query.main_query.output.columns)
 
-        # If the user correctly used 'SELECT *' (because the solution also did),
-        # then there's no need to check for individual extraneous columns.
-        if user_selects_star:
-            return results
+        if column_number_provided > column_number_required_max:
+            results.append(DetectedError(SqlErrors.LOG_70_EXTRANEOUS_COLUMN_IN_SELECT, (column_number_provided, column_number_required_max)))
 
-        # If 'SELECT *' was not misused, proceed with the original logic for named columns.
-        q_cols = self._get_select_columns(self.q_ast)
-        s_cols = self._get_select_columns(self.s_ast)
+        # Then, check for specific extraneous columns
+        columns_required = set.union(*[sol.output_columns_source for sol in self.solutions])
+        columns_provided = self.query.output_columns_source
+        extraneous_columns = columns_provided - columns_required
 
-        q_cols_set = {col.lower() for col in q_cols}
-        s_cols_set = {col.lower() for col in s_cols}
+        for schema, table, column in extraneous_columns:
+            results.append(DetectedError(SqlErrors.LOG_70_EXTRANEOUS_COLUMN_IN_SELECT, (schema, table, column)))
 
-        extraneous_columns = q_cols_set - s_cols_set
-
-        for col_lower in extraneous_columns:
-            # Find the original case from the query for the error message
-            original_col = next((col for col in q_cols if col.lower() == col_lower), col_lower)
-            results.append((
-                SqlErrors.LOG_70_EXTRANEOUS_COLUMN_IN_SELECT,
-                f"The column '{original_col}' is extraneous and should be removed from the SELECT clause."
-            ))
-            
         return results
-
-    # TODO: refactor
+    
     def log_71_missing_column_from_select(self) -> list[DetectedError]:
         '''
-        Flags when a required column is missing from the SELECT clause,
-        correctly handling cases where duplicate columns are required.
+        Flags when a required column is missing from the SELECT clause.
         '''
-        return []
-    
-        results = []
-        if not self.q_ast or not self.s_ast:
-            return results
 
-        q_cols = self._get_select_columns(self.q_ast)
-        s_cols = self._get_select_columns(self.s_ast)
+        results: list[DetectedError] = []
 
-        # Use collections.Counter to track the frequency of each column
-        q_counts = Counter(col.lower() for col in q_cols)
-        s_counts = Counter(col.lower() for col in s_cols)
+        # First, check if the number of columns is less than the minimum required by any solution
+        column_number_required_min = min(len(sol.main_query.output.columns) for sol in self.solutions)
+        column_number_provided = len(self.query.main_query.output.columns)
 
-        # Subtracting counters finds the exact number of missing instances for each column
-        missing_counts = s_counts - q_counts
+        if column_number_provided < column_number_required_min:
+            results.append(DetectedError(SqlErrors.LOG_71_MISSING_COLUMN_FROM_SELECT, (column_number_provided, column_number_required_min)))
 
-        # Iterate through the elements of the resulting counter to generate a message for each missing column
-        for col_lower in missing_counts.elements():
-            # Find the original case from the solution for a more user-friendly message
-            original_col = next((col for col in s_cols if col.lower() == col_lower), col_lower)
-            results.append((
-                SqlErrors.LOG_71_MISSING_COLUMN_FROM_SELECT,
-                f"A required column '{original_col}' is missing from the SELECT clause."
-            ))
-                
+        # Then, check for specific missing columns
+        columns_required = set.union(*[sol.output_columns_source for sol in self.solutions])
+        columns_provided = self.query.output_columns_source
+        missing_columns = columns_required - columns_provided
+
+        for schema, table, column in missing_columns:
+            results.append(DetectedError(SqlErrors.LOG_71_MISSING_COLUMN_FROM_SELECT, (schema, table, column)))
+
         return results
     
     def log_72_missing_distinct_from_select(self) -> list[DetectedError]:
         '''Flags when DISTINCT is missing from a SELECT that requires it.'''
 
-        # ensure all solutions are simple SELECTs with DISTINCT
-        requires_distinct = True
-        for sol in self.solutions:
-            main_query = sol.main_query
-            if not isinstance(main_query, Select):
-                requires_distinct = False
-                break
-            if not main_query.distinct:
-                requires_distinct = False
-                break
+        def _is_distinct(so: SetOperation) -> bool:
+            output = so.output
+            columns = len(output.columns)
+            longest_constraint = max(len(c.columns) for c in output.unique_constraints) if output.unique_constraints else 0
+
+            return longest_constraint >= columns
+
+        # ensure all solutions are DISTINCT
+        requires_distinct = all(_is_distinct(sol.main_query) for sol in self.solutions)
 
         # At least one solution doesn't require DISTINCT, so it's not necessary for the query
         # Skip this check
         if not requires_distinct:
             return []
         
-        main_query = self.query.main_query
-        if not isinstance(main_query, Select):
-            return [DetectedError(SqlErrors.LOG_72_MISSING_DISTINCT_FROM_SELECT)]
-        
-        if not main_query.distinct:
+        if not _is_distinct(self.query.main_query):
             return [DetectedError(SqlErrors.LOG_72_MISSING_DISTINCT_FROM_SELECT)]
         
         return []
