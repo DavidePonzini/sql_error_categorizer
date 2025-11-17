@@ -48,13 +48,13 @@ class BinarySetOperation(SetOperation, ABC):
         # Remove ALL constraints
         result.unique_constraints = [
             constraint for constraint in result.unique_constraints
-            if constraint.constraint_type != ConstraintType.ALL
+            if constraint.constraint_type != ConstraintType.SET_OP
         ]
 
         # If ALL is False, duplicates are not allowed
         if not self.all:
             all_columns = { ConstraintColumn(col.name, col.table_idx) for col in result.columns }
-            result.unique_constraints.append(Constraint(all_columns, ConstraintType.ALL))
+            result.unique_constraints.append(Constraint(all_columns, ConstraintType.SET_OP))
 
         return result
     
@@ -102,7 +102,7 @@ class Union(BinarySetOperation):
         # Remove all other constraints, since UNION only guarantees uniqueness based on ALL
         result.unique_constraints = [
             constraint for constraint in result.unique_constraints
-            if constraint.constraint_type == ConstraintType.ALL
+            if constraint.constraint_type == ConstraintType.SET_OP
         ]
 
         return result
