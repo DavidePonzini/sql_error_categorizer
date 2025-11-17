@@ -97,7 +97,7 @@ class Table:
         }
 
     @classmethod
-    def from_dict(cls, data: dict, schema_name: str | None = None) -> 'Table':
+    def from_dict(cls, data: dict, schema_name: str) -> 'Table':
         '''Creates a Table from a dictionary.'''
         table = cls(name=data['name'], schema_name=schema_name)
         # Unique constraints first (so Column.is_pk works immediately on repr, etc.)

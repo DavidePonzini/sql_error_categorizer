@@ -261,4 +261,47 @@ def test_query_constraints(sql, catalog, expected_constraints):
     for expected in expected_constraints:
         assert expected in output_constraints
 
+
+@pytest.mark.parametrize('sql, schema, expected', [
+    (
+        'SELECT cid from customer WHERE street = "Main St";',
+        'miedema',
+        [ ('miedema', 'customer', 'cid') ]
+    ),
+    (
+        '''
+            WITH temp AS (
+                SELECT cid c, street + cname AS col2 FROM customer
+                INTERSECT
+                SELECT sid, 'nn' FROM store
+            )
+
+            SELECT DISTINCT c, temp.col2 d, store.street as e FROM temp, store
+            INTERSECT
+            SELECT tid, (SELECT sname FROM store) FROM transaction
+            UNION
+            SELECT pid, pname FROM product;
+        ''',
+        'miedema',
+        [ ('miedema', 'customer', 'cid'),
+          ('miedema', 'customer', 'street'),
+          ('miedema', 'customer', 'cname'),
+          ('miedema', 'store', 'sid'),
+          ('miedema', 'store', 'street'),
+          ('miedema', 'transaction', 'tid'),
+          ('miedema', 'store', 'sname'),
+          ('miedema', 'product', 'pid'),
+          ('miedema', 'product', 'pname'),
+        ]
+    ),
+])
+def test_output_columns_source(sql, schema, expected):
+    catalog_db = load_catalog(f'datasets/catalogs/{schema}.json')
+    query = Query(sql, catalog=catalog_db, search_path=schema)
+
+    output_source = query.output_columns_source
+
+    assert len(output_source) == len(expected)
+    for col in expected:
+        assert col in output_source
 # endregion

@@ -1,15 +1,12 @@
 import sqlparse
 import sqlparse.tokens
+from sqlglot import exp
 
-from sql_error_categorizer.query.set_operations.binary_set_operation import BinarySetOperation
-
-
-from .set_operations import SetOperation, Select, create_set_operation_tree
-from ..catalog import Catalog
-
+from .set_operations import SetOperation, BinarySetOperation, Select, create_set_operation_tree
 from .tokenized_sql import TokenizedSQL
-
+from ..catalog import Catalog
 from ..util import OrderByColumn
+from .. import util
 
 class Query(TokenizedSQL):
     def __init__(self,
@@ -142,6 +139,59 @@ class Query(TokenizedSQL):
 
         return _gather_selects_from_set_operation(self.main_query)        
     
+    @property
+    def output_columns_source(self) -> set[tuple[str, str, str]]:
+        '''Returns a set of (schema, table, column) tuples representing the source columns for the output of the main query.'''
+
+        def _output_columns_source_recursive(so: SetOperation) -> set[tuple[str, str, str]]:
+            result: set[tuple[str, str, str]] = set()
+
+            if isinstance(so, BinarySetOperation):
+                result.update(_output_columns_source_recursive(so.left))
+                result.update(_output_columns_source_recursive(so.right))
+            
+            elif isinstance(so, Select):
+                if so.ast is None:
+                    return result
+                
+                # First, process subqueries to gather their output columns
+                for expression in so.ast.expressions:
+                    for subquery in expression.find_all(exp.Subquery):
+                        sub_so = create_set_operation_tree(str(subquery.this), catalog=so.catalog, search_path=so.search_path)
+                        result.update(_output_columns_source_recursive(sub_so))
+
+                # Then, process regular columns
+                no_subqueries = so.strip_subqueries()
+
+                if no_subqueries.ast is None:
+                    return result
+
+                for expression in no_subqueries.ast.expressions:
+                    for column in expression.find_all(exp.Column):
+                        column_name = util.normalize_ast_column_real_name(column)
+                        table_name = util.normalize_ast_column_table(column)
+
+                        if table_name is None:
+                            table_idx = next((idx for idx, table in enumerate(so.referenced_tables)
+                                            if so.referenced_tables[idx].has_column(column_name)), None)
+                        else:
+                            table_idx = next((idx for idx, table in enumerate(so.referenced_tables)
+                                            if table.name == table_name), None)
+                            
+                        if table_idx is not None:
+                            table = so.referenced_tables[table_idx]
+
+                            if table.cte_idx is not None:
+                                # Column comes from a CTE
+                                cte = self.ctes[table.cte_idx]
+                                result.update(_output_columns_source_recursive(cte))
+                            else:
+                                result.add((table.schema_name, table.real_name, column_name))
+            
+            return result
+
+        return _output_columns_source_recursive(self.main_query)
+
     # endregion   
 
     def __repr__(self) -> str:
