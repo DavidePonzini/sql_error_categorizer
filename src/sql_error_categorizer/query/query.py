@@ -5,7 +5,6 @@ from sqlglot import exp
 from .set_operations import SetOperation, BinarySetOperation, Select, create_set_operation_tree
 from .tokenized_sql import TokenizedSQL
 from ..catalog import Catalog
-from ..util import OrderByColumn
 from .. import util
 
 class Query(TokenizedSQL):
@@ -112,10 +111,6 @@ class Query(TokenizedSQL):
         main_query_sql = ''.join(str(token) for token in main_query_tokens).strip()
         self.main_query = create_set_operation_tree(main_query_sql, catalog=self.catalog, search_path=self.search_path)
 
-        self.set_operations_order_by: list[OrderByColumn] = []
-        self.set_operations_limit: int | None = None
-        self.set_operations_offset: int | None = None
-
     # region Properties
     @property
     def selects(self) -> list[Select]:
@@ -174,8 +169,8 @@ class Query(TokenizedSQL):
 
                 for expression in no_subqueries.ast.expressions:
                     for column in expression.find_all(exp.Column):
-                        column_name = util.normalize_ast_column_real_name(column)
-                        table_name = util.normalize_ast_column_table(column)
+                        column_name = util.ast.column.get_real_name(column)
+                        table_name = util.ast.column.get_table(column)
 
                         if table_name is None:
                             table_idx = next((idx for idx, table in enumerate(so.referenced_tables)

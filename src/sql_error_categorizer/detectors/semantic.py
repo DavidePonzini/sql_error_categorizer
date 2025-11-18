@@ -11,9 +11,9 @@ import sqlglot
 
 
 from .base import BaseDetector, DetectedError
-from ..query import Query, smt, extract_DNF
+from ..query import Query, smt
+from .. import util
 from ..sql_errors import SqlErrors
-from ..catalog import Catalog
 
 class SemanticErrorDetector(BaseDetector):
     '''Detector for semantic errors in SQL queries.'''
@@ -72,7 +72,7 @@ class SemanticErrorDetector(BaseDetector):
             for table in select.referenced_tables:
                 variables.update(smt.catalog_table_to_z3_vars(table))
 
-            dnf = extract_DNF(where)
+            dnf = util.ast.extract_DNF(where)
 
             # Refer to Brass & Goldberg, 2006 for these checks (error #8)
             # (1) whole formula

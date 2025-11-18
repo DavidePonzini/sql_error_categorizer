@@ -1,9 +1,9 @@
-from ...catalog import Table, Column, Constraint, ConstraintType, ConstraintColumn
-from ...util import *
 from .set_operation import SetOperation
+from ...catalog import Table, Constraint, ConstraintType, ConstraintColumn
 
 from abc import ABC
 from copy import deepcopy
+from sqlglot import exp
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:

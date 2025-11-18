@@ -216,8 +216,8 @@ class SyntaxErrorDetector(BaseDetector):
                 continue
 
             for table in select.ast.find_all(exp.Table):
-                table_name = util.normalize_ast_table_real_name(table)
-                schema_name = util.normalize_ast_schema_name(table)
+                table_name = util.ast.table.get_real_name(table)
+                schema_name = util.ast.table.get_schema(table)
 
                 if schema_name:
                     # Fully qualified table (schema.table)
@@ -256,8 +256,8 @@ class SyntaxErrorDetector(BaseDetector):
                 continue
 
             for column in select.ast.find_all(exp.Column):
-                column_name = util.normalize_ast_column_name(column)
-                table_name = util.normalize_ast_column_table(column)
+                column_name = util.ast.column.get_name(column)
+                table_name = util.ast.column.get_table(column)
 
                 possible_matches = []
 
@@ -345,8 +345,8 @@ class SyntaxErrorDetector(BaseDetector):
             for table in select.ast.find_all(exp.Table):
                 table = deepcopy(table)  # avoid modifying the original AST until we are sure we want to apply the correction
                 table_str = table.sql()
-                table_name = util.normalize_ast_table_real_name(table)
-                schema_name = util.normalize_ast_schema_name(table)
+                table_name = util.ast.table.get_real_name(table)
+                schema_name = util.ast.table.get_schema(table)
 
                 if schema_name:
                     # Fully qualified table (schema.table)
@@ -402,8 +402,8 @@ class SyntaxErrorDetector(BaseDetector):
             for column in select.ast.find_all(exp.Column):
                 column = deepcopy(column)  # avoid modifying the original AST until we are sure we want to apply the correction
                 column_str = column.sql()
-                column_name = util.normalize_ast_column_name(column)
-                table_name = util.normalize_ast_column_table(column)
+                column_name = util.ast.column.get_name(column)
+                table_name = util.ast.column.get_table(column)
 
                 found = False
 
@@ -805,8 +805,8 @@ class SyntaxErrorDetector(BaseDetector):
 
             def get_column_name(col: exp.Column | exp.Alias) -> tuple[str, str]:
                 '''Return normalized column name and alias. If no alias, both are the same.'''
-                col_name = util.normalize_ast_column_real_name(col)
-                col_alias = util.normalize_ast_column_name(col)
+                col_name = util.ast.column.get_real_name(col)
+                col_alias = util.ast.column.get_name(col)
                 return col_name, col_alias
 
             for col in select.ast.expressions:

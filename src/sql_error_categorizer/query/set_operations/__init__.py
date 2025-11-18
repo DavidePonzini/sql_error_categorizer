@@ -4,7 +4,7 @@ from .set_operation import SetOperation
 from .binary_set_operation import BinarySetOperation, Union, Intersect, Except
 from .select import Select
 from ...catalog import Catalog
-from ..util import remove_parentheses, is_ws, tokens_to_sql
+from ... import util
 
 import sqlparse
 from sqlparse.sql import Parenthesis
@@ -28,7 +28,7 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
         sql = sql.strip()[:-1].strip()
 
     # remove outer parentheses
-    stripped_sql = remove_parentheses(sql)
+    stripped_sql = util.sql.remove_parentheses(sql)
     if stripped_sql != sql:
         # if outer parentheses were removed, we are again at top level
         return create_set_operation_tree(stripped_sql, catalog, search_path, True)
@@ -62,10 +62,10 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
 
     left_tokens, right_tokens, all_kw = split_on(main_tokens, split_idx, all_in_token)
 
-    left_node  = create_set_operation_tree(tokens_to_sql(left_tokens),  catalog, search_path, False)
-    right_node = create_set_operation_tree(tokens_to_sql(right_tokens), catalog, search_path, False)
+    left_node  = create_set_operation_tree(util.tokens.tokens_to_sql(left_tokens),  catalog, search_path, False)
+    right_node = create_set_operation_tree(util.tokens.tokens_to_sql(right_tokens), catalog, search_path, False)
 
-    trailing_sql = tokens_to_sql(trailing_tokens) if trailing_tokens else None
+    trailing_sql = util.tokens.tokens_to_sql(trailing_tokens) if trailing_tokens else None
 
     if op == 'UNION':
         node = Union(sql, left_node, right_node, distinct=not all_kw, trailing_sql=trailing_sql)
@@ -116,7 +116,7 @@ def split_on(tokens: list[sqlparse.sql.Token], idx: int, all_in_token: bool | No
     right_tokens = tokens[idx + 1:]
 
     # trim ws
-    while right_tokens and is_ws(right_tokens[0]):
+    while right_tokens and util.tokens.is_ws(right_tokens[0]):
         right_tokens = right_tokens[1:]
 
     all_flag = all_in_token  # True=ALL, False=DISTINCT, None=unspecified
@@ -125,7 +125,7 @@ def split_on(tokens: list[sqlparse.sql.Token], idx: int, all_in_token: bool | No
         if kw in ('ALL', 'DISTINCT'):
             all_flag = (kw == 'ALL')  # DISTINCT => False
             right_tokens = right_tokens[1:]
-            while right_tokens and is_ws(right_tokens[0]):
+            while right_tokens and util.tokens.is_ws(right_tokens[0]):
                 right_tokens = right_tokens[1:]
 
     return left_tokens, right_tokens, all_flag

@@ -2,10 +2,8 @@ from .set_operation import SetOperation
 from .. import extractors
 from ..tokenized_sql import TokenizedSQL
 from ..typechecking import get_type, rewrite_expression
-from ..util import extract_CNF
+from ... import util
 from ...catalog import Catalog, Table, ConstraintColumn, Constraint, ConstraintType
-from ...util import *
-from ...query.util import remove_parentheses
 
 import sqlglot
 import sqlglot.errors
@@ -76,7 +74,7 @@ class Select(SetOperation, TokenizedSQL):
             '''Recursively adds tables from an expression to the result catalog.'''
             # Subquery: get its output columns
             if isinstance(expr, exp.Subquery):
-                table_name_out = normalize_ast_subquery_name(expr)
+                table_name_out = util.ast.subquery.get_name(expr)
 
                 subquery_sql = expr.this.sql()
                 subquery = Select(subquery_sql, catalog=self.catalog, search_path=self.search_path)
@@ -86,9 +84,9 @@ class Select(SetOperation, TokenizedSQL):
             # Table: look it up in the IN catalog
             elif isinstance(expr, exp.Table):
                 # schema name
-                schema_name = normalize_ast_schema_name(expr)
-                table_name_in = normalize_ast_table_real_name(expr)
-                table_name_out = normalize_ast_table_name(expr)
+                schema_name = util.ast.table.get_schema(expr)
+                table_name_in = util.ast.table.get_real_name(expr)
+                table_name_out = util.ast.table.get_name(expr)
 
                 if schema_name is None:
                     # If no schema is specified, try to find the table in the CTEs
@@ -125,7 +123,7 @@ class Select(SetOperation, TokenizedSQL):
     def _get_table_idx_for_column(self, column: exp.Column) -> int | None:
         '''Returns the index of the table that contains the given column.'''
 
-        table_name = normalize_ast_column_table(column)
+        table_name = util.ast.column.get_table(column)
         col_name = column.alias_or_name
         name = col_name if column.this.quoted else col_name.lower()
 
@@ -183,7 +181,7 @@ class Select(SetOperation, TokenizedSQL):
 
                 if isinstance(column.this, exp.Column):
                     # If the aliased expression is a column, resolve its table index
-                    real_name = normalize_ast_column_real_name(column.this)
+                    real_name = util.ast.column.get_real_name(column.this)
                     table_idx = self._get_table_idx_for_column(column.this)
                 else:
                     table_idx = None
@@ -200,7 +198,7 @@ class Select(SetOperation, TokenizedSQL):
 
             def add_table_star(column: exp.Column) -> None:
                 '''Add all columns from a specific table (SELECT table.*).'''
-                table_name = normalize_ast_column_table(column)
+                table_name = util.ast.column.get_table(column)
                 table = next((t for t in self.referenced_tables if t.name == table_name), None)
                 if table:
                     for col in table.columns:
@@ -231,7 +229,7 @@ class Select(SetOperation, TokenizedSQL):
 
             def add_subquery(column: exp.Subquery) -> None:
                 '''Add a column derived from a subquery expression (SELECT (SELECT ...)).'''
-                subq = Select(remove_parentheses(column.sql()), catalog=self.catalog, search_path=self.search_path)
+                subq = Select(util.sql.remove_parentheses(column.sql()), catalog=self.catalog, search_path=self.search_path)
                 
                 # Add the first column of the subquery's output
                 if subq.output.columns:
@@ -350,7 +348,7 @@ class Select(SetOperation, TokenizedSQL):
 
         def extract_column_equalities(expr: exp.Expression) -> list[tuple[exp.Column, exp.Column]]:
             equalities = []
-            conjuncts = extract_CNF(expr)
+            conjuncts = util.ast.extract_CNF(expr)
             for conj in conjuncts:
                 if isinstance(conj, exp.EQ):
                     left = conj.args.get('this')
@@ -473,7 +471,7 @@ class Select(SetOperation, TokenizedSQL):
                 group_by_cols: set[ConstraintColumn] = set()
                 for col in self.group_by:
                     if isinstance(col, exp.Column):
-                        col_name = normalize_ast_column_real_name(col)
+                        col_name = util.ast.column.get_real_name(col)
 
                         # Resolve which table this column belongs to
                         table_idx = self._get_table_idx_for_column(col)
@@ -533,7 +531,7 @@ class Select(SetOperation, TokenizedSQL):
                 equalities = self.get_join_equalities()
                 if equalities:
                     def resolve(col):
-                        col_name = normalize_ast_column_real_name(col)
+                        col_name = util.ast.column.get_real_name(col)
                         table_idx = self._get_table_idx_for_column(col)
                         
                         return ConstraintColumn(col_name, table_idx)
