@@ -12,12 +12,18 @@ if TYPE_CHECKING:
 
 class BinarySetOperation(SetOperation, ABC):
     '''Represents a binary set operation (e.g., UNION, INTERSECT, EXCEPT).'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool | None = None):
+    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool | None = None, trailing_sql: str | None = None):
         super().__init__(sql)
         self.left = left
         self.right = right
         self.all = all
         '''Indicates whether the operation is ALL (duplicates allowed) or DISTINCT (duplicates removed).'''
+
+        self.trailing_sql: str | None = trailing_sql
+        '''Trailing SQL clauses (e.g., ORDER BY, LIMIT) applied at this level.'''
+
+        # Cached properties
+        self._trailing_ast: exp.Expression | None = None
 
     def __repr__(self, pre: str = '') -> str:
         modifiers = []
@@ -70,29 +76,49 @@ class BinarySetOperation(SetOperation, ABC):
         print(                      f'{pre}`- Right:')
         self.right.print_tree(pre=  f'{pre}   ')
 
-    # TODO: Implement
-    @property
-    def limit(self) -> int | None:
-        return None
-    
-    # TODO: Implement
-    @property
-    def offset(self) -> int | None:
-        return None
-
-    # TODO: Implement
-    @property
-    def order_by(self) -> list[Column]:
-        return []
-    
     @property
     def selects(self) -> list['Select']:
         return self.left.selects + self.right.selects
+    
+    @property
+    def order_by(self) -> list[exp.Expression]:
+        if not self.trailing_ast:
+            return []
+        order = self.trailing_ast.args.get('order')
+        if not order:
+            return []
+
+        return order.expressions
+
+    @property
+    def limit(self) -> int | None:
+        if not self.trailing_ast:
+            return None
+        limit_exp = self.trailing_ast.args.get('limit')
+        if not limit_exp:
+            return None
+        try:
+            return int(limit_exp.expression.this)
+        except Exception:
+            return None
+        
+    @property
+    def offset(self) -> int | None:
+        if not self.trailing_ast:
+            return None
+        offset_exp = self.trailing_ast.args.get('offset')
+        if not offset_exp:
+            return None
+        try:
+            return int(offset_exp.expression.this)
+        except Exception:
+            return None
+    
 
 class Union(BinarySetOperation):
     '''Represents a SQL UNION operation.'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False):
-        super().__init__(sql, left, right, all=all)
+    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False, trailing_sql: str | None = None):
+        super().__init__(sql, left, right, all=all, trailing_sql=trailing_sql)
 
     @property
     def output(self) -> Table:
@@ -109,13 +135,13 @@ class Union(BinarySetOperation):
 
 class Intersect(BinarySetOperation):
     '''Represents a SQL INTERSECT operation.'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False):
-        super().__init__(sql, left, right, all=all)
+    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False, trailing_sql: str | None = None):
+        super().__init__(sql, left, right, all=all, trailing_sql=trailing_sql)
 
 class Except(BinarySetOperation):
     '''Represents a SQL EXCEPT operation.'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False):
-        super().__init__(sql, left, right, all=all)
+    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False, trailing_sql: str | None = None):
+        super().__init__(sql, left, right, all=all, trailing_sql=trailing_sql)
 
     
 

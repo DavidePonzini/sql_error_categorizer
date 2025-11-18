@@ -1,6 +1,7 @@
 '''Utility functions for SQL query processing.'''
 
 import sqlparse
+from sqlparse.sql import TokenList
 from sqlparse.tokens import Whitespace, Newline
 from sqlglot.optimizer.normalize import normalize
 from sqlglot import exp
@@ -10,15 +11,35 @@ from copy import deepcopy
 def remove_parentheses(sql: str) -> str:
     '''Remove outer parentheses from a SQL string.'''
     sql = sql.strip()
+
+    # check if the entire string is wrapped in parentheses or if there are inner parentheses
+    # i.e., (SELECT 1) UNION (SELECT 2) should not have parentheses removed
+    depth = 0
+    for idx, char in enumerate(sql):
+        if char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+        if depth == 0 and idx < len(sql) - 1:
+            return sql  # parentheses are not outermost
+
     while sql.startswith('(') and sql.endswith(')'):
         sql = sql[1:-1].strip()
     return sql
 # endregion
 
 # region tokens
+def tokens_to_sql(tokens: list[sqlparse.sql.Token]) -> str:
+    '''Convert a list of sqlparse tokens back to a SQL string.'''
+    return TokenList(tokens).value.strip()
+
+def is_ws(token: sqlparse.sql.Token) -> bool:
+    '''Check if a token is whitespace or newline.'''
+    return token.ttype in (Whitespace, Newline)
+
 def strip_ws(tokens: list[sqlparse.sql.Token]) -> list[sqlparse.sql.Token]:
     '''Remove whitespace and newline tokens from a list of tokens.'''
-    return [t for t in tokens if t.ttype not in (Whitespace, Newline)]
+    return [t for t in tokens if not is_ws(t)]
 # endregion
 
 # region AST
