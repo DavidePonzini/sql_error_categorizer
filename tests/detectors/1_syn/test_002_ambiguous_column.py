@@ -2,6 +2,8 @@ from tests import *
 import pytest
 import itertools
 
+ERROR = SqlErrors.SYN_2_AMBIGUOUS_COLUMN
+
 @pytest.mark.parametrize('query,column,table_aliases,schema', [
     ('SELECT street FROM store s, customer c;', 'street', ['s.street', 'c.street'], 'miedema'),
     ('SELECT s.street FROM store s, customer c WHERE street = c.street;', 'street', ['s.street', 'c.street'], 'miedema'),
@@ -18,8 +20,8 @@ def test_wrong(query, column, table_aliases, schema):
         search_path=schema,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN) == 1
-    assert any([ has_error(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN, (column, list(perm))) for perm in itertools.permutations(table_aliases) ])
+    assert count_errors(detected_errors, ERROR) == 1
+    assert any([ has_error(detected_errors, ERROR, (column, list(perm))) for perm in itertools.permutations(table_aliases) ])
 
 @pytest.mark.parametrize('query,schema', [
     ('SELECT s.street FROM store s, customer c;', 'miedema'),
@@ -36,4 +38,4 @@ def test_correct(query, schema):
         search_path=schema
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN) == 0
+    assert count_errors(detected_errors, ERROR) == 0

@@ -1,6 +1,8 @@
 import pytest
 from tests import *
 
+ERROR = SqlErrors.COM_97_GROUP_BY_CAN_BE_REPLACED_WITH_DISTINCT
+
 @pytest.mark.parametrize('query, expected', [
     (
         'SELECT a, b, c, d FROM t GROUP BY a, b, c, d;',
@@ -23,8 +25,8 @@ def test_error(query, expected):
         detectors=[ComplicationDetector],
     )
 
-    assert count_errors(result, SqlErrors.COM_97_GROUP_BY_CAN_BE_REPLACED_WITH_DISTINCT) == 1
-    assert has_error(result, SqlErrors.COM_97_GROUP_BY_CAN_BE_REPLACED_WITH_DISTINCT, (expected,))
+    assert count_errors(result, ERROR) == 1
+    assert has_error(result, ERROR, (expected,))
 
 @pytest.mark.parametrize('query', [
     'SELECT a, b, c, d FROM t GROUP BY a, b;',
@@ -42,4 +44,4 @@ def test_correct(query):
         detectors=[ComplicationDetector],
     )
 
-    assert count_errors(result, SqlErrors.COM_97_GROUP_BY_CAN_BE_REPLACED_WITH_DISTINCT) == 0
+    assert count_errors(result, ERROR) == 0

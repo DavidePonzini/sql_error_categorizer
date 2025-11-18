@@ -1,6 +1,8 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.SYN_4_UNDEFINED_COLUMN
+
 @pytest.mark.parametrize('query,column,schema', [
     ('SELECT id FROM store;', 'id', 'miedema'),
     ('SELECT sid FROM store WHERE id > 5;', 'id', 'miedema'),
@@ -20,8 +22,8 @@ def test_wrong(query, column, schema):
         search_path=schema,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_4_UNDEFINED_COLUMN) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_4_UNDEFINED_COLUMN, (column,))
+    assert count_errors(detected_errors, ERROR) == 1
+    assert has_error(detected_errors, ERROR, (column,))
 
 @pytest.mark.parametrize('query,schema', [
     ('SELECT sid FROM store;', 'miedema'),
@@ -40,4 +42,4 @@ def test_correct(query, schema):
         search_path=schema
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_4_UNDEFINED_COLUMN) == 0
+    assert count_errors(detected_errors, ERROR) == 0

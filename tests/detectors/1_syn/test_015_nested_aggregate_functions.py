@@ -1,6 +1,8 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED
+
 @pytest.mark.parametrize('query, aggregates', [
     (
         'SELECT col1, SUM(MAX(price)), SUM(price) FROM sales GROUP BY col1 HAVING AVG(MIN(quantity));',
@@ -23,9 +25,9 @@ def test_wrong(query, aggregates):
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == len(aggregates)
+    assert count_errors(detected_errors, ERROR) == len(aggregates)
     for agg in aggregates:
-        assert has_error(detected_errors, SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED, (agg,))
+        assert has_error(detected_errors, ERROR, (agg,))
 
 @pytest.mark.parametrize('query', [
     'SELECT col1, SUM(total_price) FROM table1 GROUP BY col1;',
@@ -41,6 +43,5 @@ def test_correct(query):
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_15_AGGREGATE_FUNCTIONS_CANNOT_BE_NESTED) == 0
-
+    assert count_errors(detected_errors, ERROR) == 0
 

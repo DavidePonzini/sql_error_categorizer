@@ -1,6 +1,8 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.SYN_5_UNDEFINED_FUNCTION
+
 @pytest.mark.parametrize('query,func,clause,schema', [
     ('SELECT notafunction() FROM store;', 'notafunction', 'SELECT', None),
     ('SELECT anotherfunc(col1, col2) FROM store;', 'anotherfunc', 'SELECT', None),
@@ -18,8 +20,8 @@ def test_wrong(query, func, clause, schema):
         search_path=schema,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_5_UNDEFINED_FUNCTION) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_5_UNDEFINED_FUNCTION, (func, clause))
+    assert count_errors(detected_errors, ERROR) == 1
+    assert has_error(detected_errors, ERROR, (func, clause))
 
 @pytest.mark.parametrize('query,schema', [
     ('SELECT SUM(col1) FROM store;', None),
@@ -41,4 +43,4 @@ def test_correct(query, schema):
         search_path=schema,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_5_UNDEFINED_FUNCTION) == 0
+    assert count_errors(detected_errors, ERROR) == 0

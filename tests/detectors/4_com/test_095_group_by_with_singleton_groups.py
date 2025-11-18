@@ -2,6 +2,8 @@ import pytest
 from tests import *
 from sql_error_categorizer.catalog import Constraint, ConstraintColumn
 
+ERROR = SqlErrors.COM_95_GROUP_BY_WITH_SINGLETON_GROUPS
+
 @pytest.mark.parametrize('query, group_by_constraint, singleton_constraint', [
     (
         'SELECT DISTINCT cid, cname FROM customer GROUP BY cid, cname HAVING COUNT(*) = 1;',
@@ -33,8 +35,8 @@ def test_singleton(query, group_by_constraint, singleton_constraint):
         detectors=[ComplicationDetector],
     )
 
-    assert count_errors(result, SqlErrors.COM_95_GROUP_BY_WITH_SINGLETON_GROUPS) == 1
-    assert has_error(result, SqlErrors.COM_95_GROUP_BY_WITH_SINGLETON_GROUPS, (group_by_constraint, singleton_constraint))
+    assert count_errors(result, ERROR) == 1
+    assert has_error(result, ERROR, (group_by_constraint, singleton_constraint))
 
 @pytest.mark.parametrize('query', [
     'SELECT DISTINCT cname, COUNT(*) FROM customer GROUP BY cname',
@@ -49,4 +51,4 @@ def test_necessary(query):
         detectors=[ComplicationDetector],
     )
 
-    assert count_errors(result, SqlErrors.COM_95_GROUP_BY_WITH_SINGLETON_GROUPS) == 0
+    assert count_errors(result, ERROR) == 0
