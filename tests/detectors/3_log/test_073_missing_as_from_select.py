@@ -26,7 +26,6 @@ def test_wrong(query, solutions, schema, expected):
         detectors=[LogicalErrorDetector],
         catalog_filename=schema,
         search_path=schema,
-        debug=True,
     )
 
     assert count_errors(detected_errors, ERROR) == len(expected)
@@ -59,7 +58,6 @@ def test_correct(query, solutions, schema):
         detectors=[LogicalErrorDetector],
         catalog_filename=schema,
         search_path=schema,
-        debug=True,
     )
 
     assert count_errors(detected_errors, ERROR) == 0

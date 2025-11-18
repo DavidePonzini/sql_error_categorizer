@@ -159,7 +159,6 @@ def test_correct(query: str, solutions: list[str], schema: str | None):
         catalog_filename=schema,
         search_path=schema,
         detectors=[LogicalErrorDetector],
-        debug=True
     )
 
     assert count_errors(detected_errors, ERROR) == 0

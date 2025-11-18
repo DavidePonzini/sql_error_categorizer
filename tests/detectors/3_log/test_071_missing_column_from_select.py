@@ -57,7 +57,6 @@ def test_wrong(query, solutions, schema, search_path, expected_len, expected_col
         detectors=[LogicalErrorDetector],
         catalog_filename=schema,
         search_path=search_path,
-        debug=True,
     )
 
     assert count_errors(detected_errors, ERROR) == len(expected_columns) + (1 if expected_len else 0)
