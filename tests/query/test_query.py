@@ -37,10 +37,10 @@ def test_ctes_with_cte():
     assert query.ctes[0].sql == sql_cte
 
 @pytest.mark.parametrize('sql, expected_ctes, expected_main_query', [
-    ("WITH cte1 AS (SELECT * FROM table1), cte2 AS (SELECT * FROM table2) SELECT * FROM cte1 JOIN cte2 ON cte1.id = cte2.id;",
-     ['SELECT * FROM table1', 'SELECT * FROM table2'], 'SELECT * FROM cte1 JOIN cte2 ON cte1.id = cte2.id;'),
-    ("SELECT * FROM table;", [], 'SELECT * FROM table;'),
-    ("WITH cte AS (SELECT a FROM b) SELECT * FROM cte;", ['SELECT a FROM b'], 'SELECT * FROM cte;')
+    ("WITH cte1 AS (SELECT * FROM table1), cte2 AS (SELECT * FROM table2) SELECT * FROM cte1 JOIN cte2 ON cte1.id = cte2.id",
+     ['SELECT * FROM table1', 'SELECT * FROM table2'], 'SELECT * FROM cte1 JOIN cte2 ON cte1.id = cte2.id'),
+    ("SELECT * FROM table;", [], 'SELECT * FROM table'),
+    ("WITH cte AS (SELECT a FROM b) SELECT * FROM cte", ['SELECT a FROM b'], 'SELECT * FROM cte')
 ])
 def test_query_cte_extraction(sql, expected_ctes, expected_main_query):
     query = Query(sql)
