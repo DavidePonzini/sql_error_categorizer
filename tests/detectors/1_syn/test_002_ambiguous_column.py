@@ -16,7 +16,6 @@ def test_wrong(query, column, table_aliases, schema):
         detectors=[SyntaxErrorDetector],
         catalog_filename=schema,
         search_path=schema,
-        debug=True
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_2_AMBIGUOUS_COLUMN) == 1

@@ -64,7 +64,6 @@ def test_redundant_disjunction_strings():
         detectors=[SemanticErrorDetector],
         catalog_filename='miedema',
         search_path='miedema',
-        debug=True,
     )
 
     assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1

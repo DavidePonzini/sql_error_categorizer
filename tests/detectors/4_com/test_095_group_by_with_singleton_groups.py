@@ -31,7 +31,6 @@ def test_singleton(query, group_by_constraint, singleton_constraint):
         search_path='miedema',
         catalog_filename='miedema',
         detectors=[ComplicationDetector],
-        debug=True
     )
 
     assert count_errors(result, SqlErrors.COM_95_GROUP_BY_WITH_SINGLETON_GROUPS) == 1

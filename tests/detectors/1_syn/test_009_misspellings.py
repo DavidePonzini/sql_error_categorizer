@@ -20,7 +20,6 @@ def test_wrong(query, expected_corrections):
         detectors=[SyntaxErrorDetector],
         catalog_filename='miedema',
         search_path='miedema',
-        debug=True,
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == len(expected_corrections)

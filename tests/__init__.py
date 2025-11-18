@@ -7,8 +7,7 @@ def run_test(query: str, *,
              catalog_filename: str | None = None,
              search_path: str | None = None, 
              detectors: list[type[BaseDetector]],
-             solutions: list[str] = [],
-             debug: bool = False
+             solutions: list[str] = []
     ) -> list[DetectedError]:
     
     if catalog_filename:
@@ -26,7 +25,7 @@ def run_test(query: str, *,
         search_path=search_path,
         solution_search_path=search_path,
         detectors=detectors,
-        debug=debug
+        debug=True
     )
 
     return detector.run()

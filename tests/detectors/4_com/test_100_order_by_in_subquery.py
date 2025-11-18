@@ -27,7 +27,6 @@ def test_order_by_in_nested_subquery():
     result = run_test(
         query,
         detectors=[ComplicationDetector],
-        debug=True
     )
 
     assert count_errors(result, SqlErrors.COM_100_ORDER_BY_IN_SUBQUERY) == 1

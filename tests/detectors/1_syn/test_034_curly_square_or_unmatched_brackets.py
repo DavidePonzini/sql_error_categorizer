@@ -31,7 +31,6 @@ def test_square_brackets_name():
     detected_errors = run_test(
         'SELECT * FROM orders WHERE [amount > 100];',
         detectors=[SyntaxErrorDetector],
-        debug=True,
     )
 
     assert count_errors(detected_errors, SqlErrors.SYN_34_CURLY_SQUARE_OR_UNMATCHED_BRACKETS) == 1
