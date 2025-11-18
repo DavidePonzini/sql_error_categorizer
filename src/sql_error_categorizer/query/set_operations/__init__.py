@@ -10,7 +10,7 @@ import sqlparse
 from sqlparse.sql import Parenthesis
 from sqlparse.tokens import Keyword
 
-def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_path: str = 'public') -> SetOperation:
+def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_path: str = 'public', is_top_level: bool = True) -> SetOperation:
     '''
     Parses a SQL string and constructs a tree of SetOperation objects representing the query structure using sqlparse.
 
@@ -28,7 +28,11 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
         sql = sql.strip()[:-1].strip()
 
     # remove outer parentheses
-    sql = remove_parentheses(sql)
+    stripped_sql = remove_parentheses(sql)
+    if stripped_sql != sql:
+        # if outer parentheses were removed, we are again at top level
+        return create_set_operation_tree(stripped_sql, catalog, search_path, True)
+    sql = stripped_sql
 
     parsed = sqlparse.parse(sql)
     if not parsed:
@@ -38,7 +42,10 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
     all_tokens = statement.tokens
 
     # Strip trailing ORDER BY / LIMIT / OFFSET
-    main_tokens, trailing_tokens = strip_trailing_clauses(all_tokens)
+    if is_top_level:
+        main_tokens, trailing_tokens = strip_trailing_clauses(all_tokens)
+    else:
+        main_tokens, trailing_tokens = all_tokens, []
 
     top_ops = find_top_level_ops(main_tokens)
     if not top_ops:
@@ -55,8 +62,8 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
 
     left_tokens, right_tokens, all_kw = split_on(main_tokens, split_idx, all_in_token)
 
-    left_node  = create_set_operation_tree(tokens_to_sql(left_tokens),  catalog=catalog, search_path=search_path)
-    right_node = create_set_operation_tree(tokens_to_sql(right_tokens), catalog=catalog, search_path=search_path)
+    left_node  = create_set_operation_tree(tokens_to_sql(left_tokens),  catalog, search_path, False)
+    right_node = create_set_operation_tree(tokens_to_sql(right_tokens), catalog, search_path, False)
 
     trailing_sql = tokens_to_sql(trailing_tokens) if trailing_tokens else None
 
