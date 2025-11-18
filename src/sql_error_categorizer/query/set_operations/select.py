@@ -107,7 +107,9 @@ class Select(SetOperation, TokenizedSQL):
                     result.append(table)
                 else:
                     # Table does not exist, add as empty table
-                    result.append(Table(name=table_name_out, schema_name=schema_name))
+                    table = Table(name=table_name_in, schema_name=schema_name)
+                    table.name = table_name_out
+                    result.append(table)
         
         from_expr = self.ast.args.get('from')
         
