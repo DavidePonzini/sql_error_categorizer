@@ -23,18 +23,12 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
         SetOperation: The root of the SetOperation tree representing the query.
     '''
 
-    from dav_tools import messages
-
-    messages.debug(f'Received SQL for parsing:\n{sql}')
-
     # strip trailing semicolon
     if sql.strip().endswith(';'):
         sql = sql.strip()[:-1].strip()
 
     # remove outer parentheses
     sql = remove_parentheses(sql)
-
-    messages.debug(f'SQL after stripping semicolon and outer parentheses:\n{sql}', color=messages.TextFormat.Color.CYAN)
 
     parsed = sqlparse.parse(sql)
     if not parsed:
@@ -51,11 +45,12 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
         return Select(sql, catalog=catalog, search_path=search_path)
 
     # Precedence: split lowest-precedence first (UNION/EXCEPT) so INTERSECT stays grouped
+    # start from the last occurrence to get left-associative grouping
     union_except = [(i, op, a) for (i, op, a) in top_ops if op in ('UNION', 'EXCEPT')]
     if union_except:
-        split_idx, op, all_in_token = union_except[0]
+        split_idx, op, all_in_token = union_except[-1]
     else:
-        split_idx, op, all_in_token = top_ops[0]  # only INTERSECTs remain
+        split_idx, op, all_in_token = top_ops[-1]  # only INTERSECTs remain
 
 
     left_tokens, right_tokens, all_kw = split_on(main_tokens, split_idx, all_in_token)
@@ -66,12 +61,11 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
     trailing_sql = tokens_to_sql(trailing_tokens) if trailing_tokens else None
 
     if op == 'UNION':
-        node = Union(sql, left_node, right_node, all=(all_kw is True), trailing_sql=trailing_sql)
+        node = Union(sql, left_node, right_node, distinct=not all_kw, trailing_sql=trailing_sql)
     elif op == 'EXCEPT':
-        node = Except(sql, left_node, right_node, all=(all_kw is True), trailing_sql=trailing_sql)
+        node = Except(sql, left_node, right_node, distinct=not all_kw, trailing_sql=trailing_sql)
     else:  # INTERSECT
-        node = Intersect(sql, left_node, right_node, all=(all_kw is True), trailing_sql=trailing_sql)
-
+        node = Intersect(sql, left_node, right_node, distinct=not all_kw, trailing_sql=trailing_sql)
     return node
 
 def parse_op_token(tok: sqlparse.sql.Token) -> tuple[str, bool | None] | None:

@@ -12,11 +12,11 @@ if TYPE_CHECKING:
 
 class BinarySetOperation(SetOperation, ABC):
     '''Represents a binary set operation (e.g., UNION, INTERSECT, EXCEPT).'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool | None = None, trailing_sql: str | None = None):
+    def __init__(self, sql: str, left: SetOperation, right: SetOperation, distinct: bool = True, trailing_sql: str | None = None):
         super().__init__(sql)
         self.left = left
         self.right = right
-        self.all = all
+        self.distinct = distinct
         '''Indicates whether the operation is ALL (duplicates allowed) or DISTINCT (duplicates removed).'''
 
         self.trailing_sql: str | None = trailing_sql
@@ -28,10 +28,8 @@ class BinarySetOperation(SetOperation, ABC):
     def __repr__(self, pre: str = '') -> str:
         modifiers = []
 
-        if self.all is True:
+        if not self.distinct:
             modifiers.append('ALL=True')
-        elif self.all is False:
-            modifiers.append('ALL=False')
 
         if self.order_by:
             modifiers.append(f'ORDER_BY={[col.name for col in self.order_by]}')
@@ -57,8 +55,8 @@ class BinarySetOperation(SetOperation, ABC):
             if constraint.constraint_type != ConstraintType.SET_OP
         ]
 
-        # If ALL is False, duplicates are not allowed
-        if not self.all:
+        # If DISTINCT, add a new constraint covering all columns
+        if self.distinct:
             all_columns = { ConstraintColumn(col.name, col.table_idx) for col in result.columns }
             result.unique_constraints.append(Constraint(all_columns, ConstraintType.SET_OP))
 
@@ -70,7 +68,7 @@ class BinarySetOperation(SetOperation, ABC):
 
     
     def print_tree(self, pre: str = '') -> None:
-        print(f'{pre}{self.__class__.__name__} (ALL={self.all})')
+        print(f'{pre}{self.__class__.__name__} (ALL={not self.distinct})')
         print(                      f'{pre}|- Left:')
         self.left.print_tree(pre=   f'{pre}|  ')
         print(                      f'{pre}`- Right:')
@@ -117,8 +115,8 @@ class BinarySetOperation(SetOperation, ABC):
 
 class Union(BinarySetOperation):
     '''Represents a SQL UNION operation.'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False, trailing_sql: str | None = None):
-        super().__init__(sql, left, right, all=all, trailing_sql=trailing_sql)
+    def __init__(self, sql: str, left: SetOperation, right: SetOperation, distinct: bool = True, trailing_sql: str | None = None):
+        super().__init__(sql, left, right, distinct=distinct, trailing_sql=trailing_sql)
 
     @property
     def output(self) -> Table:
@@ -135,13 +133,13 @@ class Union(BinarySetOperation):
 
 class Intersect(BinarySetOperation):
     '''Represents a SQL INTERSECT operation.'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False, trailing_sql: str | None = None):
-        super().__init__(sql, left, right, all=all, trailing_sql=trailing_sql)
+    def __init__(self, sql: str, left: SetOperation, right: SetOperation, distinct: bool = True, trailing_sql: str | None = None):
+        super().__init__(sql, left, right, distinct=distinct, trailing_sql=trailing_sql)
 
 class Except(BinarySetOperation):
     '''Represents a SQL EXCEPT operation.'''
-    def __init__(self, sql: str, left: SetOperation, right: SetOperation, all: bool = False, trailing_sql: str | None = None):
-        super().__init__(sql, left, right, all=all, trailing_sql=trailing_sql)
+    def __init__(self, sql: str, left: SetOperation, right: SetOperation, distinct: bool = True, trailing_sql: str | None = None):
+        super().__init__(sql, left, right, distinct=distinct, trailing_sql=trailing_sql)
 
     
 
