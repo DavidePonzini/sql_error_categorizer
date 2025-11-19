@@ -667,20 +667,21 @@ class SyntaxErrorDetector(BaseDetector):
         Checks for data type mismatches in comparisons within the query.
         '''
 
-        results: list[DetectedError] = []
+        def parse_set_operation(set_op: 'SetOperation', location: str) -> list[DetectedError]:
 
-        def parse_set_operation(set_operation: 'SetOperation', location: str) -> list[DetectedError]:
             '''
             Util function to parse a SetOperation and check for data type mismatches among its main selects.
             '''
-            results: list[DetectedError] = []
+            errors: list[DetectedError] = []
             expected_output = None # type of the first select's output
-            for select in set_operation.main_selects:
+            for select in set_op.main_selects:
+
+                typed_ast = select.typed_ast
                 
-                if select.typed_ast is None:
+                if typed_ast is None:
                     continue
 
-                columns_type = get_type(select.typed_ast, select.catalog, select.search_path)
+                columns_type = get_type(typed_ast, select.catalog, select.search_path)
 
                 # 1st select: set expected output type
                 if expected_output is None:
@@ -688,14 +689,15 @@ class SyntaxErrorDetector(BaseDetector):
                 else:
                     # compare with expected output type
                     if expected_output != columns_type:
-                        results.append(DetectedError(SqlErrors.SYN_13_DATA_TYPE_MISMATCH, (location,"setop types inconsistent")))
+                        errors.append(DetectedError(SqlErrors.SYN_13_DATA_TYPE_MISMATCH, (location,"setop types inconsistent")))
 
                 # load found messages
                 for message in columns_type.messages:
-                    results.append(DetectedError(SqlErrors.SYN_13_DATA_TYPE_MISMATCH, message))
+                    errors.append(DetectedError(SqlErrors.SYN_13_DATA_TYPE_MISMATCH, message))
 
-            return results
+            return errors
 
+        results: list[DetectedError] = []
 
         # CTEs
         for cte in self.query.ctes:
@@ -1248,27 +1250,30 @@ class SyntaxErrorDetector(BaseDetector):
     
 
     def syn_35_is_where_not_applicable(self) -> list[DetectedError]:
-        results: list[DetectedError] = []
+        '''
+        Find all erroneous usages of IS where it is not applicable
+        '''
 
         def parse_set_operation(set_operation: 'SetOperation') -> list[DetectedError]:
             '''
-            Util function to parse a SetOperation and check for data type mismatches among its main selects.
+            Util function to parse a SetOperation and check for invalid usage of IS in all its main selects.
             '''
-            results: list[DetectedError] = []
+
+            errors: list[DetectedError] = []
             for select in set_operation.main_selects:
+
+                typed_ast = select.typed_ast
                 
-                if select.typed_ast is None:
+                if typed_ast is None:
                     continue
 
-                all_is = select.typed_ast.find_all(exp.Is)
+                for is_expr in typed_ast.find_all(exp.Is):
+                    for error in collect_errors(is_expr, select.catalog, select.search_path):
+                        errors.append(DetectedError(SqlErrors.SYN_35_IS_WHERE_NOT_APPLICABLE, error))
 
-                for is_expr in all_is:
-                    errors = collect_errors(is_expr, select.catalog, select.search_path)
-                    for error in errors:
-                        results.append(DetectedError(SqlErrors.SYN_35_IS_WHERE_NOT_APPLICABLE, error))
+            return errors
 
-            return results
-
+        results: list[DetectedError] = []
 
         # CTEs
         for cte in self.query.ctes:

@@ -84,17 +84,9 @@ class Select(SetOperation, TokenizedSQL):
             # Table: look it up in the IN catalog
             elif isinstance(expr, exp.Table):
                 # schema name
-                schema_name = util.ast.table.get_schema(expr)
+                schema_name = util.ast.table.get_schema(expr) or self.search_path
                 table_name_in = util.ast.table.get_real_name(expr)
                 table_name_out = util.ast.table.get_name(expr)
-
-                if schema_name is None:
-                    # If no schema is specified, try to find the table in the CTEs
-                    if self.catalog.has_table(schema_name='', table_name=table_name_in):
-                        schema_name = ''
-                    # If not found in CTEs, use the search path
-                    else:
-                        schema_name = self.search_path 
 
                 # check if the table exists in the catalog
                 if self.catalog.has_table(schema_name=schema_name, table_name=table_name_in):
