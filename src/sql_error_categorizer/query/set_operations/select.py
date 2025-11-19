@@ -651,6 +651,10 @@ class Select(SetOperation, TokenizedSQL):
             return int(offset_exp.expression.this)
         except ValueError:
             return None
+        
+    @property
+    def main_selects(self) -> list['Select']:
+        return [self]
     
     @property
     def selects(self) -> list['Select']:

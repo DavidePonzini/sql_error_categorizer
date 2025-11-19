@@ -75,6 +75,10 @@ class BinarySetOperation(SetOperation, ABC):
         self.right.print_tree(pre=  f'{pre}   ')
 
     @property
+    def main_selects(self) -> list['Select']:
+        return self.left.main_selects + self.right.main_selects
+
+    @property
     def selects(self) -> list['Select']:
         return self.left.selects + self.right.selects
     

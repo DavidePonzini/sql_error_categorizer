@@ -24,7 +24,7 @@ def _(expression: exp.Select, catalog: Catalog, search_path: str) -> ResultType:
 
     having = expression.args.get("having")
     if having:
-        old_messages.extend(get_type(having, catalog, search_path).messages)
+        old_messages.extend(get_type(having.this, catalog, search_path).messages)
     if len(types) == 1:
         return AtomicType(data_type=types[0].data_type, messages=old_messages, nullable=types[0].nullable, constant=types[0].constant)
 

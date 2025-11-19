@@ -52,6 +52,12 @@ class SetOperation(ABC):
             parsed = sqlglot.parse_one(fake_sql)
             self._trailing_ast = parsed
         return self._trailing_ast
+    
+    @property
+    @abstractmethod
+    def main_selects(self) -> list['Select']:
+        '''Returns a list of selects that are part of a set operation.'''
+        return []
 
     @property
     @abstractmethod

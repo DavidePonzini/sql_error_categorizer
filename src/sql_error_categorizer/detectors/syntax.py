@@ -7,6 +7,9 @@ from sqlglot import exp
 from typing import Callable
 from copy import deepcopy
 
+from sql_error_categorizer.query.set_operations.set_operation import SetOperation
+from sql_error_categorizer.query.typechecking.base import get_type
+
 from .base import BaseDetector, DetectedError
 from ..query import Query
 from ..sql_errors import SqlErrors
@@ -665,7 +668,44 @@ class SyntaxErrorDetector(BaseDetector):
         Checks for data type mismatches in comparisons within the query.
         '''
 
-        return []
+        results: list[DetectedError] = []
+
+        def parse_set_operation(set_operation: 'SetOperation', location: str) -> list[DetectedError]:
+            '''
+            Util function to parse a SetOperation and check for data type mismatches among its main selects.
+            '''
+            results: list[DetectedError] = []
+            expected_output = None # type of the first select's output
+            for select in set_operation.main_selects:
+                
+                if select.typed_ast is None:
+                    continue
+
+                columns_type = get_type(select.typed_ast, select.catalog, select.search_path)
+
+                # 1st select: set expected output type
+                if expected_output is None:
+                    expected_output = columns_type
+                else:
+                    # compare with expected output type
+                    if expected_output != columns_type:
+                        results.append(DetectedError(SqlErrors.SYN_13_DATA_TYPE_MISMATCH, (location,"setop types inconsistent")))
+
+                # load found messages
+                for message in columns_type.messages:
+                    results.append(DetectedError(SqlErrors.SYN_13_DATA_TYPE_MISMATCH, message))
+
+            return results
+
+
+        # CTEs
+        for cte in self.query.ctes:
+            results.extend(parse_set_operation(cte, f"CTE {cte.output.name}"))
+
+        # Main Query
+        results.extend(parse_set_operation(self.query.main_query, "Main Query"))
+
+        return results
         
         # Check for data type mismatches in the query.
         results: list[DetectedError] = []
