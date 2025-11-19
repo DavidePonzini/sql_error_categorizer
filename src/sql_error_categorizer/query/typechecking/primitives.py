@@ -67,8 +67,8 @@ def _(expression: exp.Column, catalog: Catalog, search_path: str) -> ResultType:
     if expression.type.this in (DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
         return AtomicType(messages=[error_message(expression.name, "Unknown column type")])
     else:
-        schema = get_schema(expression.args.get("db")) or search_path
-        table = get_real_name(expression.args.get("table"))
+        schema = get_schema(expression) or search_path
+        table = get_real_name(expression)
 
         nullable = catalog[schema][table][expression.name].is_nullable
         return AtomicType(data_type=expression.type.this, constant=False, nullable=nullable)

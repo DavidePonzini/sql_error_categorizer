@@ -8,7 +8,7 @@ from typing import Callable
 from copy import deepcopy
 
 from sql_error_categorizer.query.set_operations.set_operation import SetOperation
-from sql_error_categorizer.query.typechecking.base import get_type
+from ..query.typechecking import get_type, collect_errors
 
 from .base import BaseDetector, DetectedError
 from ..query import Query
@@ -662,7 +662,6 @@ class SyntaxErrorDetector(BaseDetector):
     def syn_12_failure_to_specify_column_name_twice(self) -> list[DetectedError]:
         return []
     
-    # TODO: refactor, needs AST
     def syn_13_data_type_mismatch(self) -> list[DetectedError]:
         '''
         Checks for data type mismatches in comparisons within the query.
@@ -706,83 +705,6 @@ class SyntaxErrorDetector(BaseDetector):
         results.extend(parse_set_operation(self.query.main_query, "Main Query"))
 
         return results
-        
-        # Check for data type mismatches in the query.
-        results: list[DetectedError] = []
-
-        comparison_operators = {'=', '<>', '!=', '<', '>', '<=', '>='}
-
-        
-        tokens = self.tokens
-        alias_map = self.query_map.get('alias_mapping', {})
-        all_table_columns = self.catalog.get("table_columns", {})
-        column_metadata = self.catalog.get("column_metadata", {})
-
-        # Build reverse alias map for resolving columns to tables
-        column_to_table = {}
-        for table, columns in all_table_columns.items():
-            for col in columns:
-                column_to_table.setdefault(col.lower(), set()).add(table)
-
-        i = 0
-        while i < len(tokens):
-            tt, val = tokens[i]
-            if val in comparison_operators:
-                lhs_token = tokens[i - 1] if i - 1 >= 0 else None
-                rhs_token = tokens[i + 1] if i + 1 < len(tokens) else None
-
-                lhs_type = rhs_type = None
-
-                # --- LHS type resolution ---
-                if lhs_token:
-                    lhs_val = lhs_token[1].strip('"`')
-                    if '.' in lhs_val:
-                        tbl, col = lhs_val.split('.', 1)
-                        tbl = alias_map.get(tbl, [tbl])[0] if tbl in alias_map else tbl
-                        lhs_type = column_metadata.get(tbl, {}).get(col, {}).get("type")
-                    elif lhs_val.lower() in column_to_table:
-                        for tbl in column_to_table[lhs_val.lower()]:
-                            t = column_metadata.get(tbl, {}).get(lhs_val, {}).get("type")
-                            if t:
-                                lhs_type = t
-                                break
-                    elif lhs_val.startswith("'") and lhs_val.endswith("'"):
-                        lhs_type = "text"
-                    elif re.match(r'^\d+\.\d+$', lhs_val):
-                        lhs_type = "float"
-                    elif lhs_val.isdigit():
-                        lhs_type = "int"
-
-                # --- RHS type resolution ---
-                if rhs_token:
-                    rhs_val = rhs_token[1].strip('"`')
-                    if '.' in rhs_val:
-                        tbl, col = rhs_val.split('.', 1)
-                        tbl = alias_map.get(tbl, [tbl])[0] if tbl in alias_map else tbl
-                        rhs_type = column_metadata.get(tbl, {}).get(col, {}).get("type")
-                    elif rhs_val.lower() in column_to_table:
-                        for tbl in column_to_table[rhs_val.lower()]:
-                            t = column_metadata.get(tbl, {}).get(rhs_val, {}).get("type")
-                            if t:
-                                rhs_type = t
-                                break
-                    elif rhs_val.startswith("'") and rhs_val.endswith("'"):
-                        rhs_type = "text"
-                    elif re.match(r'^\d+\.\d+$', rhs_val):
-                        rhs_type = "float"
-                    elif rhs_val.isdigit():
-                        rhs_type = "int"
-
-                # --- Check mismatch ---
-                if lhs_type and rhs_type and not self._are_types_compatible(lhs_type, rhs_type):
-                    results.append((
-                        SqlErrors.SYN_13_DATA_TYPE_MISMATCH,
-                        f"Comparison type mismatch: {lhs_token[1]} ({lhs_type}) {val} {rhs_token[1]} ({rhs_type})"
-                    ))
-
-            i += 1
-
-        return results    
     
     def syn_14_aggregate_function_outside_select_or_having(self) -> list[DetectedError]:
         '''
@@ -1324,9 +1246,38 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
     
-    #TODO: implement
+
     def syn_35_is_where_not_applicable(self) -> list[DetectedError]:
-        return []
+        results: list[DetectedError] = []
+
+        def parse_set_operation(set_operation: 'SetOperation') -> list[DetectedError]:
+            '''
+            Util function to parse a SetOperation and check for data type mismatches among its main selects.
+            '''
+            results: list[DetectedError] = []
+            for select in set_operation.main_selects:
+                
+                if select.typed_ast is None:
+                    continue
+
+                all_is = select.typed_ast.find_all(exp.Is)
+
+                for is_expr in all_is:
+                    errors = collect_errors(is_expr, select.catalog, select.search_path)
+                    for error in errors:
+                        results.append(DetectedError(SqlErrors.SYN_35_IS_WHERE_NOT_APPLICABLE, error))
+
+            return results
+
+
+        # CTEs
+        for cte in self.query.ctes:
+            results.extend(parse_set_operation(cte))
+
+        # Main Query
+        results.extend(parse_set_operation(self.query.main_query))
+
+        return results
     
     #TODO: implement
     def syn_36_nonstandard_keywords_or_standard_keywords_in_wrong_context(self) -> list[DetectedError]:
