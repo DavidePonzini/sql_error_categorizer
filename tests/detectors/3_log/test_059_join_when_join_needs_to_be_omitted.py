@@ -107,7 +107,12 @@ def test_wrong(query: str, solutions: list[str], expected_errors: list[tuple[str
         ],
         None
     ),
-    
+    (
+        # no solutions (return no errors)
+        'SELECT a, b, c FROM table1 JOIN table2 ON table1.id = table2.id;',
+        [],
+        None,
+    ),
     # subqueries
     (
         # expected: table1 table2 table3 table4

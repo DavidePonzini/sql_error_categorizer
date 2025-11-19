@@ -84,6 +84,12 @@ def test_wrong(query, solutions, schema, search_path, expected_len, expected_col
         ['SELECT cid, cname FROM customer;'],
         'miedema',
     ),
+    (
+        # no solutions (return no errors)
+        'SELECT a, b, c FROM table1;',
+        [],
+        None,
+    ),
     # subqueries
     (
         'SELECT a, (SELECT b FROM table2) as sub_col FROM table1;',

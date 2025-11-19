@@ -47,7 +47,13 @@ def test_wrong(query, solutions, schema, expected):
         'SELECT cid AS cname, cname AS cid FROM customer;',
         ['SELECT cid AS cname, cname AS cid FROM customer;'],
         'miedema',
-    )
+    ),
+    (
+        # no solutions (return no errors)
+        'SELECT a, b, c FROM table1;',
+        [],
+        None,
+    ),
     # subqueries -- Not applicable
     # CTEs -- Not applicable
 ])

@@ -27,7 +27,13 @@ class LogicalErrorDetector(BaseDetector):
             update_query=update_query,
         )
 
-    def run(self) -> list[DetectedError]:    
+    def run(self) -> list[DetectedError]:
+
+        # All logical errors require at least one solution to compare against
+        # If no solutions are provided, we cannot perform logical error detection
+        if not self.solutions:
+            return []
+
         results: list[DetectedError] = super().run()
 
         checks = [
@@ -182,9 +188,6 @@ class LogicalErrorDetector(BaseDetector):
             3. Incorrect Join: A table is included, but it is not the correct one needed for the join.
         '''
                 
-        if not self.solutions:
-            return []
-
         @dataclass(frozen=True)
         class TableCol:
             table: str
@@ -434,6 +437,10 @@ class LogicalErrorDetector(BaseDetector):
         return []
 
     def log_73_missing_as_from_select(self) -> list[DetectedError]:
+        '''
+            Flags when AS aliases are missing from required columns in the SELECT clause.
+        '''
+        
         results: list[DetectedError] = []
 
         # ensure we have the correct columns in both amount and source

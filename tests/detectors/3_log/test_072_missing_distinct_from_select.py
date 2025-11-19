@@ -59,6 +59,12 @@ def test_wrong(query, solutions, schema):
         ['SELECT DISTINCT street FROM customer;'],
         'miedema'
     ),
+    (
+        # no solutions (return no errors)
+        'SELECT a, b, c FROM table1;',
+        [],
+        None,
+    ),    
     # Subqueries
     (
         'SELECT DISTINCT a, (SELECT b FROM table2) as sub_col FROM table1;',
