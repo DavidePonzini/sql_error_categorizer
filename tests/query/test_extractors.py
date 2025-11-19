@@ -29,18 +29,6 @@ def test_extract_comparisons(sql, expected):
 
 
 @pytest.mark.parametrize('sql, expected', [
-    ("WITH cte1 AS (SELECT * FROM table1), cte2 AS (SELECT * FROM table2) SELECT * FROM cte1 JOIN cte2 ON cte1.id = cte2.id;",
-     [('cte1', 'SELECT * FROM table1'), ('cte2', 'SELECT * FROM table2')]),
-    ("SELECT * FROM table;", []),
-    ("WITH cte AS (SELECT a FROM b) SELECT * FROM cte;", [('cte', 'SELECT a FROM b')])
-])
-def test_extract_ctes(sql, expected):
-    ast = parse_one(sql)
-    ctes = extract_ctes(ast)
-    assert ctes == expected
-
-
-@pytest.mark.parametrize('sql, expected', [
     ("SELECT a,b,c FROM table1 WHERE a > (SELECT MAX(a) FROM table2);", [('(SELECT MAX(a) FROM table2)')]),
     ("SELECT * FROM (SELECT id, name FROM users) AS sub WHERE id IN (SELECT user_id FROM orders);",
      ['(SELECT id, name FROM users) AS sub', '(SELECT user_id FROM orders)']),

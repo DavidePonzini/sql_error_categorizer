@@ -111,7 +111,7 @@ class Select(SetOperation, TokenizedSQL):
                     table.name = table_name_out
                     result.append(table)
         
-        from_expr = self.ast.args.get('from')
+        from_expr = self.ast.args.get('from_')
         
 
         if from_expr:
