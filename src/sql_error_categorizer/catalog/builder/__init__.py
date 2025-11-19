@@ -54,12 +54,18 @@ def build_catalog(columns_info: list[CatalogColumnInfo], unique_constraints_info
     result = Catalog()
     
     for column in columns_info:
-        schema_name, table_name, column_name, column_type, numeric_precision, numeric_scale, is_nullable, fk_schema, fk_table, fk_column = column
-
-        result.add_column(schema_name, table_name, column_name,
-                          column_type, numeric_precision, numeric_scale,
-                          is_nullable,
-                          fk_schema, fk_table, fk_column)
+        result.add_column(
+            schema_name=column.schema_name,
+            table_name=column.table_name,
+            column_name=column.column_name,
+            column_type=column.column_type,
+            numeric_precision=column.numeric_precision,
+            numeric_scale=column.numeric_scale,
+            is_nullable=column.is_nullable,
+            fk_schema=column.foreign_key_schema,
+            fk_table=column.foreign_key_table,
+            fk_column=column.foreign_key_column,
+        )
         
     for constraint in unique_constraints_info:
         columns = set(constraint.columns.strip('{}').split(','))  # Postgres returns {col1,col2,...}
