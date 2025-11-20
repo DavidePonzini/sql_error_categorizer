@@ -1,6 +1,7 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.SYN_13_DATA_TYPE_MISMATCH
 CATALOG = 'miedema'
 
 @pytest.mark.parametrize('query,errors', [
@@ -22,9 +23,9 @@ def test_wrong(query, errors):
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_13_DATA_TYPE_MISMATCH) == len(errors)
+    assert count_errors(detected_errors, ERROR) == len(errors)
     for snippet in errors:
-        assert has_error(detected_errors, SqlErrors.SYN_13_DATA_TYPE_MISMATCH, snippet)
+        assert has_error(detected_errors, ERROR, snippet)
 
 
 @pytest.mark.parametrize('query', [
@@ -46,4 +47,4 @@ def test_correct(query):
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_13_DATA_TYPE_MISMATCH) == 0
+    assert count_errors(detected_errors, ERROR) == 0
