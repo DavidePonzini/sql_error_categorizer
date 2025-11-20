@@ -1,6 +1,7 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.SYN_35_IS_WHERE_NOT_APPLICABLE
 CATALOG = 'miedema'
 
 @pytest.mark.parametrize('query,errors', [
@@ -21,9 +22,9 @@ def test_wrong(query, errors):
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_35_IS_WHERE_NOT_APPLICABLE) == len(errors)
+    assert count_errors(detected_errors, ERROR) == len(errors)
     for snippet in errors:
-        assert has_error(detected_errors, SqlErrors.SYN_35_IS_WHERE_NOT_APPLICABLE, snippet)
+        assert has_error(detected_errors, ERROR, snippet)
 
 
 @pytest.mark.parametrize('query', [
@@ -45,4 +46,4 @@ def test_correct(query):
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_35_IS_WHERE_NOT_APPLICABLE) == 0
+    assert count_errors(detected_errors, ERROR) == 0
