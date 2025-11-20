@@ -13,7 +13,7 @@ CATALOG = 'miedema'
     ('SELECT * FROM store WHERE sid IN (SELECT sid FROM store WHERE sid >= ALL(SELECT sname FROM store));', [('"store"."sid" >= ALL (SELECT "store"."sname" AS "sname" FROM "miedema"."store" AS "store")', 'decimal & varchar', None)]),
     ('SELECT s.sid FROM store s WHERE s.sid >= (SELECT AVG(p.pid) FROM product p WHERE s.name >= p.pid);', [('"s"."sname" >= "p"."pid"', 'varchar & decimal', None)]),
     # CTEs
-    ('WITH x AS (SELECT sid FROM store WHERE sname IS \'Lidl\' UNION SELECT sname FROM store WHERE sid IN (1,2,\'ciao\')) SELECT * FROM x;', [('"store"."sname" IS \'Lidl\'', 'varchar', 'boolean|null'),('CTE ', 'setop types inconsistent'),('"store"."sid" IN (1, 2, \'ciao\')', 'varchar', 'decimal')]),
+    ('WITH x AS (SELECT sid FROM store WHERE sname IS TRUE UNION SELECT sname FROM store WHERE sid IN (1,2,\'ciao\')) SELECT * FROM x;', [('"store"."sname" IS TRUE', 'varchar', 'boolean'),('CTE ', 'setop types inconsistent'),('"store"."sid" IN (1, 2, \'ciao\')', 'varchar', 'decimal')]),
 ])
 def test_wrong(query, errors):
     detected_errors = run_test(
