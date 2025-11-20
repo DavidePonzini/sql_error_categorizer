@@ -41,4 +41,15 @@ def get_table(column: exp.Column) -> str | None:
     
     return None
 
+def get_schema(column: exp.Column) -> str | None:
+    '''Returns the schema name for the column, in lowercase if unquoted.'''
+    
+    if column.args.get('db'):
+        quoted = column.args['db'].quoted
+        name = column.db
+
+        return name if quoted else name.lower()
+    
+    return None
+
 

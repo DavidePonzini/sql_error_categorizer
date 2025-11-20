@@ -76,12 +76,14 @@ def _(expression: exp.In, catalog: Catalog, search_path: str) -> ResultType:
     # Case IN (<list>)
     for item in expression.expressions:
         item_type = get_type(item, catalog, search_path)
+        old_messages.extend(item_type.messages)
         if target_type != item_type:
             old_messages.append(error_message(expression, item_type, target_type))
 
     # Case IN (subquery)
     if expression.args.get("query"):
         subquery_type = get_type(expression.args.get("query"), catalog, search_path)
+        old_messages.extend(subquery_type.messages)
         if target_type != subquery_type:
             old_messages.append(error_message(expression, subquery_type, target_type))
 

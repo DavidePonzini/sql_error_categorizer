@@ -3,6 +3,7 @@ from ...catalog import Catalog
 from sqlglot import exp
 from .types import ResultType, AtomicType, DataType, TupleType
 from .util import is_number, is_date, to_number, to_date, error_message
+from ...util.ast.column import get_real_name, get_schema
 
 @get_type.register
 def _(expression: exp.Literal, catalog: Catalog, search_path: str) -> ResultType:
@@ -66,8 +67,8 @@ def _(expression: exp.Column, catalog: Catalog, search_path: str) -> ResultType:
     if expression.type.this in (DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
         return AtomicType(messages=[error_message(expression.name, "Unknown column type")])
     else:
-        schema = expression.args.get("db") or search_path
-        table = expression.args.get("table")
+        schema = get_schema(expression) or search_path
+        table = get_real_name(expression)
 
         nullable = catalog[schema][table][expression.name].is_nullable
         return AtomicType(data_type=expression.type.this, constant=False, nullable=nullable)

@@ -121,21 +121,7 @@ class Query(TokenizedSQL):
 
         result.extend(self.main_query.selects)
 
-        return result
-    
-
-    @property
-    def main_selects(self) -> list[Select]:
-
-        def _gather_selects_from_set_operation(so: SetOperation) -> list[Select]:
-            if isinstance(so, Select):
-                return [so]
-            elif isinstance(so, BinarySetOperation):
-                return _gather_selects_from_set_operation(so.left) + _gather_selects_from_set_operation(so.right)
-            else:
-                return []
-
-        return _gather_selects_from_set_operation(self.main_query)        
+        return result        
     
     @property
     def output_columns_source(self) -> set[tuple[str, str | None, str]]:

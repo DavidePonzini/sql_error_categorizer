@@ -24,11 +24,11 @@ def _(expression: exp.Select, catalog: Catalog, search_path: str) -> ResultType:
 
     having = expression.args.get("having")
     if having:
-        old_messages.extend(get_type(having, catalog, search_path).messages)
+        old_messages.extend(get_type(having.this, catalog, search_path).messages)
     if len(types) == 1:
-        return AtomicType(data_type=types[0].data_type, messages=old_messages, nullable=types[0].nullable, constant=types[0].constant)
+        return AtomicType(data_type=types[0].data_type, messages=old_messages, nullable=types[0].nullable)
 
-    return TupleType(types=types, messages=old_messages, nullable=any(t.nullable for t in types), constant=all(t.constant for t in types))
+    return TupleType(types=types, messages=old_messages, nullable=any(t.nullable for t in types))
 
 @get_type.register
 def _(expression: exp.Subquery, catalog: Catalog, search_path: str) -> ResultType:
