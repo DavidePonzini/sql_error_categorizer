@@ -1,6 +1,8 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.SYN_7_UNDEFINED_OBJECT
+
 @pytest.mark.parametrize('query,objects,schema', [
     ('SELECT * FROM store;', ('store',), None),
     ('SELECT * FROM customer c JOIN orders o ON c.cid = o.cid;', ['orders AS o'], 'miedema'),
@@ -18,9 +20,9 @@ def test_wrong(query, objects, schema):
         search_path=schema,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT) == len(objects)
+    assert count_errors(detected_errors, ERROR) == len(objects)
     for obj in objects:
-        assert has_error(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT, (obj,))
+        assert has_error(detected_errors, ERROR, (obj,))
 
 @pytest.mark.parametrize('query,schema', [
     ('SELECT * FROM store;', 'miedema'),
@@ -38,4 +40,4 @@ def test_correct(query, schema):
         search_path=schema,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_7_UNDEFINED_OBJECT) == 0
+    assert count_errors(detected_errors, ERROR) == 0

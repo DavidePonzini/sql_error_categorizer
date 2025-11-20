@@ -74,10 +74,15 @@ class SemanticErrorDetector(BaseDetector):
 
             dnf = util.ast.extract_DNF(where)
 
+
             # Refer to Brass & Goldberg, 2006 for these checks (error #8)
             # (1) whole formula
             try:
-                whole = Or(*[smt.sql_to_z3(C, variables) for C in dnf])
+                whole_clauses = [smt.sql_to_z3(C, variables) for C in dnf]
+                from dav_tools import messages
+                messages.debug(f'DNF clauses Z3: {whole_clauses}')
+
+                whole = Or(*whole_clauses)
             except Exception:
                 continue  # skip if cannot convert to z3
 

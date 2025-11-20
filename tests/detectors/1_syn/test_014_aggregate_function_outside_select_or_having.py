@@ -1,6 +1,8 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.SYN_14_USING_AGGREGATE_FUNCTION_OUTSIDE_SELECT_OR_HAVING
+
 @pytest.mark.parametrize('query,errors', [
     ('SELECT * FROM orders WHERE SUM(amount) > 100;', [('SUM', 'WHERE')]),
     ('SELECT customer_id, SUM(amount) FROM orders GROUP BY SUM(amount);', [('SUM', 'GROUP BY')]),
@@ -17,9 +19,9 @@ def test_wrong(query, errors):
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_14_USING_AGGREGATE_FUNCTION_OUTSIDE_SELECT_OR_HAVING) == len(errors)
+    assert count_errors(detected_errors, ERROR) == len(errors)
     for func, clause in errors:
-        assert has_error(detected_errors, SqlErrors.SYN_14_USING_AGGREGATE_FUNCTION_OUTSIDE_SELECT_OR_HAVING, (func, clause))
+        assert has_error(detected_errors, ERROR, (func, clause))
 
 @pytest.mark.parametrize('query', [
     'SELECT customer_id, SUM(amount) FROM orders GROUP BY customer_id;',
@@ -38,4 +40,4 @@ def test_correct(query):
         detectors=[SyntaxErrorDetector],
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_14_USING_AGGREGATE_FUNCTION_OUTSIDE_SELECT_OR_HAVING) == 0
+    assert count_errors(detected_errors, ERROR) == 0

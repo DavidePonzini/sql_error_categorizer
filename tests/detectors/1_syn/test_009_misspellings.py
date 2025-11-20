@@ -1,6 +1,8 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.SYN_9_MISSPELLINGS
+
 @pytest.mark.parametrize('query,expected_corrections', [
     ('SELECT * FROM miedma.store;', [('miedma.store', '"miedema"."store"')]),
     ('SELECT * FROM miedema.stor;', [('miedema.stor', '"miedema"."store"')]),
@@ -22,9 +24,9 @@ def test_wrong(query, expected_corrections):
         search_path='miedema',
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == len(expected_corrections)
+    assert count_errors(detected_errors, ERROR) == len(expected_corrections)
     for correction in expected_corrections:
-        assert has_error(detected_errors, SqlErrors.SYN_9_MISSPELLINGS, correction)
+        assert has_error(detected_errors, ERROR, correction)
 
 @pytest.mark.parametrize('query', [
     'SELECT SID FROM store;',
@@ -44,4 +46,4 @@ def test_correct(query):
         search_path='miedema',
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_9_MISSPELLINGS) == 0
+    assert count_errors(detected_errors, ERROR) == 0

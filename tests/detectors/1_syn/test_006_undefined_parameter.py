@@ -1,6 +1,8 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.SYN_6_UNDEFINED_PARAMETER
+
 @pytest.mark.parametrize('query,value,schema', [
     ('SELECT * FROM table WHERE id = :id;', ':id', None),
     ('SELECT * FROM table WHERE name = @name;', '@name', None),
@@ -18,8 +20,8 @@ def test_wrong(query, value, schema):
         search_path=schema,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_UNDEFINED_PARAMETER) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_6_UNDEFINED_PARAMETER, (value,))
+    assert count_errors(detected_errors, ERROR) == 1
+    assert has_error(detected_errors, ERROR, (value,))
 
 @pytest.mark.parametrize('query,schema', [
     ('SELECT * FROM table WHERE id = 5;', None),
@@ -38,4 +40,4 @@ def test_correct(query, schema):
         search_path=schema,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_6_UNDEFINED_PARAMETER) == 0
+    assert count_errors(detected_errors, ERROR) == 0

@@ -1,6 +1,8 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.COM_92_UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION
+
 @pytest.mark.parametrize('query,expected', [
     (
         'SELECT SUM(DISTINCT sid) FROM store',
@@ -51,10 +53,10 @@ def test_unnecessary(query: str, expected: list[str]):
         detectors=[ComplicationDetector],
     )
 
-    assert count_errors(result, SqlErrors.COM_92_UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION) == len(expected)
+    assert count_errors(result, ERROR) == len(expected)
     
     for exp_str in expected:
-        assert has_error(result, SqlErrors.COM_92_UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION, (exp_str,))
+        assert has_error(result, ERROR, (exp_str,))
 
 @pytest.mark.parametrize('query', [
     'SELECT MIN(sid) FROM store',
@@ -74,4 +76,4 @@ def test_distinct_necessary(query: str):
         detectors=[ComplicationDetector],
     )
 
-    assert count_errors(result, SqlErrors.COM_92_UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION) == 0
+    assert count_errors(result, ERROR) == 0

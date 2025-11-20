@@ -1,6 +1,8 @@
 from tests import *
 import pytest
 
+ERROR = SqlErrors.SYN_8_INVALID_SCHEMA_NAME
+
 @pytest.mark.parametrize('query,value,schema,search_path', [
     ('SELECT * FROM notaschema.store;', 'notaschema.store', None, 'public'),
     ('SELECT * FROM miedema.store;', 'miedema.store', None, 'public'),
@@ -18,8 +20,8 @@ def test_wrong(query, value, schema, search_path):
         search_path=search_path,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_8_INVALID_SCHEMA_NAME) == 1
-    assert has_error(detected_errors, SqlErrors.SYN_8_INVALID_SCHEMA_NAME, (value,))
+    assert count_errors(detected_errors, ERROR) == 1
+    assert has_error(detected_errors, ERROR, (value,))
 
 @pytest.mark.parametrize('query,schema,search_path', [
     ('SELECT * FROM miedema.store;', 'miedema', 'public'),
@@ -38,4 +40,4 @@ def test_correct(query, schema, search_path):
         search_path=search_path,
     )
 
-    assert count_errors(detected_errors, SqlErrors.SYN_8_INVALID_SCHEMA_NAME) == 0
+    assert count_errors(detected_errors, ERROR) == 0

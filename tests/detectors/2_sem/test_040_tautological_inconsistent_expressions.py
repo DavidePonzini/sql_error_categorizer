@@ -1,135 +1,101 @@
-import pytest
 from tests import *
+import pytest
 
-def test_tautology():
-    query = "SELECT * FROM orders WHERE a = a"
+ERROR = SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION
 
-    result = run_test(
+
+@pytest.mark.parametrize('query,expected_errors,dataset', [
+    (
+        "SELECT * FROM orders WHERE a = a",
+        [('tautology',)],
+        None
+    ),
+    (
+        "SELECT * FROM orders WHERE 1 = 0",
+        [('contradiction',), ('redundant_disjunct', '1 = 0')],
+        None
+    ),
+    (
+        "SELECT * FROM orders WHERE (sal < 500 AND comm > 1000) OR sal >= 500",
+        [('redundant_conjunct', ('sal < 500 AND comm > 1000', 'sal < 500'))],
+        None
+    ),
+    (
+        "SELECT * FROM orders WHERE sal > 500 OR sal > 1000",
+        [('redundant_disjunct', 'sal > 1000')],
+        None
+    ),
+    (
+        "SELECT * FROM store WHERE sname <= 'Coop' OR sname IN ('Coop', 'Lidl') OR sname >= 'Lidl';",
+        [('redundant_disjunct', "sname IN ('Coop', 'Lidl')")],
+        'miedema'
+    ),
+    # subqueries
+    pytest.param(
+        "SELECT * FROM orders WHERE amount > (SELECT MAX(amount) FROM orders) OR amount <= (SELECT MAX(amount) FROM orders);",
+        [('redundant_disjunct', 'amount <= (SELECT MAX(amount) FROM orders)')],
+        None,
+        marks=pytest.mark.xfail(reason="Subquery comparison handling not implemented yet"),
+    ),
+    pytest.param(
+        "SELECT * FROM orders WHERE amount < (SELECT MIN(amount) FROM orders) AND amount >= (SELECT MIN(amount) FROM orders);",
+        [('redundant_conjunct', ('amount < (SELECT MIN(amount) FROM orders) AND amount >= (SELECT MIN(amount) FROM orders)', 'amount < (SELECT MIN(amount) FROM orders)'))],
+        None,
+        marks=pytest.mark.xfail(reason="Subquery comparison handling not implemented yet"),
+    ),
+    (
+        'SELECT * FROM employees WHERE department_id IN (SELECT department_id FROM departments WHERE location_id = 1700 OR location_id >= 1700);',
+        [('redundant_disjunct', 'location_id = 1700')],
+        None
+    ),
+    pytest.param(
+        'SELECT * FROM employees WHERE department_id >= (SELECT MIN(department_id) FROM departments',
+        [('tautology',)],
+        None,
+        marks=pytest.mark.xfail(reason="Subquery comparison handling not implemented yet"),
+    ),
+    # CTEs
+    pytest.param(
+        'WITH dept_cte AS (SELECT department_id FROM departments WHERE department_id < 100) SELECT * FROM dept_cte WHERE department_id > 100;',
+        [('contradiction',)],
+        None,
+        marks=pytest.mark.xfail(reason="CTE handling not implemented yet"),
+    ),
+])
+def test_wrong(query, expected_errors, dataset):
+    detected_errors = run_test(
         query,
         detectors=[SemanticErrorDetector],
+        catalog_filename=dataset,
+        search_path=dataset,
     )
 
-    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('tautology',))
+    assert count_errors(detected_errors, ERROR) == len(expected_errors)
+    for snippet in expected_errors:
+        assert has_error(detected_errors, ERROR, snippet)
 
-def test_contradiction():
-    query = "SELECT * FROM orders WHERE 1 = 0"
-
-    result = run_test(
+@pytest.mark.parametrize('query,dataset', [
+    ("SELECT * FROM orders WHERE a > b", None),
+    ("SELECT * FROM orders WHERE amount <= 100", None),
+    ("SELECT * FROM orders WHERE sal < 500 AND comm <= 1000", None),
+    ("SELECT * FROM orders WHERE sal > 500 OR comm > 1000", None),
+    ("SELECT * FROM orders WHERE sal BETWEEN 100 AND 500", None),
+    ("SELECT * FROM orders WHERE sal IN (100, 200, 300)", None),
+    ("SELECT * FROM orders WHERE NOT (sal = 500)", None),
+    ("SELECT * FROM orders WHERE name LIKE 'A%'", None),
+    ("SELECT * FROM customer WHERE street LIKE 'Main %'", 'miedema'),
+    # subqueries
+    ("SELECT * FROM orders WHERE amount > (SELECT AVG(amount) FROM orders)", None),
+    ("SELECT * FROM employees WHERE department_id IN (SELECT department_id FROM departments WHERE location_id = 1700 OR location_id = 1800)", None),
+    # CTEs
+    ("WITH dept_cte AS (SELECT department_id, dep_name FROM departments WHERE department_id < 100) SELECT * FROM dept_cte WHERE dep_name LIKE 'A%';", None),
+])
+def test_correct(query, dataset):
+    detected_errors = run_test(
         query,
         detectors=[SemanticErrorDetector],
+        catalog_filename=dataset,
+        search_path=dataset,
     )
 
-    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 2
-    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('contradiction',))
-    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', '1 = 0'))
-
-def test_contingent_expression():
-    query = "SELECT * FROM orders WHERE amount > 100"
-
-    result = run_test(
-        query,
-        detectors=[SemanticErrorDetector],
-    )
-
-    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 0
-
-def test_redundant_conjunction():
-    query = "SELECT * FROM orders WHERE (sal < 500 AND comm > 1000) OR sal >= 500"
-
-    result = run_test(
-        query,
-        detectors=[SemanticErrorDetector],
-    )
-
-    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_conjunct', ('sal < 500 AND comm > 1000', 'sal < 500')))
-
-def test_redundant_disjunction():
-    query = "SELECT * FROM orders WHERE sal > 500 OR sal > 1000"
-
-    result = run_test(
-        query,
-        detectors=[SemanticErrorDetector],
-    )
-
-    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', 'sal > 1000'))
-
-def test_redundant_disjunction_strings():
-    query = "SELECT * FROM store WHERE sname <= 'Coop' OR sname IN ('Coop', 'Lidl') or sname >= 'Lidl';"
-
-    result = run_test(
-        query,
-        detectors=[SemanticErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema',
-    )
-
-    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', "sname IN ('Coop', 'Lidl')"))
-
-
-def test_redundant_disjunction_on_subquery():
-    query = '''
-    SELECT * FROM employees WHERE department_id IN (
-        SELECT department_id FROM departments WHERE location_id = 1700 OR location_id >= 1700
-    )
-    '''
-
-    result = run_test(
-        query,
-        detectors=[SemanticErrorDetector],
-    )
-
-    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('redundant_disjunct', 'location_id = 1700'))
-
-
-def test_no_errors_on_contingent_subquery():
-    query = '''
-    SELECT * FROM employees WHERE department_id IN (
-        SELECT department_id FROM departments WHERE location_id = 1700 OR location_id = 1800
-    )
-    '''
-
-    result = run_test(
-        query,
-        detectors=[SemanticErrorDetector],
-    )
-
-    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 0
-
-@pytest.mark.skip(reason="Subquery handling not yet implemented")
-def test_tautology_with_subquery():
-    query = '''
-    SELECT * FROM employees WHERE department_id >= (
-        SELECT MIN(department_id)
-        FROM departments
-    )
-    '''
-
-    result = run_test(
-        query,
-        detectors=[SemanticErrorDetector],
-    )
-
-    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('tautology',))
-
-@pytest.mark.skip(reason="CTE handling not yet implemented")
-def test_contradiction_with_cte():
-    query = '''
-    WITH dept_cte AS (
-        SELECT department_id FROM departments WHERE department_id < 100
-    )
-    SELECT * FROM dept_cte WHERE department_id > 100
-    '''
-
-    result = run_test(
-        query,
-        detectors=[SemanticErrorDetector],
-    )
-
-    assert count_errors(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION) == 1
-    assert has_error(result, SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION, ('contradiction',))
+    assert count_errors(detected_errors, ERROR) == 0
