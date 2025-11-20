@@ -79,9 +79,6 @@ class SemanticErrorDetector(BaseDetector):
             # (1) whole formula
             try:
                 whole_clauses = [smt.sql_to_z3(C, variables) for C in dnf]
-                from dav_tools import messages
-                messages.debug(f'DNF clauses Z3: {whole_clauses}')
-
                 whole = Or(*whole_clauses)
             except Exception:
                 continue  # skip if cannot convert to z3

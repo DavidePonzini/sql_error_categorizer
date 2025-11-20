@@ -199,15 +199,12 @@ def sql_to_z3(expr, variables: dict[str, ExprRef] = {}) -> Any:
     elif isinstance(expr, exp.In):
         target = sql_to_z3(expr.this, variables)
 
-        from dav_tools import messages
-        messages.debug(f'Processing IN expression: {repr(expr)}', color=messages.TextFormat.Color.CYAN)
         if isinstance(expr.args.get('query'), exp.Subquery):
             # subquery → symbolic value
             sym = fresh_symbol('subq_in', 'string')
             return target == sym
 
         options = [sql_to_z3(e, variables) for e in expr.expressions]
-        messages.debug(f'IN options Z3: {options} for expr: {expr.sql()}', color=messages.TextFormat.Color.CYAN)
 
         return Or(*[target == o for o in options])
 
@@ -326,14 +323,11 @@ def check_formula(expr) -> str:
     return 'contingent'
 
 def is_satisfiable(expr_z3) -> bool:
-    from dav_tools import messages
 
     solver = Solver()
     solver.add(expr_z3)
     result = solver.check() != unsat
 
-    messages.debug(f'Z3 expression: {expr_z3} -> Satisfiable: {result}')
-    
     return result
 
 def is_bool_expr(e) -> bool:
