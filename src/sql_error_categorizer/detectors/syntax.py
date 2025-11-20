@@ -1269,7 +1269,10 @@ class SyntaxErrorDetector(BaseDetector):
 
                 for is_expr in typed_ast.find_all(exp.Is):
                     for error in collect_errors(is_expr, select.catalog, select.search_path):
-                        errors.append(DetectedError(SqlErrors.SYN_35_IS_WHERE_NOT_APPLICABLE, error))
+
+                        # if the expected type is boolean|null, it means that the part after IS is not valid
+                        if error[2] == 'boolean|null':
+                            errors.append(DetectedError(SqlErrors.SYN_35_IS_WHERE_NOT_APPLICABLE, error))
 
             return errors
 

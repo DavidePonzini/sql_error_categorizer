@@ -5,10 +5,10 @@ CATALOG = 'miedema'
 
 @pytest.mark.parametrize('query,errors', [
     ('SELECT * FROM store WHERE sname IS 2;', [('"store"."sname" IS 2', 'int', 'boolean|null')]),
-    ('SELECT * FROM store UNION SELECT * FROM product WHERE pname IS TRUE;', [('"product"."pname" IS TRUE', 'varchar', 'boolean')]),
+    ('SELECT * FROM store UNION SELECT * FROM product WHERE pname IS 2;', [('"product"."pname" IS 2', 'int', 'boolean|null')]),
     ('SELECT sid, SUM(sname) FROM store WHERE (sid > 2) IS TRUE AND sname IS (SELECT NULL);', [('"store"."sname" IS (SELECT NULL AS "_col_0")', 'null', 'boolean|null')]),
     # subqueries
-    ('SELECT sid, sname FROM store WHERE sid >= (SELECT sid FROM store WHERE sid IS FALSE);', [('"store"."sid" IS FALSE', 'decimal', 'boolean')]),
+    ('SELECT sid, sname FROM store WHERE sid >= (SELECT sid FROM store WHERE sid IS \'FALSE\');', [('"store"."sid" IS \'FALSE\'', 'varchar', 'boolean|null')]),
     ('SELECT * FROM store WHERE sid IN (SELECT sid FROM store WHERE sid >= ALL(SELECT sname FROM store WHERE sid IS 7));', [('"store"."sid" IS 7', 'int', 'boolean|null')]),
     # CTEs
     ('WITH x AS (SELECT sname FROM store WHERE sname IS \'Lidl\' UNION SELECT sname FROM store) SELECT * FROM x;', [('"store"."sname" IS \'Lidl\'', 'varchar', 'boolean|null')]),
