@@ -244,8 +244,8 @@ def sql_to_z3(expr, variables: dict[str, ExprRef] = {}) -> Any:
         if wildcard_count > 2:
             return target == StringVal(pattern)
 
-        # PREFIX pattern: abc%
         if '%' in pattern and '_' not in pattern:
+            # PREFIX pattern: abc%
             if pattern.endswith('%') and pattern.count('%') == 1:
                 prefix = pattern[:-1]
                 return PrefixOf(StringVal(prefix), target)
