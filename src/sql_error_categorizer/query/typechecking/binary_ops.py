@@ -18,13 +18,13 @@ def _(expression: exp.Binary, catalog: Catalog, search_path: str) -> ResultType:
 
     if left_type != right_type:
 
-        if not to_number(left_type) and left_type.data_type != DataType.Type.NULL:
+        if left_type.data_type != DataType.Type.UNKNOWN and not to_number(left_type) and left_type.data_type != DataType.Type.NULL:
             old_messages.append(error_message(expression, left_type, "numeric"))
 
-        if not to_number(right_type) and right_type.data_type != DataType.Type.NULL:
+        if right_type.data_type != DataType.Type.UNKNOWN and not to_number(right_type) and right_type.data_type != DataType.Type.NULL:
             old_messages.append(error_message(expression, right_type, "numeric"))
 
-    elif not is_number(left_type.data_type) and not is_number(right_type.data_type):
+    elif DataType.Type.UNKNOWN != left_type.data_type and not is_number(left_type.data_type) and not is_number(right_type.data_type):
         if left_type.data_type != DataType.Type.NULL or right_type.data_type != DataType.Type.NULL:
             old_messages.append(error_message(expression, left_type, "numeric"))
 
@@ -32,6 +32,9 @@ def _(expression: exp.Binary, catalog: Catalog, search_path: str) -> ResultType:
 
 # handle comparison typechecking (e.g =, <, >, etc.)
 def typecheck_comparisons(left_type: ResultType, right_type: ResultType, expression: exp.Binary, old_messages: list) -> ResultType:
+
+    if DataType.Type.UNKNOWN in (left_type.data_type, right_type.data_type):
+        return AtomicType(data_type=expression.type.this,messages=old_messages)
 
     # for boolean comparisons we can have only equality/inequality
     if DataType.Type.BOOLEAN == left_type.data_type == right_type.data_type:

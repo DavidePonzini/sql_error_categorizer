@@ -42,8 +42,13 @@ def _(expression: exp.Cast, catalog: Catalog, search_path: str) -> ResultType:
     
     old_messages = original_type.messages
 
-    if new_type in (DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
+    # if casting to unknown type, return error
+    if new_type == DataType.Type.USERDEFINED:
         old_messages.append(error_message(expression, "Invalid type."))
+        return AtomicType(data_type=original_type.data_type, nullable=original_type.nullable, constant=original_type.constant, messages=old_messages, value=original_type.value)
+
+    if original_type.data_type == DataType.Type.UNKNOWN:
+        return AtomicType(data_type=new_type, messages=old_messages)
 
     # handle cast to numeric types
     if is_number(new_type) and not to_number(original_type):
@@ -65,7 +70,7 @@ def _(expression: exp.CurrentTimestamp, catalog: Catalog, search_path: str) -> R
 @get_type.register
 def _(expression: exp.Column, catalog: Catalog, search_path: str) -> ResultType:
     if expression.type.this in (DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
-        return AtomicType(messages=[error_message(expression.name, "Unknown column type")])
+        return AtomicType() # unknown column
     else:
         schema = get_schema(expression) or search_path
         table = get_real_name(expression)

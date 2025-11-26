@@ -25,6 +25,9 @@ class AtomicType(ResultType):
     def __eq__(self, other):
         if not isinstance(other, AtomicType):
             return False
+        
+        if other.data_type == DataType.Type.UNKNOWN or self.data_type == DataType.Type.UNKNOWN:
+            return True
 
         # handle numeric equivalence (e.g. INT and FLOAT are compatible)
         if self.data_type in DataType.NUMERIC_TYPES:

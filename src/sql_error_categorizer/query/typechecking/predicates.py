@@ -11,10 +11,10 @@ def _(expression: exp.Like, catalog: Catalog, search_path: str) -> ResultType:
 
     old_messages = left_type.messages + right_type.messages
     
-    if not is_string(left_type.data_type) and left_type.data_type != DataType.Type.NULL:
+    if left_type.data_type != DataType.Type.UNKNOWN and not is_string(left_type.data_type) and left_type.data_type != DataType.Type.NULL:
         old_messages.append(error_message(expression, left_type, 'string'))
 
-    if not is_string(right_type.data_type) and right_type.data_type != DataType.Type.NULL:
+    if right_type.data_type != DataType.Type.UNKNOWN and not is_string(right_type.data_type) and right_type.data_type != DataType.Type.NULL:
         old_messages.append(error_message(expression, right_type, 'string'))
 
     # Always returns boolean
@@ -32,7 +32,7 @@ def _(expression: exp.Is, catalog: Catalog, search_path: str) -> ResultType:
         old_messages.append(error_message(expression, right_type, 'boolean|null'))
 
     # if right is BOOLEAN and left is not NULL, left must be BOOLEAN
-    if right_type.data_type == DataType.Type.BOOLEAN and left_type.data_type != DataType.Type.NULL:
+    if left_type.data_type != DataType.Type.UNKNOWN and right_type.data_type == DataType.Type.BOOLEAN and left_type.data_type != DataType.Type.NULL:
         if left_type.data_type != DataType.Type.BOOLEAN:
             old_messages.append(error_message(expression, left_type, 'boolean'))
     
@@ -48,16 +48,16 @@ def _(expression: exp.Between, catalog: Catalog, search_path: str) -> ResultType
     old_messages = target_type.messages + low_type.messages + high_type.messages
 
     # if the target is NULL, the result will always be NULL (no matter the bounds)
-    if target_type.data_type == DataType.Type.NULL:
+    if target_type.data_type == DataType.Type.UNKNOWN or target_type.data_type == DataType.Type.NULL:
         return AtomicType(data_type=expression.type.this, constant=True, messages=old_messages)
 
-    if low_type.data_type != target_type.data_type and low_type.data_type != DataType.Type.NULL:
+    if low_type.data_type != DataType.Type.UNKNOWN and low_type.data_type != target_type.data_type and low_type.data_type != DataType.Type.NULL:
 
         # check for implicit casts
         if (to_number(target_type) and not to_number(low_type)) or (to_date(target_type) and not to_date(low_type)):
             old_messages.append(error_message(expression, low_type, target_type))
 
-    if high_type.data_type != target_type.data_type and high_type.data_type != DataType.Type.NULL:
+    if high_type.data_type != DataType.Type.UNKNOWN and high_type.data_type != target_type.data_type and high_type.data_type != DataType.Type.NULL:
         
         # check for implicit casts
         if (to_number(target_type) and not to_number(high_type)) or (to_date(target_type) and not to_date(high_type)):
@@ -72,6 +72,9 @@ def _(expression: exp.In, catalog: Catalog, search_path: str) -> ResultType:
     target_type = get_type(expression.this, catalog, search_path)
 
     old_messages = target_type.messages
+
+    if target_type.data_type == DataType.Type.UNKNOWN:
+        return AtomicType(data_type=expression.type.this, messages=old_messages)
 
     # Case IN (<list>)
     for item in expression.expressions:

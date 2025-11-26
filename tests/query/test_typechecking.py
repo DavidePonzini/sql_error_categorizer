@@ -24,13 +24,6 @@ def test_type_columns(make_query):
     
     assert result == ['decimal', 'varchar', 'varchar', 'varchar']
 
-def test_wrong_column_reference(make_query):
-    sql = "SELECT pippo FROM store;"
-    query = make_query(sql, 'miedema')
-
-    messages = collect_errors(query.main_query.typed_ast, query.catalog, query.search_path)
-    assert messages == [("pippo", "unknown column type", None)]
-
 @pytest.mark.parametrize('sql, expected_types', [
     ("SELECT 1 + (2 - '4') AS sum_col;", []),
     ("SELECT sid FROM store WHERE sid > '3';", []),

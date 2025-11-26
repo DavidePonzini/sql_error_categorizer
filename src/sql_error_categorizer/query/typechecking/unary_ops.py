@@ -10,6 +10,9 @@ def _(expression: exp.Neg, catalog: Catalog, search_path: str) -> ResultType:
 
     old_messages = inner_type.messages
 
+    if inner_type.data_type == DataType.Type.UNKNOWN:
+        return AtomicType(data_type=expression.type.this, messages=old_messages)
+
     if not is_number(expression.type.this):
         old_messages.append(error_message(expression, 'numeric', inner_type))
     
@@ -20,6 +23,9 @@ def _(expression: exp.Not, catalog: Catalog, search_path: str) -> ResultType:
     inner_type = get_type(expression.this, catalog, search_path)
 
     old_messages = inner_type.messages
+
+    if inner_type.data_type == DataType.Type.UNKNOWN:
+        return AtomicType(data_type=expression.type.this, messages=old_messages)
 
     if inner_type.data_type != DataType.Type.BOOLEAN:
         old_messages.append(error_message(expression, 'boolean', inner_type))

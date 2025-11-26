@@ -16,7 +16,7 @@ def _(expression: exp.Avg, catalog: Catalog, search_path: str) -> ResultType:
 
     old_messages = inner_type.messages
 
-    if not is_number(inner_type.data_type):
+    if inner_type.data_type != DataType.Type.UNKNOWN and not is_number(inner_type.data_type):
         old_messages.append(error_message(expression, inner_type, "NUMERIC"))
 
     return AtomicType(data_type=expression.type.this, nullable=True, constant=True, messages=old_messages)
@@ -27,7 +27,7 @@ def _(expression: exp.Sum, catalog: Catalog, search_path: str) -> ResultType:
 
     old_messages = inner_type.messages
 
-    if not is_number(inner_type.data_type):
+    if inner_type.data_type != DataType.Type.UNKNOWN and not is_number(inner_type.data_type):
         old_messages.append(error_message(expression, inner_type, "NUMERIC"))
 
     return AtomicType(data_type=expression.type.this, nullable=True, constant=True, messages=old_messages)
@@ -38,7 +38,7 @@ def _(expression: exp.Min, catalog: Catalog, search_path: str) -> ResultType:
 
     old_messages = inner_type.messages
 
-    if inner_type.data_type in (DataType.Type.BOOLEAN, DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
+    if inner_type.data_type != DataType.Type.UNKNOWN and inner_type.data_type == DataType.Type.BOOLEAN:
         old_messages.append(error_message(expression, inner_type))
 
     return AtomicType(data_type=inner_type.data_type, nullable=inner_type.nullable, constant=True, messages=old_messages)
@@ -49,7 +49,7 @@ def _(expression: exp.Max, catalog: Catalog, search_path: str) -> ResultType:
 
     old_messages = inner_type.messages
 
-    if inner_type.data_type in (DataType.Type.BOOLEAN, DataType.Type.UNKNOWN, DataType.Type.USERDEFINED):
+    if inner_type.data_type != DataType.Type.UNKNOWN and inner_type.data_type == DataType.Type.BOOLEAN:
         old_messages.append(error_message(expression, inner_type))
 
     return AtomicType(data_type=inner_type.data_type, nullable=inner_type.nullable, constant=True, messages=old_messages)
