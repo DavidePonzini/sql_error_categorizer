@@ -814,6 +814,8 @@ class SyntaxErrorDetector(BaseDetector):
                             group_by_columns.add(select_columns[val - 1])
                     except ValueError:
                         continue
+                elif isinstance(gb, exp.AggFunc):
+                    group_by_columns.add(ColumnInfo(gb.sql(), gb.sql(), is_aggregated=True))
                 else:
                     # Complex expression in GROUP BY: try to extract columns
                     for c in gb.find_all(exp.Column):

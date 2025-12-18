@@ -34,6 +34,19 @@ def test_aggregated_column_in_group_by():
         ('SUM(col2)', 'AGGREGATED IN GROUP BY'),
     )
 
+def test_aggregated_column_in_group2():
+    detected_errors = run_test(
+        query='SELECT id, SUM(col2) FROM store GROUP BY id, SUM(col2)',
+        detectors=[SyntaxErrorDetector],
+    )
+
+    assert count_errors(detected_errors, SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN) == 1
+    assert has_error(
+        detected_errors,
+        SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,
+        ('SUM(col2)', 'AGGREGATED IN GROUP BY'),
+    )
+
 def test_omitted_grouping_column():
     detected_errors = run_test(
         query='SELECT id, col2, sum(col3) FROM store GROUP BY id',
