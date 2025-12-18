@@ -1,8 +1,6 @@
 '''Utility functions related to SQL tables in ASTs made with sqlglot.'''
 
-import sqlglot.optimizer.normalize
 from sqlglot import exp
-from copy import deepcopy
 
 def get_real_name(table: exp.Table) -> str:
     '''Returns the table real name, in lowercase if unquoted.'''
