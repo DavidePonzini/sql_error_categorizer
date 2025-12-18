@@ -1,5 +1,6 @@
 '''Detector for syntax errors in SQL queries.'''
 
+from dataclasses import dataclass
 import difflib
 import re
 import sqlparse
@@ -752,9 +753,22 @@ class SyntaxErrorDetector(BaseDetector):
     
     def syn_16_extraneous_or_omitted_grouping_column(self) -> list[DetectedError]:
         '''
-        Enforces the SQL "single-value rule":
-        All selected columns must be either included in the GROUP BY clause or aggregated.
+            All columns in SELECT must be either included in the GROUP BY clause or aggregated.
+
+            All non-aggregated columns in HAVING must not be included in the GROUP BY clause.
         '''
+
+        @dataclass(frozen=True)
+        class ColumnInfo:
+            name: str
+            alias: str
+            is_aggregated: bool = False
+
+        def get_column_name(col: exp.Column | exp.Alias) -> ColumnInfo:
+            '''Return normalized column name and alias. If no alias, both are the same.'''
+            col_name = util.ast.column.get_real_name(col)
+            col_alias = util.ast.column.get_name(col)
+            return ColumnInfo(col_name, col_alias)
 
         results: list[DetectedError] = []
 
@@ -765,32 +779,29 @@ class SyntaxErrorDetector(BaseDetector):
             if not select.group_by:
                 continue    # no GROUP BY, skip
 
-            select_columns: list[tuple[str, str]] = [] # we need a list for positional GROUP BY handling
+            select_columns: list[ColumnInfo] = [] # we need a list for positional GROUP BY handling
 
-            def get_column_name(col: exp.Column | exp.Alias) -> tuple[str, str]:
-                '''Return normalized column name and alias. If no alias, both are the same.'''
-                col_name = util.ast.column.get_real_name(col)
-                col_alias = util.ast.column.get_name(col)
-                return col_name, col_alias
-
+            # Gather non-aggregated columns from SELECT
             for col in select.ast.expressions:
                 if isinstance(col, exp.Star):
                     # SELECT * case: expand to all columns from all referenced tables
                     for table in select.referenced_tables:
                         for table_col in table.columns:
-                            select_columns.append((table_col.name, table_col.name))
+                            select_columns.append(ColumnInfo(table_col.name, table_col.name))
                 if isinstance(col, exp.Column) or isinstance(col, exp.Alias):
                     col_name = get_column_name(col)
                     select_columns.append(col_name)
                 elif isinstance(col, exp.Func):
-                    continue  # aggregated, skip
+                    # aggregated, add the column but skip it later
+                    select_columns.append(ColumnInfo(col.sql(), col.sql(), is_aggregated=True))
                 else:
                     # Complex expression: try to extract columns
                     for c in col.find_all(exp.Column):
                         col_name = get_column_name(c)
                         select_columns.append(col_name)
 
-            group_by_columns = set()
+            # Gather columns from GROUP BY
+            group_by_columns: set[ColumnInfo] = set()
             for gb in select.group_by:
                 if isinstance(gb, exp.Column):
                     gb_name = get_column_name(gb)
@@ -809,15 +820,25 @@ class SyntaxErrorDetector(BaseDetector):
                         gb_name = get_column_name(c)
                         group_by_columns.add(gb_name)
 
-            for sel_col, sel_alias in set(select_columns):  # convert to set to avoid outputting the same error multiple times
-                if any(sel_col == group_col or sel_alias == group_alias for group_col, group_alias in group_by_columns):
-                    continue    # valid: in GROUP BY
-                results.append(DetectedError(SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,(sel_col, 'ONLY IN SELECT')))
 
-            for group_col, group_alias in group_by_columns:
-                if any(group_col == select_col or group_alias == select_alias for select_col, select_alias in select_columns):
+            # Ensure all non-aggregated columns in SELECT are in GROUP BY
+            for select_col in set(select_columns):  # convert to set to avoid outputting the same error multiple times
+                if select_col.is_aggregated:
+                    continue    # aggregated, skip
+                if any(select_col.name == group_col.name or select_col.alias == group_col.alias for group_col in group_by_columns):
+                    continue    # valid: in GROUP BY
+                results.append(DetectedError(SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,(select_col.name, 'ONLY IN SELECT')))
+
+            # Ensure all non-aggregated columns in GROUP BY are in SELECT
+            # (Note: aggregated columns in GROUP BY are invalid)
+            for group_col in group_by_columns:
+                if group_col.is_aggregated:
+                    results.append(DetectedError(SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,(group_col.name, 'AGGREGATED IN GROUP BY')))
+                    continue
+                if any(group_col.name == select_col.name or group_col.alias == select_col.alias for select_col in select_columns):
                     continue # valid: in SELECT
-                results.append(DetectedError(SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,(group_col, 'ONLY IN GROUP BY')))
+                results.append(DetectedError(SqlErrors.SYN_16_EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,(group_col.name, 'ONLY IN GROUP BY')))
+            # Ensure all non-aggregated columns in HAVING are in GROUP BY
 
         return results
 
