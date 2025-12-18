@@ -11,10 +11,26 @@ ERROR = SqlErrors.SEM_40_TAUTOLOGICAL_OR_INCONSISTENT_EXPRESSION
         None
     ),
     (
+        "SELECT * FROM orders WHERE (a = a)",
+        [('tautology',)],
+        None
+    ),
+    (
         "SELECT * FROM orders WHERE 1 = 0",
         [('contradiction',), ('redundant_disjunct', '1 = 0')],
         None
     ),
+    (
+        "SELECT * FROM orders WHERE a = b OR a <> a",
+        [('redundant_disjunct', 'a <> a')],
+        None
+    ),
+    (
+        "SELECT * FROM orders WHERE (a = b OR a <> a)",
+        [('redundant_disjunct', 'a <> a')],
+        None
+    ),
+
     (
         "SELECT * FROM orders WHERE (sal < 500 AND comm > 1000) OR sal >= 500",
         [('redundant_conjunct', ('sal < 500 AND comm > 1000', 'sal < 500'))],
