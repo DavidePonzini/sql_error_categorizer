@@ -34,7 +34,7 @@ uninstall: $(VENV)
 	$(VENV_BIN)/python -m pip uninstall -y $(NAME)
 
 documentation:
-	make html -C docs/
+	make html SPHINXBUILD="../$(VENV_BIN)/sphinx-build" -C docs/
 
 test: install
 	$(VENV_BIN)/python -m pytest
