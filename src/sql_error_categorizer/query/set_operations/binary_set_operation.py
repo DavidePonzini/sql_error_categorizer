@@ -3,6 +3,7 @@ from ...catalog import Table, Constraint, ConstraintType, ConstraintColumn
 
 from abc import ABC
 from copy import deepcopy
+import sqlglot
 from sqlglot import exp
 
 from typing import TYPE_CHECKING
@@ -43,6 +44,18 @@ class BinarySetOperation(SetOperation, ABC):
         result += self.right.__repr__(pre + '`- ')
 
         return result
+
+    @property
+    def trailing_ast(self) -> exp.Expression | None:
+        '''Parses and returns the AST of the trailing SQL clauses (e.g., ORDER BY, LIMIT) if present, with a fake `SELECT 1` prefix.'''
+        if self.trailing_sql is None:
+            return None
+        if self._trailing_ast is None:
+            # Parse trailing SQL with a fake SELECT to get valid AST
+            fake_sql = f'SELECT 1 {self.trailing_sql}'
+            parsed = sqlglot.parse_one(fake_sql)
+            self._trailing_ast = parsed
+        return self._trailing_ast
 
     @property
     def output(self) -> Table:
