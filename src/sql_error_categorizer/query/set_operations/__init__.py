@@ -78,11 +78,9 @@ def create_set_operation_tree(sql: str, catalog: Catalog = Catalog(), search_pat
 def parse_op_token(tok: sqlparse.sql.Token) -> tuple[str, bool | None] | None:
     '''
     Parse "UNION", "INTERSECT", "EXCEPT" with optional inline ALL/DISTINCT.
+
     Returns:
-        tuple: `(op, all_flag)` where all_flag is:
-        - True  if ALL inline (e.g., "UNION ALL")
-        - False if DISTINCT inline (e.g., "EXCEPT DISTINCT")
-        - None  if no modifier inline (so caller may look right).
+        tuple: `(op, all_flag)` where all_flag is: True  if ALL inline (e.g., "UNION ALL"); False if DISTINCT inline (e.g., "EXCEPT DISTINCT"); None  if no modifier inline (so caller may look right).
     '''
     if tok.ttype is not Keyword:
         return None
@@ -106,11 +104,9 @@ def split_on(tokens: list[sqlparse.sql.Token], idx: int, all_in_token: bool | No
     '''
     Splits around the operator at idx. If the modifier wasn't inline,
     consume a single immediate ALL/DISTINCT to the right.
+    
     Returns:
-        tuple: A tuple containing:
-            - left_tokens (list[sqlparse.sql.Token]): Tokens to the left of the operator.
-            - right_tokens (list[sqlparse.sql.Token]): Tokens to the right of the operator
-            - all_flag (bool | None): True if ALL, False if DISTINCT, None if unspecified.
+        tuple: A tuple containing: left_tokens (list[sqlparse.sql.Token]): Tokens to the left of the operator; right_tokens (list[sqlparse.sql.Token]): Tokens to the right of the operator; all_flag (bool | None): True if ALL, False if DISTINCT, None if unspecified.
     '''
     left_tokens = tokens[:idx]
     right_tokens = tokens[idx + 1:]

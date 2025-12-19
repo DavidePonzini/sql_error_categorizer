@@ -1,4 +1,5 @@
-from .types import ResultType, DataType
+from .types import ResultType
+from sqlglot.expressions import DataType
 from dateutil.parser import parse
 from sqlglot import exp
 

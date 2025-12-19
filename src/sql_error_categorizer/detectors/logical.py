@@ -711,14 +711,14 @@ class LogicalErrorDetector(BaseDetector):
     
     def _selects_star(self, ast: dict) -> bool:
         '''
-        Checks if a 'SELECT *' is used in the query by looking for a 'Star'
+        Checks if a `SELECT *` is used in the query by looking for a 'Star'
         node in the AST's expression list.
 
         Args:
             ast: The Abstract Syntax Tree of the query.
 
         Returns:
-            True if 'SELECT *' is found, otherwise False.
+            True if `SELECT *` is found, otherwise False.
         '''
         if not ast:
             return False

@@ -1,9 +1,6 @@
 '''Utility functions for processing SQL ASTs made with sqlglot.'''
 
-from .column import *
-from .function import *
-from .subquery import *
-from .table import *
+from . import column, function, subquery, table
 
 import sqlglot.optimizer.normalize
 from sqlglot import exp

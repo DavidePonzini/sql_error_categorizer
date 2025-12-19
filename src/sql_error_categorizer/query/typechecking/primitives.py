@@ -1,7 +1,8 @@
 from .base import get_type
 from ...catalog import Catalog
 from sqlglot import exp
-from .types import ResultType, AtomicType, DataType, TupleType
+from .types import ResultType, AtomicType, TupleType
+from sqlglot.expressions import DataType
 from .util import is_number, is_date, to_number, to_date, error_message
 from ...util.ast.column import get_real_name, get_schema
 
