@@ -116,7 +116,7 @@ def build_catalog_from_sql(sql_string: str, search_path: str = 'public') -> Cata
             ref_schema_name = _get_schema_name(ref_table_exp, search_path)
             ref_table_name = _get_table_name(ref_table_exp)
 
-            ref_id_exps = ref_exp.expressions
+            ref_id_exps = ref_schema_exp.expressions
             ref_column_names = [_get_identifier_name(col_exp) for col_exp in ref_id_exps]
 
             # e.g. "FOREIGN KEY (tenant_id, order_id) REFERENCES orders (tenant_id, order_id)"
@@ -159,6 +159,8 @@ def build_catalog_from_sql(sql_string: str, search_path: str = 'public') -> Cata
                 fk_column_exp = fk_schema_exp.expressions[0]
                 assert isinstance(fk_column_exp, exp.Identifier), 'Expected Identifier expression in Foreign Key column'
                 fk_column_name = _get_identifier_name(fk_column_exp)
+            elif column_name in fks:
+                fk_schema_name, fk_table_name, fk_column_name = fks[column_name]
             else:
                 fk_schema_name = None
                 fk_table_name = None
