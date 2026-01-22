@@ -8,7 +8,7 @@ from sqlglot import exp
 from typing import Callable
 from copy import deepcopy
 
-from sql_error_categorizer.query.set_operations.set_operation import SetOperation
+from ..query.set_operations.set_operation import SetOperation
 from ..query.typechecking import get_type, collect_errors
 
 from .base import BaseDetector, DetectedError

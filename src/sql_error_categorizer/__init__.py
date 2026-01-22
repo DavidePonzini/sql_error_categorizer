@@ -5,7 +5,7 @@ from .detectors import BaseDetector as _BaseDetector, Detector as _Detector
 
 # Public API
 from .sql_errors import SqlErrors
-from .catalog import Catalog, build_catalog, load_catalog, build_catalog_from_postgres
+from .catalog import Catalog, build_catalog, load_catalog, build_catalog_from_postgres, build_catalog_from_sql
 from .detectors import SyntaxErrorDetector, SemanticErrorDetector, LogicalErrorDetector, ComplicationDetector, DetectedError
 
 def get_errors(query_str: str,

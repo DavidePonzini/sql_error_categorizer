@@ -7,7 +7,7 @@ import sqlparse.keywords
 from typing import Callable
 from sqlglot import exp
 
-from sql_error_categorizer.catalog import ConstraintType, ConstraintColumn, Constraint
+from ..catalog import ConstraintType, ConstraintColumn, Constraint
 
 from .base import BaseDetector, DetectedError
 from ..query import Query
