@@ -8,12 +8,11 @@ from typing import Callable
 from sqlglot import exp
 from z3 import Solver, Not, unsat, Or, And, BoolSort, is_expr
 import sqlglot
-
+from sql_error_taxonomy import SqlErrors
+from sqlscope import util
+from sqlscope.query import Query, smt
 
 from .base import BaseDetector, DetectedError
-from ..query import Query, smt
-from .. import util
-from ..sql_errors import SqlErrors
 
 class SemanticErrorDetector(BaseDetector):
     '''Detector for semantic errors in SQL queries.'''

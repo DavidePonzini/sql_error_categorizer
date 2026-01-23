@@ -7,14 +7,13 @@ import sqlparse
 from sqlglot import exp
 from typing import Callable
 from copy import deepcopy
-
-from ..query.set_operations.set_operation import SetOperation
-from ..query.typechecking import get_type, collect_errors
+from sql_error_taxonomy import SqlErrors
+from sqlscope import Query
+from sqlscope.query.set_operations.set_operation import SetOperation
+from sqlscope.query.typechecking import get_type, collect_errors
+from sqlscope import util
 
 from .base import BaseDetector, DetectedError
-from ..query import Query
-from ..sql_errors import SqlErrors
-from .. import util
 
 
 class SyntaxErrorDetector(BaseDetector):

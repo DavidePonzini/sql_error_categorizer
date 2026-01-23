@@ -1,6 +1,6 @@
 import pytest
 from tests import *
-from sql_error_categorizer.catalog import Constraint, ConstraintColumn
+from sqlscope.catalog import Constraint, ConstraintColumn
 
 ERROR = SqlErrors.COM_95_GROUP_BY_WITH_SINGLETON_GROUPS
 

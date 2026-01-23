@@ -6,12 +6,10 @@ import re
 import sqlparse
 import sqlparse.keywords
 from typing import Callable
+from sql_error_taxonomy import SqlErrors
 
 from .base import BaseDetector, DetectedError
-from ..query import Query
-from ..sql_errors import SqlErrors
-from ..query import Select, SetOperation
-
+from sqlscope.query import Query, Select, SetOperation
 
 class LogicalErrorDetector(BaseDetector):
     '''Detector for logical errors in SQL queries.'''

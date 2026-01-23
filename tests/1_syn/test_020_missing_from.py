@@ -12,7 +12,6 @@ def test_no_from_simple():
     assert count_errors(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE) == 1
     assert has_error(detected_errors, SqlErrors.SYN_20_OMITTING_THE_FROM_CLAUSE, (query,))
 
-@pytest.mark.skip(reason="is_constant not yet implemented")
 def test_no_from_with_constant_expression():
     query = 'SELECT 1 + 2'
 

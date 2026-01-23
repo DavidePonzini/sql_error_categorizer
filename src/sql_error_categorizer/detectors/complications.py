@@ -6,15 +6,12 @@ import sqlparse
 import sqlparse.keywords
 from typing import Callable
 from sqlglot import exp
-
-from ..catalog import ConstraintType, ConstraintColumn, Constraint
+from sql_error_taxonomy import SqlErrors
+from sqlscope.catalog import ConstraintType, ConstraintColumn, Constraint
+from sqlscope import Query, Catalog
+from sqlscope import util
 
 from .base import BaseDetector, DetectedError
-from ..query import Query
-from ..sql_errors import SqlErrors
-from ..catalog import Catalog
-from .. import util
-
 
 class ComplicationDetector(BaseDetector):
     '''Detector for complications in SQL queries.'''

@@ -4,6 +4,8 @@ sqlparse
 sqlglot==28.0.0
 z3-solver
 python-dateutil
+sql_error_taxonomy>=1.0.1
+sqlscope
 
 # Dependencies for development
 ipython

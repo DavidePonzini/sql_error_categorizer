@@ -1,7 +1,6 @@
 '''SQL error detectors.'''
 
-from .. import catalog
-from ..query import Query
+from sqlscope import Query, Catalog
 from .base import BaseDetector, DetectedError
 
 # exported detectors
@@ -18,7 +17,7 @@ class Detector:
                  search_path: str = 'public',
                  solution_search_path: str = 'public',
                  solutions: list[str] = [],
-                 catalog: catalog.Catalog = catalog.Catalog(),
+                 catalog: Catalog = Catalog(),
                  detectors: list[type[BaseDetector]] = [],
                  debug: bool = False):
         
