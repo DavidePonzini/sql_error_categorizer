@@ -14,5 +14,4 @@ ipython
 build
 autoapi
 pytest
-pytest-cov
 sphinx-autoapi
