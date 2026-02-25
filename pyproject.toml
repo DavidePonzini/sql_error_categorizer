@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sql_error_categorizer"
-version = "0.2.1"
+version = "0.2.2"
 authors = [
   { name="Davide Ponzini", email="davide.ponzini95@gmail.com" },
 ]

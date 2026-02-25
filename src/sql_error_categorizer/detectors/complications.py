@@ -342,7 +342,7 @@ class ComplicationDetector(BaseDetector):
         checked_subqueries: set[str] = set()
 
         for select in self.query.selects:
-            for subquery, clause in select.subqueries:
+            for subquery, clause, depth in select.subqueries:
                 if subquery.sql in checked_subqueries:
                     continue
 

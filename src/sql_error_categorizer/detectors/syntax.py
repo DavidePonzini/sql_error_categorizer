@@ -967,7 +967,7 @@ class SyntaxErrorDetector(BaseDetector):
         results: list[DetectedError] = []
 
         for select in self.query.selects:
-            for subquery, clause in select.subqueries:
+            for subquery, clause, depth in select.subqueries:
                 if clause in ('FROM', 'EXISTS'):
                     continue    # FROM/EXISTS subqueries can have any number of columns
                 
