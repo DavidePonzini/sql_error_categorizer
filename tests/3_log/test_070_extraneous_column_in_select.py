@@ -90,6 +90,18 @@ def test_wrong(query, solutions, schema, search_path, expected_len, expected_col
         [],
         None,
     ),
+    (
+        # SELECT t.*
+        'SELECT sid, sname, s.street, s.city FROM store s, customer;',
+        ['SELECT store.* FROM store;'],
+        'miedema',
+    ),
+    (
+        # SELECT t.* - inversed
+        'SELECT store.* FROM store;',
+        ['SELECT sid, sname, s.street, s.city FROM store s, customer;'],
+        'miedema',
+    ),
     # subqueries
     (
         'SELECT a, (SELECT b FROM table2) as sub_col FROM table1;',

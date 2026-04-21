@@ -259,6 +259,10 @@ class SyntaxErrorDetector(BaseDetector):
                 continue
 
             for column in select.ast.find_all(exp.Column):
+                # skip `table.*` syntax, we only want to check actual column references
+                if isinstance(column.this, exp.Star):
+                    continue
+
                 column_name = util.ast.column.get_name(column)
                 table_name = util.ast.column.get_table(column)
 
@@ -403,6 +407,10 @@ class SyntaxErrorDetector(BaseDetector):
                 continue
 
             for column in select.ast.find_all(exp.Column):
+                # skip `table.*` syntax, we only want to check actual column references
+                if isinstance(column.this, exp.Star):
+                    continue
+
                 column = deepcopy(column)  # avoid modifying the original AST until we are sure we want to apply the correction
                 column_str = column.sql()
                 column_name = util.ast.column.get_name(column)

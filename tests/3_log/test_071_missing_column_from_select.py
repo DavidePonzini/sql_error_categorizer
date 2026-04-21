@@ -85,6 +85,18 @@ def test_wrong(query, solutions, schema, search_path, expected_len, expected_col
         'miedema',
     ),
     (
+        # SELECT t.*
+        'SELECT sid, sname, s.street, s.city FROM store s, customer;',
+        ['SELECT store.* FROM store;'],
+        'miedema',
+    ),
+    (
+        # SELECT t.* - inversed
+        'SELECT store.* FROM store;',
+        ['SELECT sid, sname, s.street, s.city FROM store s, customer;'],
+        'miedema',
+    ),
+    (
         # no solutions (return no errors)
         'SELECT a, b, c FROM table1;',
         [],

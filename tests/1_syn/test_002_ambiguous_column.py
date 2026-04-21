@@ -25,6 +25,7 @@ def test_wrong(query, column, table_aliases, schema):
 
 @pytest.mark.parametrize('query,schema', [
     ('SELECT s.street FROM store s, customer c;', 'miedema'),
+    ('SELECT s.* FROM store s, customer c;', 'miedema'),
     # subqueries
     ('SELECT * FROM store s, customer c WHERE cid IN (SELECT s2.street FROM store s2, customer c2);', 'miedema'),
     # CTEs
