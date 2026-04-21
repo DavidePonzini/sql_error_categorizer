@@ -14,7 +14,21 @@ ERROR = SqlErrors.LOG_73_MISSING_AS_FROM_SELECT
         'SELECT cid, cname AS street FROM customer;',
         ['SELECT cid AS id, cname FROM customer;'],
         'miedema',
-        ['id', 'cname']
+        ['id']
+    ),
+
+    (
+        'SELECT cid, cname AS street FROM customer;',
+        ['SELECT cid AS id, cname AS street2 FROM customer;'],
+        'miedema',
+        ['id', 'street2']
+    ),
+    (
+        # aliased aggregate in solution (should trigger AS error)
+        'SELECT a AS b, COUNT(*) FROM table1 GROUP BY a;',
+        ['SELECT a AS b, COUNT(*) AS c FROM table1 GROUP BY a;'],
+        None,
+        ['c']
     )
     # subqueries -- Not applicable
     # CTEs -- Not applicable
@@ -52,6 +66,12 @@ def test_wrong(query, solutions, schema, expected):
         # no solutions (return no errors)
         'SELECT a, b, c FROM table1;',
         [],
+        None,
+    ),
+    (
+        # unaliased aggregate in solution (should not trigger AS error)
+        'SELECT a AS b, COUNT(*) AS c FROM table1 GROUP BY a;',
+        ['SELECT a AS b, COUNT(*) FROM table1 GROUP BY a;'],
         None,
     ),
     # subqueries -- Not applicable

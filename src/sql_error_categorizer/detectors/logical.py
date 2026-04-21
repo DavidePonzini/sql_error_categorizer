@@ -448,8 +448,9 @@ class LogicalErrorDetector(BaseDetector):
         if extraneous_columns or missing_columns:
             return results  # skip AS check if column count is already wrong
 
-        expected_aliases: set[str] = set.intersection(*[set(col.name for col in sol.main_query.output.columns) for sol in self.solutions])
-        provided_aliases: set[str] = set(col.name for col in self.query.main_query.output.columns)
+        # only consider columns that are actually aliased
+        expected_aliases: set[str] = set.intersection(*[set(col.name for col in sol.main_query.output.columns if col.name != col.real_name and not col.name.startswith('_')) for sol in self.solutions])
+        provided_aliases: set[str] = set(col.name for col in self.query.main_query.output.columns if col.name != col.real_name and not col.name.startswith('_'))
 
         missing_aliases = expected_aliases - provided_aliases
 
