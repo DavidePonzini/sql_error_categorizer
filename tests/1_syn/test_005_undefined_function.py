@@ -31,6 +31,12 @@ def test_wrong(query, func, clause, schema):
     ('SELECT cid FROM customer GROUP BY cid HAVING COUNT(order_id) > 2;', None),
     ('SELECT NOW();', None),
     ('SELECT col1, COUNT(col2) FILTER (WHERE col3 = 1) as count_col FROM table1 WHERE col4 = 2', None),
+    ('SELECT EXTRACT(YEAR FROM CURRENT_DATE) AS current_year;', None),
+    ('SELECT COALESCE(col1, col2, 0) AS result FROM table1;', None),
+    ('SELECT NULLIF(col1, col2) AS result FROM table1;', None),
+    ('SELECT UPPER(col1) AS upper_col FROM table1;', None),
+    ('SELECT LOWER(col1) AS lower_col FROM table1;', None),
+    ('SELECT DATE_TRUNC(col1, \'month\') AS truncated_date FROM table1;', None),
     # subqueries
     ('SELECT * FROM store WHERE sid >= (SELECT MAX(col1) FROM store);', None),
     # CTEs
