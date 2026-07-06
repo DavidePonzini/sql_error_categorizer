@@ -2,6 +2,7 @@
 test_q.sql
 test_s?.sql
 .codex
+t.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
