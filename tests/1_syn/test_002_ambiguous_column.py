@@ -30,6 +30,7 @@ def test_wrong(query, column, table_aliases, schema):
     ('select professori.cognome,professori.nome, count(studenti.matricola) from studenti right outer join professori on studenti.relatore=professori.id group by professori.cognome,professori.nome order by professori.cognome,professori.nome asc;', 'unicorsi'),
     ("SELECT DISTINCT studente FROM Studenti s JOIN CorsiDiLaurea c ON s.corsodilaurea = c.id JOIN Esami e ON s.matricola = e.studente WHERE c.denominazione = 'Informatica' AND e.corso = 'bdd1n' AND e.voto >= 18 AND s.matricola NOT IN (SELECT studente FROM Esami WHERE corso = 'graf' AND voto >= 18 AND data >= '06/01/2010' AND Data <= '06/30/2010');", 'unicorsi'),
     ("select Cognome, Nome, Relatore from Studenti natural join Professori order by Cognome asc;", 'unicorsi'),
+    ("SELECT studenti.cognome, studenti.nome, professori.cognome AS relatore FROM studenti JOIN professori ON studenti.relatore = professori.id ORDER BY cognome, nome ASC;", 'unicorsi'),
     # subqueries
     ('SELECT * FROM store s, customer c WHERE cid IN (SELECT s2.street FROM store s2, customer c2);', 'miedema'),
     ('''SELECT customers.full_name,

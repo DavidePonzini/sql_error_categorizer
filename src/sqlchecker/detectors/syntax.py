@@ -242,6 +242,14 @@ class SyntaxErrorDetector(BaseDetector):
                 column_name = util.ast.column.get_name(column)
                 table_name = util.ast.column.get_table(column)
 
+                is_order_by = False
+                col_aux = column
+                while col_aux.parent:
+                    if isinstance(col_aux.parent, exp.Ordered):
+                        is_order_by = True
+                        break
+                    col_aux = col_aux.parent
+
                 possible_matches: list[str] = []
 
                 if table_name:
@@ -285,6 +293,13 @@ class SyntaxErrorDetector(BaseDetector):
 
                         # add a dummy match for the natural join, to make the comparison below work correctly
                         possible_matches.append(f'NATURAL JOIN({",".join(table_names)}).{column_name}')
+
+                # If the column is part of ORDER BY and it appears in SELECT clause, we can only check for ambiguity in the SELECT clause
+                # If it doesn't appear in SELECT clause, we can check for ambiguity in the whole query
+                if is_order_by:
+                    select_columns = [col.name for col in select.output.columns]
+                    if column_name in select_columns:
+                        possible_matches = [m for m in select_columns if m == column_name]
 
                 if len(possible_matches) > 1:
                     results.append(DetectedError(SqlErrors.AMBIGUOUS_COLUMN, (column.sql(), possible_matches)))
