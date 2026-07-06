@@ -232,6 +232,8 @@ class SyntaxErrorDetector(BaseDetector):
             if select_stripped.ast is None:
                 continue
 
+            natural_join_equalities = select.get_natural_join_equalities()
+
             for column in select_stripped.ast.find_all(exp.Column):
                 # skip `table.*` syntax, we only want to check actual column references
                 if isinstance(column.this, exp.Star):
@@ -272,6 +274,17 @@ class SyntaxErrorDetector(BaseDetector):
                                 parent_columns.add(f'{parent_table.name}.{parent_column.name}')
 
                     possible_matches = [m for m in possible_matches if m not in parent_columns]
+
+                # Remove equal matches from NATURAL JOINs, since they are not ambiguous
+                if column_name in natural_join_equalities:
+                    table_names = [select.referenced_tables[i].name for i in natural_join_equalities[column_name]]
+
+                    if len(table_names) > 1:
+                        # only keep matches that are not part of the natural join, since those are not ambiguous
+                        possible_matches = [m for m in possible_matches if not any(m.startswith(f'{t}.') for t in table_names)]
+
+                        # add a dummy match for the natural join, to make the comparison below work correctly
+                        possible_matches.append(f'NATURAL JOIN({",".join(table_names)}).{column_name}')
 
                 if len(possible_matches) > 1:
                     results.append(DetectedError(SqlErrors.AMBIGUOUS_COLUMN, (column.sql(), possible_matches)))
