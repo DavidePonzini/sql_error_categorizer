@@ -28,22 +28,32 @@ def test_wrong(query, expected_corrections):
     for correction in expected_corrections:
         assert has_error(detected_errors, ERROR, correction)
 
-@pytest.mark.parametrize('query', [
-    'SELECT SID FROM store;',
-    'SELECT SID FROM store WHERE sID = 1;',
-    'SELECT * FROM STORE;',
-    'SELECT * FROM MIEDEMA.store;',
+@pytest.mark.parametrize('query,schema', [
+    ('SELECT SID FROM store;', 'miedema'),
+    ('SELECT SID FROM store WHERE sID = 1;', 'miedema'),
+    ('SELECT * FROM STORE;', 'miedema'),
+    ('SELECT * FROM MIEDEMA.store;', 'miedema'),
     # subqueries
-    'SELECT * FROM store WHERE sid IN (SELECT sid FROM store);',
+    ('SELECT * FROM store WHERE sid IN (SELECT sid FROM store);', 'miedema'),
+    ('''select A.studente, A.relatore, A.media
+        from (select studenti.relatore, esami.studente, avg(voto) as media
+                    from (studenti join professori on studenti.relatore=professori.id) join esami on studenti.matricola=esami.studente
+                    group by studenti.relatore, esami.studente) as A
+            join (select relatore, max(media) as massimo
+                from (select studenti.relatore, esami.studente, avg(voto) as media
+                        from (studenti join professori on studenti.relatore=professori.id) join esami on studenti.matricola=esami.studente
+                        group by studenti.relatore, esami.studente) as medie
+                group by relatore) as B on A.relatore = B.relatore and A.media = B.massimo
+        ''', 'unicorsi'),
     # CTEs
-    'WITH temp AS (SELECT * FROM store) SELECT * FROM temp;',
+    ('WITH temp AS (SELECT * FROM store) SELECT * FROM temp;', 'miedema'),
 ])
-def test_correct(query):
+def test_correct(query, schema):
     detected_errors = run_test(
         query=query,
         detectors=[SyntaxErrorDetector],
-        catalog_filename='miedema',
-        search_path='miedema',
+        catalog_filename=schema,
+        search_path=schema,
     )
 
     assert count_errors(detected_errors, ERROR) == 0

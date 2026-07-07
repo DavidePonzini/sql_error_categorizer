@@ -55,6 +55,27 @@ def test_wrong(query, column, table_aliases, schema):
         SELECT AVG(balance)
         FROM accounts
     );''', 'gen1'),
+    ("select nome, cognome from studenti where not (nome in (select nome from professori) and cognome in (select cognome from professori))", 'unicorsi'),
+    ('''select  p.Cognome ,p.Nome , count(c.id) as numerocorsi
+        from Professori p
+        join Corsi c on c.Professore = p.id
+        group by p.id, p.Cognome , p.Nome
+        having count(c.id) = (
+                    select max(cnt) from (
+                        select count(*) as cnt from Corsi
+                        group by Professore
+                    )t
+         )''', 'unicorsi'),
+    ('''select A.studente, A.relatore, A.media
+        from (select studenti.relatore, esami.studente, avg(voto) as media
+                    from (studenti join professori on studenti.relatore=professori.id) join esami on studenti.matricola=esami.studente
+                    group by studenti.relatore, esami.studente) as A
+            join (select relatore, max(media) as massimo
+                from (select studenti.relatore, esami.studente, avg(voto) as media
+                        from (studenti join professori on studenti.relatore=professori.id) join esami on studenti.matricola=esami.studente
+                        group by studenti.relatore, esami.studente) as medie
+                group by relatore) as B on A.relatore = B.relatore and A.media = B.massimo
+        ''', 'unicorsi'),
     # CTEs
     ('WITH temp AS (SELECT s.street FROM store s, customer c) SELECT street FROM temp;', 'miedema'),
 ])

@@ -53,6 +53,16 @@ def test_wrong(query, column, schema):
         SELECT AVG(balance)
         FROM accounts
     );''', 'gen1'),
+    ('''select A.studente, A.relatore, A.media
+        from (select studenti.relatore, esami.studente, avg(voto) as media
+                    from (studenti join professori on studenti.relatore=professori.id) join esami on studenti.matricola=esami.studente
+                    group by studenti.relatore, esami.studente) as A
+            join (select relatore, max(media) as massimo
+                from (select studenti.relatore, esami.studente, avg(voto) as media
+                        from (studenti join professori on studenti.relatore=professori.id) join esami on studenti.matricola=esami.studente
+                        group by studenti.relatore, esami.studente) as medie
+                group by relatore) as B on A.relatore = B.relatore and A.media = B.massimo
+        ''', 'unicorsi'),
     # CTEs
     ('WITH temp AS (SELECT sname as name FROM store) SELECT name FROM temp;', 'miedema'),
 ])

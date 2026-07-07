@@ -1042,8 +1042,9 @@ class SyntaxErrorDetector(BaseDetector):
 
         for select in self.query.selects:
             for subquery, clause, depth in select.subqueries:
-                if clause in ('FROM', 'EXISTS') or 'JOIN' in clause:
-                    continue    # FROM/EXISTS subqueries can have any number of columns
+                if clause == 'EXISTS' or 'FROM' in clause or 'JOIN' in clause:
+                    # FROM/EXISTS subqueries can have any number of columns
+                    continue
                 
                 output_columns = len(subquery.output.columns)
                 expected_columns = 1  # Default expected columns for most contexts

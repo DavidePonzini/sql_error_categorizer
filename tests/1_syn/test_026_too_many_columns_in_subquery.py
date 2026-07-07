@@ -53,6 +53,7 @@ def test_wrong(query, subquery):
         SELECT AVG(balance)
         FROM accounts
     );''','gen1'),
+    ("select nome, cognome from studenti where not (nome in (select nome from professori) and cognome in (select cognome from professori))", 'unicorsi'),
 ])
 def test_correct(query, schema):
     detected_errors = run_test(
