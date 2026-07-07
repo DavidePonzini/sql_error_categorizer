@@ -8,7 +8,7 @@ from sqlglot import exp
 from typing import Callable
 from copy import deepcopy
 from sqlerrors import SqlErrors
-from sqlscope import Query
+from sqlscope import Query, catalog
 from sqlscope.query.set_operations.set_operation import SetOperation
 from sqlscope.query.typechecking import get_type, collect_errors
 from sqlscope import util
@@ -242,13 +242,17 @@ class SyntaxErrorDetector(BaseDetector):
                 column_name = util.ast.column.get_name(column)
                 table_name = util.ast.column.get_table(column)
 
-                is_order_by = False
-                col_aux = column
-                while col_aux.parent:
-                    if isinstance(col_aux.parent, exp.Ordered):
-                        is_order_by = True
+                # Determine the parent clause of the column (FROM, ORDER BY, etc.) to handle special cases
+                parent_clause = None
+                aux = column
+                while aux.parent:
+                    if isinstance(aux.parent, exp.Ordered):
+                        parent_clause = 'ORDER BY'
                         break
-                    col_aux = col_aux.parent
+                    if isinstance(aux.parent, exp.Join):
+                        parent_clause = 'JOIN'
+                        break
+                    aux = aux.parent
 
                 possible_matches: list[str] = []
 
@@ -283,6 +287,21 @@ class SyntaxErrorDetector(BaseDetector):
 
                     possible_matches = [m for m in possible_matches if m not in parent_columns]
 
+                # If the column is part of a JOIN clause, we can discard matches that belong to tables that are not yet joined, since they are not visible in the current context
+                if parent_clause == 'JOIN':
+                    # compute this again to avoid potentially unbound warnings
+                    aux = column
+                    join_left_tables: list[catalog.Table] = []
+                    while aux.parent:
+                        if isinstance(aux.parent, exp.Join):
+                            join_table_name = util.ast.table.get_name(aux.parent.this)
+                            join_left_tables = select.get_left_tables(join_table_name)
+                            break
+                        aux = aux.parent
+
+                    # Remove tables not yet joined
+                    possible_matches = [m for m in possible_matches if any(m.startswith(f'{t.name}.') for t in join_left_tables)]
+
                 # Remove equal matches from NATURAL JOINs, since they are not ambiguous
                 if column_name in natural_join_equalities:
                     table_names = [select.referenced_tables[i].name for i in natural_join_equalities[column_name]]
@@ -294,9 +313,10 @@ class SyntaxErrorDetector(BaseDetector):
                         # add a dummy match for the natural join, to make the comparison below work correctly
                         possible_matches.append(f'NATURAL JOIN({",".join(table_names)}).{column_name}')
 
-                # If the column is part of ORDER BY and it appears in SELECT clause, we can only check for ambiguity in the SELECT clause
-                # If it doesn't appear in SELECT clause, we can check for ambiguity in the whole query
-                if is_order_by:
+                # If the column has no table name and is part of ORDER BY and it appears in SELECT clause,
+                #   we can only check for ambiguity in the SELECT clause
+                # If it doesn't appear in SELECT clause, we keep checking for ambiguity in the whole query
+                if parent_clause == 'ORDER BY' and table_name is None:
                     select_columns = [col.name for col in select.output.columns]
                     if column_name in select_columns:
                         possible_matches = [m for m in select_columns if m == column_name]
