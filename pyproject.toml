@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sqlchecker"
-version = "0.3.3"
+version = "1.0.0"
 authors = [
   { name="Davide Ponzini", email="davide.ponzini95@gmail.com" },
 ]
@@ -21,7 +21,7 @@ dependencies = [
     "pyyaml",
     "sqlparse",
     "sqlglot",
-    "sqlscope>=1.0.16",
+    "sqlscope>=1.1.0",
     "sqlerrors>=2.0.0",
     "z3-solver",
     "python-dateutil",
