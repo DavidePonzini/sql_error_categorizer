@@ -820,7 +820,6 @@ class SyntaxErrorDetector(BaseDetector):
 
             select_columns: list[ColumnInfo] = [] # we need a list for positional GROUP BY handling
             
-            import dav_tools
             def parse_expression_for_columns(expr: exp.Expression, alias: str | None = None):
                 '''Recursively parse an expression to extract all column references, handling aliases and aggregate functions.'''
                 
