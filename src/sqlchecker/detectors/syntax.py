@@ -280,7 +280,7 @@ class SyntaxErrorDetector(BaseDetector):
                 if select_stripped.parent_query is not None and table_name is None:
                     # unqualified match in a subquery, we can ignore matches that belong to the parent query, since subquery tables have precedence over them
                     parent_columns = set()
-                    for parent_select in select_stripped.parent_query.strip_subqueries().selects:
+                    for parent_select in select_stripped.parent_query.strip(select.sql, ' __subq ').selects:
                         for parent_table in parent_select.referenced_tables:
                             for parent_column in parent_table.columns:
                                 parent_columns.add(f'{parent_table.name}.{parent_column.name}')

@@ -76,6 +76,32 @@ def test_wrong(query, column, table_aliases, schema):
                         group by studenti.relatore, esami.studente) as medie
                 group by relatore) as B on A.relatore = B.relatore and A.media = B.massimo
         ''', 'unicorsi'),
+    ('''SELECT customers.full_name,
+                loan_totals.total_loan_amount,
+                account_totals.total_balance
+        FROM customers
+        JOIN (
+            SELECT borrower_id, SUM(amount) AS total_loan_amount
+            FROM loans
+            GROUP BY borrower_id
+        ) loan_totals
+        ON loan_totals.borrower_id = customers.cust_id
+        JOIN (
+            SELECT ref_customer, SUM(balance) AS total_balance
+            FROM accounts
+            GROUP BY ref_customer
+        ) account_totals
+        ON account_totals.ref_customer = customers.cust_id
+        WHERE loan_totals.total_loan_amount > 5000
+        AND account_totals.total_balance > (
+            SELECT AVG(total_balance)
+            FROM (
+                SELECT SUM(balance) AS total_balance
+                FROM accounts
+                GROUP BY ref_customer
+            ) avg_table
+        );
+        ''', 'gen1'),
     # CTEs
     ('WITH temp AS (SELECT s.street FROM store s, customer c) SELECT street FROM temp;', 'miedema'),
 ])
