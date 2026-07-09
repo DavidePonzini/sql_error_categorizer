@@ -396,7 +396,7 @@ class SyntaxErrorDetector(BaseDetector):
                         continue
 
                     # check "schema.table" for more accurate matches in edge cases (i.e. can't determine if the misspelled part is schema or table)
-                    available_tables = {f'{s}.{t}' for s in select.catalog.schema_names for t in select.catalog[s].table_names}
+                    available_tables = {f'{s}.{t}' for s in select.catalog.schema_names for t in select.catalog.get_schema(s).table_names}
                     match = difflib.get_close_matches(f'{schema_name}.{table_name}', available_tables, n=1, cutoff=0.6)
                     if match:
                         s, t = match[0].split('.')
@@ -417,7 +417,7 @@ class SyntaxErrorDetector(BaseDetector):
                     if select.catalog.has_table(select.search_path, table_name):
                         continue
 
-                    available_tables = {t for s in select.catalog.schema_names for t in select.catalog[s].table_names}
+                    available_tables = {t for s in select.catalog.schema_names for t in select.catalog.get_schema(s).table_names}
                     match = difflib.get_close_matches(table_name, available_tables, n=1, cutoff=0.6)
                     if match:
                         db = next(s for s in select.catalog.schema_names if select.catalog.has_table(s, match[0]))
@@ -820,7 +820,7 @@ class SyntaxErrorDetector(BaseDetector):
 
             select_columns: list[ColumnInfo] = [] # we need a list for positional GROUP BY handling
             
-            def parse_expression_for_columns(expr: exp.Expression, alias: str | None = None):
+            def parse_expression_for_columns(expr: exp.Expr, alias: str | None = None):
                 '''Recursively parse an expression to extract all column references, handling aliases and aggregate functions.'''
                 
                 if isinstance(expr, exp.Star):
