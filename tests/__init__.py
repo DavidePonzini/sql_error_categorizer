@@ -2,6 +2,7 @@ from typing import Any
 from sqlchecker import SqlErrors, Catalog, load_catalog
 from sqlchecker.detectors import Detector, BaseDetector, DetectedError
 from sqlchecker import SyntaxErrorDetector, SemanticErrorDetector, LogicalErrorDetector, ComplicationDetector
+from sqlscope.catalog import split_search_path
 
 def run_test(query: str, *,
              catalog_filename: str | None = None,
@@ -10,10 +11,9 @@ def run_test(query: str, *,
              solutions: list[str] = []
     ) -> list[DetectedError]:
     
-    if catalog_filename:
-        catalog = load_catalog(f'datasets/catalogs/{catalog_filename}.json')
-    else:
-        catalog = Catalog()
+    catalog = Catalog()
+    for filename in split_search_path(catalog_filename) if catalog_filename else []:
+        catalog = catalog.merge(load_catalog(f'datasets/catalogs/{filename}.json'))
 
     if search_path is None:
         search_path = 'public'

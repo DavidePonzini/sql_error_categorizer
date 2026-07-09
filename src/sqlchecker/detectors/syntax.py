@@ -198,7 +198,7 @@ class SyntaxErrorDetector(BaseDetector):
 
                 if schema_name:
                     # Fully qualified table (schema.table)
-                    if not select.catalog.has_schema(schema_name):
+                    if not select.catalog.lookup_schema(schema_name):
                         results.append(DetectedError(SqlErrors.INVALID_SCHEMA_NAME, (table.sql(),)))
                         continue
 

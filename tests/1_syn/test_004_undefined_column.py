@@ -28,6 +28,8 @@ def test_wrong(query, column, schema):
 
 @pytest.mark.parametrize('query,schema', [
     ('SELECT sid FROM store;', 'miedema'),
+    ('SELECT sid FROM store', 'miedema, unicorsi'),
+    ('SELECT sid FROM store', 'unicorsi, miedema'),
     ('SELECT sid FROM store WHERE street = \'Eindhoven\';', 'miedema'),
     ('SELECT sid FROM store WHERE street = \'Eindhoven\';', 'miedema'),
     # subqueries
