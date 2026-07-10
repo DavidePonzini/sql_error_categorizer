@@ -32,6 +32,7 @@ def test_wrong(query, column, schema):
     ('SELECT sid FROM store', 'unicorsi, miedema'),
     ('SELECT sid FROM store WHERE street = \'Eindhoven\';', 'miedema'),
     ('SELECT sid FROM store WHERE street = \'Eindhoven\';', 'miedema'),
+    ('SELECT cid c FROM customer ORDER BY c;', 'miedema'),
     # subqueries
     ('SELECT sid FROM store WHERE sid > ALL(SELECT cid FROM customer);', 'miedema'),
     ('''SELECT customers.full_name,

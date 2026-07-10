@@ -296,6 +296,15 @@ class SyntaxErrorDetector(BaseDetector):
                             if possible_match.name == column_name:
                                 possible_matches.append(f'{table.name}.{column_name}')
 
+                # If the column has no table name and is part of ORDER BY and it appears in SELECT clause,
+                #   we can only check for ambiguity in the SELECT clause
+                # If it doesn't appear in SELECT clause, we keep checking for ambiguity in the whole query
+                if parent_clause == 'ORDER BY' and table_name is None:
+                    select_columns = [col.name for col in select.output.columns]
+
+                    if column_name in select_columns:
+                        possible_matches = [m for m in select_columns if m == column_name]
+
                 if len(possible_matches) == 0:
                     results.append(DetectedError(SqlErrors.UNDEFINED_COLUMN, (column.sql(),)))
                     continue
@@ -336,14 +345,6 @@ class SyntaxErrorDetector(BaseDetector):
 
                         # add a dummy match for the natural join, to make the comparison below work correctly
                         possible_matches.append(f'NATURAL JOIN({",".join(table_names)}).{column_name}')
-
-                # If the column has no table name and is part of ORDER BY and it appears in SELECT clause,
-                #   we can only check for ambiguity in the SELECT clause
-                # If it doesn't appear in SELECT clause, we keep checking for ambiguity in the whole query
-                if parent_clause == 'ORDER BY' and table_name is None:
-                    select_columns = [col.name for col in select.output.columns]
-                    if column_name in select_columns:
-                        possible_matches = [m for m in select_columns if m == column_name]
 
                 if len(possible_matches) > 1:
                     results.append(DetectedError(SqlErrors.AMBIGUOUS_COLUMN, (column.sql(), possible_matches)))
