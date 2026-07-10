@@ -128,6 +128,12 @@ class SyntaxErrorDetector(BaseDetector):
 
         results: list[DetectedError] = []
 
+        def is_semicolon(token):
+            return token.ttype == sqlparse.tokens.Punctuation and token.value == ';'
+
+        def is_ws(token):
+            return token.ttype in (sqlparse.tokens.Whitespace, sqlparse.tokens.Newline)
+
         all_tokens = []
         for statement in self.query.all_statements:
             all_tokens.extend(list(statement.flatten()))
@@ -137,14 +143,12 @@ class SyntaxErrorDetector(BaseDetector):
         non_whitespace_found = False
 
         depth = 0
-        select_token_found = False
-        query_token_length = 0
         
         for token in reversed(all_tokens):  # start from end to preserve only the last semicolon
             # check for whitespace/newline
-            if token.ttype in (sqlparse.tokens.Whitespace, sqlparse.tokens.Newline):
+            if is_ws(token):
                 # keep as is and continue
-                good_tokens.append(token.value)
+                good_tokens.append(token)
                 continue
 
             # compute query depth
@@ -154,32 +158,23 @@ class SyntaxErrorDetector(BaseDetector):
                 else:
                     depth += 1
 
-            # handle multiple statements in the same query (keep only the statement at the beginning, discard the rest)
-            if token.ttype == sqlparse.tokens.DML and depth == 0:
-                if not select_token_found:
-                    # we encountered a SELECT token at the top level, which means we now have a complete query
-                    select_token_found = True
-                else:
-                    # we encountered a second SELECT token at the top level, which means we have multiple queries in the same string.
-                    # we only keep the new one and discard the rest.
-                    # discard detected errors as well, since the query will be ignored
-                    good_tokens = good_tokens[query_token_length:]
-                    results = []
-
-                query_token_length = len(good_tokens) + 1 # include the SELECT token itself
-
             # check for semicolons: the first one before any non-whitespace is kept, others are flagged
-            if token.ttype == sqlparse.tokens.Punctuation and token.value == ';':
+            if is_semicolon(token):
                 if non_whitespace_found:
                     # we encountered a semicolon in the middle of the query!
                     # we don't care if this is the first one we encounter, it's surely not supposed to be here
                     results.append(DetectedError(SqlErrors.ADDITIONAL_SEMICOLON))
+
+                    if depth == 0:
+                        # possibly multiple statements in the same query, keep the ; to be safe
+                        good_tokens.append(token)
+
                     continue
                 
                 if not trailing_semicolon_found:
                     # we encountered the trailing semicolon for the first time
                     # it's good, keep it
-                    good_tokens.append(token.value)
+                    good_tokens.append(token)
                     trailing_semicolon_found = True
                     continue
 
@@ -189,12 +184,16 @@ class SyntaxErrorDetector(BaseDetector):
             
             # any other token
             non_whitespace_found = True
-            good_tokens.append(token.value)
+            good_tokens.append(token)
                 
         if not trailing_semicolon_found:
             results.append(DetectedError(SqlErrors.OMITTED_SEMICOLON))
 
-        return (results, ''.join(reversed(good_tokens)))
+        # if there are semicolons at the start of the query, before any actual tokens, we can safely discard them
+        while(len(good_tokens) > 0 and is_semicolon(good_tokens[-1]) or is_ws(good_tokens[-1])):
+            good_tokens.pop()
+
+        return (results, ''.join(reversed([token.value for token in good_tokens])))
     # endregion
 
     # region 2) Pre-fixing
