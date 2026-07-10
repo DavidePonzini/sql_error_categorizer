@@ -279,6 +279,7 @@ class SyntaxErrorDetector(BaseDetector):
                     aux = aux.parent
 
                 possible_matches: list[str] = []
+                possible_matches_order_by: list[str] = []
 
                 if table_name:
                     # Qualified column (table.column)
@@ -303,9 +304,9 @@ class SyntaxErrorDetector(BaseDetector):
                     select_columns = [col.name for col in select.output.columns]
 
                     if column_name in select_columns:
-                        possible_matches = [m for m in select_columns if m == column_name]
+                        possible_matches_order_by = [m for m in select_columns if m == column_name]
 
-                if len(possible_matches) == 0:
+                if len(possible_matches) == 0 and len(possible_matches_order_by) == 0:
                     results.append(DetectedError(SqlErrors.UNDEFINED_COLUMN, (column.sql(),)))
                     continue
 
@@ -345,6 +346,10 @@ class SyntaxErrorDetector(BaseDetector):
 
                         # add a dummy match for the natural join, to make the comparison below work correctly
                         possible_matches.append(f'NATURAL JOIN({",".join(table_names)}).{column_name}')
+
+                # "ORDER BY alias" has precedence over column names 
+                if parent_clause == 'ORDER BY' and table_name is None and column_name in possible_matches_order_by:
+                    continue
 
                 if len(possible_matches) > 1:
                     results.append(DetectedError(SqlErrors.AMBIGUOUS_COLUMN, (column.sql(), possible_matches)))
