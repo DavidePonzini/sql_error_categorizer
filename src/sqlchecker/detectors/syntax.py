@@ -123,7 +123,7 @@ class SyntaxErrorDetector(BaseDetector):
 
         Returns:
         - List of DetectedError instances for semicolon issues.
-        - The cleaned query string with extra semicolons removed.
+        - The cleaned query string with extra semicolons removed. If the query contains multiple nested queries, only the last semicolon is kept. If it contains multiple separate queries, only the first statement is kept.
         '''
 
         results: list[DetectedError] = []
@@ -135,6 +135,10 @@ class SyntaxErrorDetector(BaseDetector):
         good_tokens = []
         trailing_semicolon_found = False
         non_whitespace_found = False
+
+        depth = 0
+        select_token_found = False
+        query_token_length = 0
         
         for token in reversed(all_tokens):  # start from end to preserve only the last semicolon
             # check for whitespace/newline
@@ -142,7 +146,28 @@ class SyntaxErrorDetector(BaseDetector):
                 # keep as is and continue
                 good_tokens.append(token.value)
                 continue
-            
+
+            # compute query depth
+            if token.ttype == sqlparse.tokens.Punctuation and token.value in ('(', ')'):
+                if token.value == '(':
+                    depth -= 1
+                else:
+                    depth += 1
+
+            # handle multiple statements in the same query (keep only the statement at the beginning, discard the rest)
+            if token.ttype == sqlparse.tokens.DML and depth == 0:
+                if not select_token_found:
+                    # we encountered a SELECT token at the top level, which means we now have a complete query
+                    select_token_found = True
+                else:
+                    # we encountered a second SELECT token at the top level, which means we have multiple queries in the same string.
+                    # we only keep the new one and discard the rest.
+                    # discard detected errors as well, since the query will be ignored
+                    good_tokens = good_tokens[query_token_length:]
+                    results = []
+
+                query_token_length = len(good_tokens) + 1 # include the SELECT token itself
+
             # check for semicolons: the first one before any non-whitespace is kept, others are flagged
             if token.ttype == sqlparse.tokens.Punctuation and token.value == ';':
                 if non_whitespace_found:
