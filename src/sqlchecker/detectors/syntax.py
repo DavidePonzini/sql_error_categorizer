@@ -1055,17 +1055,39 @@ class SyntaxErrorDetector(BaseDetector):
         for select in self.query.selects:
             stripped = select.strip_subqueries().strip_filters()
 
-            clause_count = {}
+            depth: int = 0
+
+            # { depth: {clause: count} }
+            # 
+            clause_count: dict[int, dict[str, int]] = {
+                0: {}
+            }
+            
             for ttype, val in stripped.tokens:
                 val_upper = val.upper()
-                if ttype == sqlparse.tokens.DML and val_upper == 'SELECT':
-                    clause_count[val_upper] = clause_count.get(val_upper, 0) + 1
-                if ttype == sqlparse.tokens.Keyword and val_upper in clause_keywords:
-                    clause_count[val_upper] = clause_count.get(val_upper, 0) + 1
 
-            for clause, count in clause_count.items():
-                if count > 1:
-                    results.append(DetectedError(SqlErrors.DUPLICATE_CLAUSE, (clause, count)))
+                if ttype == sqlparse.tokens.Punctuation:
+                    if val == '(':
+                        depth += 1
+
+                        # we are entering a new subquery, reset the clause count for this depth and raise errors if needed
+                        if depth in clause_count:
+                            for clause, count in clause_count[depth].items():
+                                if count > 1:
+                                    results.append(DetectedError(SqlErrors.DUPLICATE_CLAUSE, (clause, count)))
+                        clause_count[depth] = {}
+                    elif val == ')':
+                        depth -= 1
+
+                if ttype == sqlparse.tokens.DML and val_upper == 'SELECT':
+                    clause_count[depth][val_upper] = clause_count[depth].get(val_upper, 0) + 1
+                elif ttype == sqlparse.tokens.Keyword and val_upper in clause_keywords:
+                    clause_count[depth][val_upper] = clause_count[depth].get(val_upper, 0) + 1
+
+            for depth, counter in clause_count.items():
+                for clause, count in counter.items():
+                    if count > 1:
+                        results.append(DetectedError(SqlErrors.DUPLICATE_CLAUSE, (clause, count)))
 
         return results
 
