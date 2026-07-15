@@ -12,6 +12,7 @@ from sqlscope import Query, catalog
 from sqlscope.query.set_operations.set_operation import SetOperation
 from sqlscope.query.typechecking import get_type, collect_errors
 from sqlscope import util
+from sqlscope.catalog import ConstraintType
 
 from .base import BaseDetector, DetectedError
 
@@ -835,13 +836,9 @@ class SyntaxErrorDetector(BaseDetector):
         class ColumnInfo:
             name: str
             alias: str
+            table_idx: int | None
             is_aggregated: bool = False
 
-        def get_column_name(col: exp.Column | exp.Alias, *, alias: str | None = None, is_aggregated: bool = False) -> ColumnInfo:
-            '''Return normalized column name and alias. If no alias, both are the same.'''
-            col_name = util.ast.column.get_real_name(col)
-            col_alias = alias if alias is not None else util.ast.column.get_name(col)
-            return ColumnInfo(col_name, col_alias, is_aggregated)
 
         results: list[DetectedError] = []
 
@@ -856,14 +853,38 @@ class SyntaxErrorDetector(BaseDetector):
 
             select_columns: list[ColumnInfo] = [] # we need a list for positional GROUP BY handling
             
+            def get_column_name(col: exp.Column | exp.Alias, *, alias: str | None = None, is_aggregated: bool = False) -> ColumnInfo:
+                '''Return normalized column name and alias. If no alias, both are the same.'''
+                col_name = util.ast.column.get_real_name(col)
+                col_alias = alias if alias is not None else util.ast.column.get_name(col)
+
+                actual_col = col.find(exp.Column)
+                if actual_col is None:
+                    table_idx = None
+                else:
+                    table_idx = select_stripped.get_table_idx_for_column(actual_col)
+
+                    if table_idx is None:
+                        table_idx = select_stripped.get_table_idx_for_column(actual_col)
+                        if table_idx is not None:
+                            table_idx = table_idx
+
+
+                return ColumnInfo(col_name, col_alias, table_idx, is_aggregated)
+            
             def parse_expression_for_columns(expr: exp.Expr, alias: str | None = None):
                 '''Recursively parse an expression to extract all column references, handling aliases and aggregate functions.'''
                 
                 if isinstance(expr, exp.Star):
                     # SELECT * case: expand to all columns from all referenced tables
-                    for table in select.referenced_tables:
+                    for i, table in enumerate(select.referenced_tables):
                         for table_col in table.columns:
-                            select_columns.append(ColumnInfo(table_col.name, table_col.name))
+                            select_columns.append(ColumnInfo(
+                                name=table_col.name,
+                                alias=table_col.name,
+                                table_idx=i,
+                                is_aggregated=False
+                            ))
                 elif isinstance(expr, exp.Alias):
                     return parse_expression_for_columns(expr.this, alias=util.ast.column.get_name(expr))
                 elif isinstance(expr, exp.Column):
@@ -915,9 +936,26 @@ class SyntaxErrorDetector(BaseDetector):
                     continue    # aggregated, skip
                 if any(select_col.name == group_col.name or select_col.alias == group_col.alias for group_col in group_by_columns):
                     continue    # valid: in GROUP BY
+                if select_col.table_idx is not None:
+                    # Check if the PK of the table is in GROUP BY, if so, it's valid
+                    table = select_stripped.referenced_tables[select_col.table_idx]
+
+                    # if the PK/UNIQUE constraint is in GROUP BY, the column is valid, even if it doesn't directly appear in GROUP BY
+                    constraint_satisfied = False
+                    for constraint in table.unique_constraints:
+                        group_by_column_names = {col.name for col in group_by_columns}
+                        constraint_column_names = {col.name for col in constraint.columns}
+
+                        if constraint_column_names.issubset(group_by_column_names):
+                            constraint_satisfied = True
+                            break
+                        
+                    if constraint_satisfied:
+                        continue    # valid: PK/UNIQUE constraint satisfied in GROUP BY
+
                 results.append(DetectedError(SqlErrors.EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,(select_col.name, 'ONLY IN SELECT')))
 
-            # Ensure all non-aggregated columns in GROUP BY are in SELECT
+            # Ensure aggregated columns are not in GROUP BY
             # (Note: aggregated columns in GROUP BY are invalid)
             for group_col in group_by_columns:
                 if group_col.is_aggregated:
@@ -925,7 +963,7 @@ class SyntaxErrorDetector(BaseDetector):
                     continue
                 if any(group_col.name == select_col.name or group_col.alias == select_col.alias for select_col in select_columns):
                     continue # valid: in SELECT
-                results.append(DetectedError(SqlErrors.EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,(group_col.name, 'ONLY IN GROUP BY')))
+                # results.append(DetectedError(SqlErrors.EXTRANEOUS_OR_OMITTED_GROUPING_COLUMN,(group_col.name, 'ONLY IN GROUP BY')))
             # Ensure all non-aggregated columns in HAVING are in GROUP BY
 
         return results
