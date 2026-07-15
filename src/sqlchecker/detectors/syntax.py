@@ -2,11 +2,13 @@
 
 from dataclasses import dataclass
 import difflib
+import enum
 import re
 import sqlparse
 from sqlglot import exp
 from typing import Callable
 from copy import deepcopy
+
 from sqlerrors import SqlErrors
 from sqlscope import Query, catalog
 from sqlscope.query.set_operations.set_operation import SetOperation
@@ -949,7 +951,7 @@ class SyntaxErrorDetector(BaseDetector):
                         if constraint_column_names.issubset(group_by_column_names):
                             constraint_satisfied = True
                             break
-                        
+                    
                     if constraint_satisfied:
                         continue    # valid: PK/UNIQUE constraint satisfied in GROUP BY
 
@@ -1157,46 +1159,75 @@ class SyntaxErrorDetector(BaseDetector):
         Expected order:
         SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY → LIMIT → OFFSET
         '''
+        class Keywords(enum.IntEnum):
+            SELECT = enum.auto()
+            FROM = enum.auto()
+            WHERE = enum.auto()
+            GROUP_BY = enum.auto()
+            HAVING = enum.auto()
+            ORDER_BY = enum.auto()
+            LIMIT = enum.auto()
+            OFFSET = enum.auto()
+
+            def __str__(self) -> str:
+                return self.name.replace('_', ' ')
+
         results: list[DetectedError] = []
 
         for select in self.query.selects:
             stripped = select.strip_subqueries().strip_filters()
 
-            expected_order = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT', 'OFFSET']
-            actual_order: list[str] = []
+            expected_order = [
+                Keywords.SELECT,
+                Keywords.FROM,
+                Keywords.WHERE,
+                Keywords.GROUP_BY,
+                Keywords.HAVING,
+                Keywords.ORDER_BY,
+                Keywords.LIMIT,
+                Keywords.OFFSET
+            ]
+            actual_order: list[Keywords] = []
+
+            depth = 0
+
 
             for ttype, val in stripped.tokens:
+                if ttype == sqlparse.tokens.Punctuation:
+                    if val == '(':
+                        depth += 1
+                    elif val == ')':
+                        depth -= 1
+                
+                # Only consider top-level clauses (depth == 0)
+                if depth > 0:
+                    continue
+
                 if ttype == sqlparse.tokens.DML:
-                    actual_order.append('SELECT')
+                    actual_order.append(Keywords.SELECT)
                 elif ttype == sqlparse.tokens.Keyword:
                     val_upper = val.upper()
                     if val_upper == 'FROM':
-                        actual_order.append('FROM')
+                        actual_order.append(Keywords.FROM)
                     elif val_upper == 'WHERE':
-                        actual_order.append('WHERE')
+                        actual_order.append(Keywords.WHERE)
                     elif val_upper == 'GROUP BY':
-                        actual_order.append('GROUP BY')
+                        actual_order.append(Keywords.GROUP_BY)
                     elif val_upper == 'HAVING':
-                        actual_order.append('HAVING')
+                        actual_order.append(Keywords.HAVING)
                     elif val_upper == 'ORDER BY':
-                        actual_order.append('ORDER BY')
+                        actual_order.append(Keywords.ORDER_BY)
                     elif val_upper == 'LIMIT':
-                        actual_order.append('LIMIT')
+                        actual_order.append(Keywords.LIMIT)
                     elif val_upper == 'OFFSET':
-                        actual_order.append('OFFSET')
+                        actual_order.append(Keywords.OFFSET)
 
             # Check the order of clauses
-            last_index = -1
-            for clause in actual_order:
-                if clause in expected_order:
-                    current_index = expected_order.index(clause)
-                    if current_index < last_index:
-                        results.append(DetectedError(
-                            SqlErrors.CONFUSED_ORDER_OF_KEYWORDS,
-                            (actual_order,)
-                        ))
-                        break
-                    last_index = current_index
+            if actual_order != sorted(actual_order):
+                results.append(DetectedError(
+                    SqlErrors.CONFUSED_ORDER_OF_KEYWORDS,
+                    ([str(kw) for kw in actual_order],)
+                ))
 
         return results
             
