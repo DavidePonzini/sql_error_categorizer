@@ -8,6 +8,7 @@ ERROR = SqlErrors.DUPLICATE_CLAUSE
     'SELECT col1 FROM table1 WHERE col2 = 10 GROUP BY col1 HAVING COUNT(*) > 1',
     'SELECT col1 FROM table1 WHERE col2 IN (SELECT col3 FROM table2) GROUP BY col1 HAVING COUNT(*) > 1',
     'SELECT col1 FROM table1 JOIN table2 ON table1.id = table2.id JOIN table3 ON table2.id = table3.id',
+    'SELECT SUM(col1) FILTER (WHERE col2 = 10) FROM table1 WHERE col3 = 20',
     'SELECT col1, COUNT(col2) FILTER (WHERE col3 = 1) as count_col FROM table1 WHERE col4 = 2',
     '''
         SELECT s.matricola, COUNT(e.voto), EXTRACT(YEAR FROM e.data) AS year, EXTRACT(MONTH FROM e.data) AS month
