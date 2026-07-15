@@ -249,6 +249,12 @@ class SyntaxErrorDetector(BaseDetector):
         '''
 
         results: list[DetectedError] = []
+        special_names = {
+            'CURRENT_ROLE',
+            'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP',
+            'LOCALTIME', 'LOCALTIMESTAMP',
+            'SESSION_USER', 'SYSTEM_USER', 'USER',
+        }
 
         for select in self.query.selects:
             select_stripped = select.strip_subqueries()
@@ -306,7 +312,7 @@ class SyntaxErrorDetector(BaseDetector):
                     if column_name in select_columns:
                         possible_matches_order_by = [m for m in select_columns if m == column_name]
 
-                if len(possible_matches) == 0 and len(possible_matches_order_by) == 0:
+                if len(possible_matches) == 0 and len(possible_matches_order_by) == 0 and column_name and column_name.upper() not in special_names:
                     results.append(DetectedError(SqlErrors.UNDEFINED_COLUMN, (column.sql(),)))
                     continue
 
