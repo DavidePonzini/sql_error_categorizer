@@ -9,6 +9,7 @@ sqlscope>=1.1.0
 
 # Dependencies for development
 ipython
+dav_tools
 
 # Dependencies for building
 build
