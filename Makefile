@@ -18,8 +18,8 @@ install: uninstall build
 	$(VENV_BIN)/python -m pip install ./dist/*.whl
 
 install_sqlscope: $(VENV)
-	cd ../sqlscope && make build
-	$(VENV_BIN)/python -m pip install ../sqlscope/dist/sqlscope-*.whl --force-reinstall
+	cd ../lensql_sqlscope && make build
+	$(VENV_BIN)/python -m pip install ../lensql_sqlscope/dist/sqlscope-*.whl --force-reinstall
 
 $(VENV):
 	python -m venv --clear $(VENV)
