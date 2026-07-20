@@ -233,10 +233,10 @@ class SemanticErrorDetector(BaseDetector):
 
                 for left, right in equalities:
                     left_name = util.ast.column.get_real_name(left)
-                    left_idx = select._get_table_idx_for_column(left)
+                    left_idx = select.get_table_idx_for_column(left)
 
                     right_name = util.ast.column.get_real_name(right)
-                    right_idx = select._get_table_idx_for_column(right)
+                    right_idx = select.get_table_idx_for_column(right)
 
                     if left_idx is not None and right_idx is not None:
                         left_full = f'{left_idx}.{left_name}'

@@ -207,7 +207,7 @@ class ComplicationDetector(BaseDetector):
                         # Check if the column has a UNIQUE constraint
                         unique_constraints = [c for c in select.all_constraints if c.constraint_type == ConstraintType.UNIQUE]
                         for constraint in unique_constraints:
-                            if { ConstraintColumn(column_name, table_idx=select._get_table_idx_for_column(expr)) } == constraint.columns:
+                            if { ConstraintColumn(column_name, table_idx=select.get_table_idx_for_column(expr)) } == constraint.columns:
                                 results.append(DetectedError(SqlErrors.UNNECESSARY_DISTINCT_IN_AGGREGATE_FUNCTION, (str(agg_func),)))
                                 break
         return results
@@ -282,8 +282,8 @@ class ComplicationDetector(BaseDetector):
                 columns = list(expression.find_all(exp.Column))
                 group_by_columns.extend(columns)
 
-            select_col_names = {(util.ast.column.get_real_name(col), select._get_table_idx_for_column(col)) for col in select_columns}
-            group_by_col_names = {(util.ast.column.get_real_name(col), select._get_table_idx_for_column(col)) for col in group_by_columns}
+            select_col_names = {(util.ast.column.get_real_name(col), select.get_table_idx_for_column(col)) for col in select_columns}
+            group_by_col_names = {(util.ast.column.get_real_name(col), select.get_table_idx_for_column(col)) for col in group_by_columns}
 
             if select_col_names == group_by_col_names:
                 results.append(DetectedError(SqlErrors.GROUP_BY_CAN_BE_REPLACED_WITH_DISTINCT, (select_col_names,)))
