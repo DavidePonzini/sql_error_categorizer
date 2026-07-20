@@ -32,10 +32,12 @@ class BaseDetector(ABC):
                  query: Query,
                  solutions: list[Query] = [],
                  update_query: Callable[[str, str | None], None],
+                 dialect: str | None = None
         ):        
         self.query = query
         self.solutions = solutions
         self.update_query = update_query
+        self.dialect = dialect
 
     @abstractmethod
     def run(self) -> list[DetectedError]:

@@ -19,6 +19,7 @@ class Detector:
                  solutions: list[str] = [],
                  catalog: Catalog = Catalog(),
                  detectors: list[type[BaseDetector]] = [],
+                 dialect: str | None = None,
                  debug: bool = False):
         
         # Context data: they don't need to be parsed again if the query changes
@@ -27,6 +28,7 @@ class Detector:
         self.catalog = catalog
         self.solutions = [Query(sol, catalog=self.catalog, search_path=self.solution_search_path) for sol in solutions]
         self.detectors: list[BaseDetector] = []
+        self.dialect = dialect
         self.debug = debug
 
         self.set_query(query)
@@ -62,6 +64,7 @@ class Detector:
             query=self.query,
             solutions=self.solutions,
             update_query=lambda new_query, reason=None: self.set_query(new_query, reason),
+            dialect=self.dialect
         )
 
         self.detectors.append(detector)

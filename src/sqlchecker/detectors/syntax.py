@@ -27,11 +27,13 @@ class SyntaxErrorDetector(BaseDetector):
                  query: Query,
                  update_query: Callable[[str, str | None], None],
                  solutions: list[Query] = [],
+                 dialect: str | None = None
                 ):
         super().__init__(
             query=query,
             solutions=solutions,
             update_query=update_query,
+            dialect=dialect
         )
 
     def run(self) -> list[DetectedError]:
@@ -67,7 +69,7 @@ class SyntaxErrorDetector(BaseDetector):
         misspelling_checks = [
             self.detect_33_omitting_commas,                         # TODO: implement/refactor
             self.detect_27_confusing_table_names_with_column_names, # TODO: implement
-            self.detect_36_nonstandard_operators,                   # ok
+            self.detect_37_nonstandard_operators,                   # ok
             self.detect_9_misspellings_schemas_tables,              # ok
             self.detect_9_misspellings_columns,                     # ok
             self.detect_10_synonyms,                                # TODO: implement
@@ -712,7 +714,7 @@ class SyntaxErrorDetector(BaseDetector):
 
         return results
 
-    def detect_36_nonstandard_operators(self) -> list[DetectedError]:
+    def detect_37_nonstandard_operators(self) -> list[DetectedError]:
         '''
         Flags usage of non-standard or language-specific operators like &&, ||, ==, etc.
         '''
@@ -736,12 +738,19 @@ class SyntaxErrorDetector(BaseDetector):
             '≤'     : '<=',
         }
 
+        language_specific_ops = {
+            'postgres' : [
+                '||'
+            ]
+        }
+
         for ttype, val in self.query.tokens:
             val_stripped = val.strip()
             if ttype in sqlparse.tokens.Operator or ttype in sqlparse.tokens.Operator.Comparison or ttype == sqlparse.tokens.Error:
                 if val_stripped in nonstandard_ops:
-                    correction = nonstandard_ops[val_stripped]
-                    results.append(DetectedError(SqlErrors.NONSTANDARD_OPERATORS, (val_stripped, correction)))
+                    if self.dialect is None or val_stripped not in language_specific_ops.get(self.dialect, []):
+                        correction = nonstandard_ops[val_stripped]
+                        results.append(DetectedError(SqlErrors.NONSTANDARD_OPERATORS, (val_stripped, correction)))
 
         return results
     # endregion
@@ -763,7 +772,6 @@ class SyntaxErrorDetector(BaseDetector):
             errors: list[DetectedError] = []
             expected_output = None # type of the first select's output
             for select in set_op.main_selects:
-
                 typed_ast = select.typed_ast
                 
                 if typed_ast is None:
