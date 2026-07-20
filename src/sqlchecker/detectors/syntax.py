@@ -144,10 +144,11 @@ class SyntaxErrorDetector(BaseDetector):
         good_tokens = []
         trailing_semicolon_found = False
         non_whitespace_found = False
+        tokens_after_semicolon = False
 
         depth = 0
         
-        for token in reversed(all_tokens):  # start from end to preserve only the last semicolon
+        for token in all_tokens:
             # check for whitespace/newline
             if is_ws(token):
                 # keep as is and continue
@@ -157,46 +158,50 @@ class SyntaxErrorDetector(BaseDetector):
             # compute query depth
             if token.ttype == sqlparse.tokens.Punctuation and token.value in ('(', ')'):
                 if token.value == '(':
-                    depth -= 1
-                else:
                     depth += 1
+                else:
+                    depth -= 1
 
             # check for semicolons: the first one before any non-whitespace is kept, others are flagged
             if is_semicolon(token):
-                if non_whitespace_found:
-                    # we encountered a semicolon in the middle of the query!
-                    # we don't care if this is the first one we encounter, it's surely not supposed to be here
+                # semicolon in nested query, definetely wrong!
+                if depth > 0:
                     results.append(DetectedError(SqlErrors.ADDITIONAL_SEMICOLON))
-
-                    if depth == 0:
-                        # possibly multiple statements in the same query, keep the ; to be safe
-                        good_tokens.append(token)
-
                     continue
-                
+
+                # semicolon for the first time, let's keep it unless it's before any actual token
                 if not trailing_semicolon_found:
-                    # we encountered the trailing semicolon for the first time
-                    # it's good, keep it
-                    good_tokens.append(token)
-                    trailing_semicolon_found = True
+                    if non_whitespace_found:
+                        # we encountered some meaningful tokens before, it's an actual query
+                        good_tokens.append(token)
+                        trailing_semicolon_found = True
+                        continue
+
+                    # multiple semicolons before actual tokens, let's skip it
+                    results.append(DetectedError(SqlErrors.ADDITIONAL_SEMICOLON))
                     continue
 
-                # else, we have already found the trailing semicolon, so this is an extra one at the end
+                # semicolon after the first one, let's flag it as an error and skip it
                 results.append(DetectedError(SqlErrors.ADDITIONAL_SEMICOLON))
                 continue
             
             # any other token
             non_whitespace_found = True
-            good_tokens.append(token)
+
+            if not trailing_semicolon_found:
+                # we are still building our first query
+                good_tokens.append(token)
+            else:
+                # a new query starts from here
+                tokens_after_semicolon = True
+                trailing_semicolon_found = False
                 
         if not trailing_semicolon_found:
             results.append(DetectedError(SqlErrors.OMITTED_SEMICOLON))
+        if tokens_after_semicolon:
+            results.append(DetectedError(SqlErrors.ADDITIONAL_SEMICOLON))
 
-        # if there are semicolons at the start of the query, before any actual tokens, we can safely discard them
-        while(len(good_tokens) > 0 and is_semicolon(good_tokens[-1]) or is_ws(good_tokens[-1])):
-            good_tokens.pop()
-
-        return (results, ''.join(reversed([token.value for token in good_tokens])))
+        return (results, ''.join([token.value for token in good_tokens]))
     # endregion
 
     # region 2) Pre-fixing
@@ -279,16 +284,22 @@ class SyntaxErrorDetector(BaseDetector):
                 parent_clause = None
                 aux = column
                 while aux.parent:
-                    if isinstance(aux.parent, exp.Ordered):
-                        parent_clause = 'ORDER BY'
-                        break
                     if isinstance(aux.parent, exp.Join):
                         parent_clause = 'JOIN'
+                        break
+                    if isinstance(aux.parent, exp.From):
+                        parent_clause = 'FROM'
+                        break
+                    if isinstance(aux.parent, exp.Group):
+                        parent_clause = 'GROUP BY'
+                        break
+                    if isinstance(aux.parent, exp.Ordered):
+                        parent_clause = 'ORDER BY'
                         break
                     aux = aux.parent
 
                 possible_matches: list[str] = []
-                possible_matches_order_by: list[str] = []
+                possible_output_matches: list[str] = []
 
                 if table_name:
                     # Qualified column (table.column)
@@ -306,16 +317,16 @@ class SyntaxErrorDetector(BaseDetector):
                             if possible_match.name == column_name:
                                 possible_matches.append(f'{table.name}.{column_name}')
 
-                # If the column has no table name and is part of ORDER BY and it appears in SELECT clause,
+                # If the column has no table name and is part of GROUP BY/ORDER BY and it appears in SELECT clause,
                 #   we can only check for ambiguity in the SELECT clause
                 # If it doesn't appear in SELECT clause, we keep checking for ambiguity in the whole query
-                if parent_clause == 'ORDER BY' and table_name is None:
+                if parent_clause in ('GROUP BY', 'ORDER BY') and table_name is None:
                     select_columns = [col.name for col in select.output.columns]
 
                     if column_name in select_columns:
-                        possible_matches_order_by = [m for m in select_columns if m == column_name]
+                        possible_output_matches = [m for m in select_columns if m == column_name]
 
-                if len(possible_matches) == 0 and len(possible_matches_order_by) == 0 and column_name and column_name.upper() not in special_names:
+                if len(possible_matches) == 0 and len(possible_output_matches) == 0 and column_name and column_name.upper() not in special_names:
                     results.append(DetectedError(SqlErrors.UNDEFINED_COLUMN, (column.sql(),)))
                     continue
 
@@ -356,8 +367,8 @@ class SyntaxErrorDetector(BaseDetector):
                         # add a dummy match for the natural join, to make the comparison below work correctly
                         possible_matches.append(f'NATURAL JOIN({",".join(table_names)}).{column_name}')
 
-                # "ORDER BY alias" has precedence over column names 
-                if parent_clause == 'ORDER BY' and table_name is None and column_name in possible_matches_order_by:
+                # "GROUP BY / ORDER BY alias" has precedence over column names 
+                if parent_clause in ('GROUP BY', 'ORDER BY') and table_name is None and column_name in possible_output_matches:
                     continue
 
                 if len(possible_matches) > 1:

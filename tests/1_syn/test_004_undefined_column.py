@@ -68,6 +68,15 @@ def test_wrong(query, column, schema):
                         group by studenti.relatore, esami.studente) as medie
                 group by relatore) as B on A.relatore = B.relatore and A.media = B.massimo
         ''', 'unicorsi'),
+    ('''
+        SELECT s.matricola, COUNT(e.voto), EXTRACT(YEAR FROM e.data) AS year, EXTRACT(MONTH FROM e.data) AS month
+        FROM Studenti s
+        JOIN Esami e on e.studente = s.matricola
+        JOIN Corsi c on c.id = e.corso
+        JOIN CorsiDiLaurea cdl on cdl.id = c.corsodilaurea
+        WHERE cdl.denominazione = 'Informatica'
+        GROUP BY s.matricola, YEAR, MONTH
+    ''', 'unicorsi'),
     # CTEs
     ('WITH temp AS (SELECT sname as name FROM store) SELECT name FROM temp;', 'miedema'),
 ])
