@@ -5,7 +5,7 @@ from .detectors import BaseDetector as _BaseDetector, Detector as _Detector
 
 # Public API
 from sqlerrors import SqlErrors
-from sqlscope import Catalog, build_catalog, load_catalog, build_catalog_from_postgres, build_catalog_from_sql
+from sqlscope import Catalog, Dialect, build_catalog, load_catalog, build_catalog_from_postgres, build_catalog_from_sql
 from .detectors import SyntaxErrorDetector, SemanticErrorDetector, LogicalErrorDetector, ComplicationDetector, DetectedError
 
 def get_errors(query_str: str,
@@ -13,6 +13,7 @@ def get_errors(query_str: str,
                catalog: Catalog = Catalog(),
                search_path: str = 'public',
                solution_search_path: str = 'public',
+               dialect: Dialect | None = None,
                detectors: list[type[_BaseDetector]] = [
                    SyntaxErrorDetector,
                    SemanticErrorDetector,
@@ -26,6 +27,7 @@ def get_errors(query_str: str,
                     catalog=catalog,
                     search_path=search_path,
                     solution_search_path=solution_search_path,
+                    dialect=dialect,
                     debug=debug)
 
     for detector in detectors:
@@ -38,6 +40,7 @@ def get_error_types(query_str: str,
                     catalog: Catalog = Catalog(),
                     search_path: str = 'public',
                     solution_search_path: str = 'public',
+                    dialect: Dialect | None = None,
                     detectors: list[type[_BaseDetector]] = [
                         SyntaxErrorDetector,
                         SemanticErrorDetector,
@@ -52,6 +55,7 @@ def get_error_types(query_str: str,
                                  catalog=catalog,
                                  search_path=search_path,
                                  solution_search_path=solution_search_path,
+                                 dialect=dialect,
                                  detectors=detectors,
                                  debug=debug)
     
