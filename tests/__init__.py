@@ -3,10 +3,12 @@ from sqlchecker import SqlErrors, Catalog, load_catalog
 from sqlchecker.detectors import Detector, BaseDetector, DetectedError
 from sqlchecker import SyntaxErrorDetector, SemanticErrorDetector, LogicalErrorDetector, ComplicationDetector
 from sqlscope.catalog import split_search_path
+from sqlscope import Dialect
 
 def run_test(query: str, *,
              catalog_filename: str | None = None,
-             search_path: str | None = None, 
+             search_path: str | None = None,
+             dialect: Dialect | None = None,
              detectors: list[type[BaseDetector]],
              solutions: list[str] = []
     ) -> list[DetectedError]:
@@ -24,6 +26,7 @@ def run_test(query: str, *,
         catalog=catalog,
         search_path=search_path,
         solution_search_path=search_path,
+        dialect=dialect,
         detectors=detectors,
         debug=True
     )

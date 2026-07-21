@@ -10,7 +10,7 @@ from typing import Callable
 from copy import deepcopy
 
 from sqlerrors import SqlErrors
-from sqlscope import Query, catalog
+from sqlscope import Query, catalog, Dialect
 from sqlscope.query.set_operations.set_operation import SetOperation
 from sqlscope.query.typechecking import get_type, collect_errors
 from sqlscope import util
@@ -27,13 +27,11 @@ class SyntaxErrorDetector(BaseDetector):
                  query: Query,
                  update_query: Callable[[str, str | None], None],
                  solutions: list[Query] = [],
-                 dialect: str | None = None
                 ):
         super().__init__(
             query=query,
             solutions=solutions,
             update_query=update_query,
-            dialect=dialect
         )
 
     def run(self) -> list[DetectedError]:
@@ -738,8 +736,8 @@ class SyntaxErrorDetector(BaseDetector):
             '≤'     : '<=',
         }
 
-        language_specific_ops = {
-            'postgres' : [
+        language_specific_ops: dict[Dialect | None, list[str]] = {
+            Dialect.POSTGRES: [
                 '||'
             ]
         }
@@ -748,7 +746,7 @@ class SyntaxErrorDetector(BaseDetector):
             val_stripped = val.strip()
             if ttype in sqlparse.tokens.Operator or ttype in sqlparse.tokens.Operator.Comparison or ttype == sqlparse.tokens.Error:
                 if val_stripped in nonstandard_ops:
-                    if self.dialect is None or val_stripped not in language_specific_ops.get(self.dialect, []):
+                    if val_stripped not in language_specific_ops.get(self.query.dialect, []):
                         correction = nonstandard_ops[val_stripped]
                         results.append(DetectedError(SqlErrors.NONSTANDARD_OPERATORS, (val_stripped, correction)))
 

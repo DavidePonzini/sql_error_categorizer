@@ -1,6 +1,6 @@
 '''SQL error detectors.'''
 
-from sqlscope import Query, Catalog
+from sqlscope import Query, Catalog, Dialect
 from .base import BaseDetector, DetectedError
 
 # exported detectors
@@ -11,24 +11,26 @@ from .complications import ComplicationDetector
 
 class Detector:
     '''Manages and runs SQL error detectors on a query.'''
-    def __init__(self,
-                 query: str,
-                 *,
-                 search_path: str = 'public',
-                 solution_search_path: str = 'public',
-                 solutions: list[str] = [],
-                 catalog: Catalog = Catalog(),
-                 detectors: list[type[BaseDetector]] = [],
-                 dialect: str | None = None,
-                 debug: bool = False):
+    def __init__(
+            self,
+            query: str,
+            *,
+            search_path: str = 'public',
+            solution_search_path: str = 'public',
+            solutions: list[str] = [],
+            catalog: Catalog = Catalog(),
+            dialect: Dialect | None = None,
+            detectors: list[type[BaseDetector]] = [],
+            debug: bool = False,
+        ):
         
         # Context data: they don't need to be parsed again if the query changes
         self.search_path = search_path
         self.solution_search_path = solution_search_path
         self.catalog = catalog
-        self.solutions = [Query(sol, catalog=self.catalog, search_path=self.solution_search_path) for sol in solutions]
-        self.detectors: list[BaseDetector] = []
         self.dialect = dialect
+        self.solutions = [Query(sol, catalog=self.catalog, search_path=self.solution_search_path, dialect=self.dialect) for sol in solutions]
+        self.detectors: list[BaseDetector] = []
         self.debug = debug
 
         self.set_query(query)
@@ -48,7 +50,7 @@ class Detector:
                 print(f'Updating query:\n{query}')
             print('=' * 20)
 
-        self.query = Query(query, catalog=self.catalog, search_path=self.search_path)
+        self.query = Query(query, catalog=self.catalog, search_path=self.search_path, dialect=self.dialect)
 
         # Update all detectors with the new query and parse results
         for detector in self.detectors:
@@ -64,7 +66,6 @@ class Detector:
             query=self.query,
             solutions=self.solutions,
             update_query=lambda new_query, reason=None: self.set_query(new_query, reason),
-            dialect=self.dialect
         )
 
         self.detectors.append(detector)
