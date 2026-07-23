@@ -32,6 +32,12 @@ def test_wrong(query, errors):
     'SELECT * FROM orders WHERE amount > 100;',
     'SELECT customer_id, SUM(amount) FROM orders GROUP BY customer_id HAVING SUM(amount) > 100;',
     'select p.cognome, p.nome, count(*) from professori as p join corsi as c on c.professore=p.id group by p.id, p.cognome, p.nome having count(*)= (select count(*) from corsi as c join professori as p on p.id=c.professore group by p.id order by count(*) desc limit 1)',
+    '''select stipendio from professori
+        where stipendio = (
+                select(min(stipendio))
+                from professori
+        )
+    ''',
     # subqueries
     'SELECT * FROM orders WHERE amount > (SELECT AVG(amount) FROM orders);',
     'SELECT customer_id, SUM(amount) FROM orders GROUP BY customer_id HAVING SUM(amount) > (SELECT AVG(amount) FROM orders);',
