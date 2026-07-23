@@ -68,8 +68,6 @@ class SyntaxErrorDetector(BaseDetector):
             self.detect_33_omitting_commas,                         # TODO: implement/refactor
             self.detect_27_confusing_table_names_with_column_names, # TODO: implement
             self.detect_37_nonstandard_operators,                   # ok
-            self.detect_9_misspellings_schemas_tables,              # ok
-            self.detect_9_misspellings_columns,                     # ok
             self.detect_10_synonyms,                                # TODO: implement
             self.detect_11_omitted_quotes,                          # TODO: implement/refactor
         ]
@@ -90,6 +88,33 @@ class SyntaxErrorDetector(BaseDetector):
                 # Use the corrected query from here on (across all detectors)
                 if corrected_sql != self.query.sql:
                     self.update_query(corrected_sql, check.__name__)
+
+        # 3.3) fix table/column misspellings and re-parse until no new errors are found
+        misspelling_checks = [
+            self.detect_9_misspellings_schemas_tables,              # ok
+            self.detect_9_misspellings_columns,                     # ok
+        ]
+
+        while True:
+            new_errors_found = False
+            for check in misspelling_checks:
+                for error in check():
+                    pattern = re.escape(error.data[0])
+                    corrected_sql = re.sub(
+                        pattern,
+                        error.data[1],
+                        corrected_sql,
+                        # flags=re.IGNORECASE
+                    )
+
+                    # Use the corrected query from here on (across all detectors)
+                    if corrected_sql != self.query.sql:
+                        self.update_query(corrected_sql, check.__name__)
+                        new_errors_found = True
+                        results.append(error)   # this correction has been applied
+
+            if not new_errors_found:
+                break
             
         # Proceed with all other checks
         checks = [
@@ -421,6 +446,33 @@ class SyntaxErrorDetector(BaseDetector):
     # endregion
 
     # region 3) Fixable errors
+    def _detect_9_misspellings_expression_to_str(self, expr: exp.Column | exp.Table) -> str:
+        parent = expr.parent
+
+        if parent is None:
+            return expr.sql()
+        
+        if isinstance(parent, exp.Select):
+            parent = deepcopy(parent) # avoid modifying the caller's AST
+            
+            # remove all clauses except for SELECT
+            if 'from_' in parent.args:
+                del parent.args['from_']
+            if 'where' in parent.args:
+                del parent.args['where']
+            if 'group' in parent.args:
+                del parent.args['group']
+            if 'having' in parent.args:
+                del parent.args['having']
+            if 'order' in parent.args:
+                del parent.args['order']
+            if 'limit' in parent.args:
+                del parent.args['limit']
+            if 'offset' in parent.args:
+                del parent.args['offset']
+
+        return parent.sql()
+
     def detect_9_misspellings_schemas_tables(self) -> list[DetectedError]:
         '''
         Check for misspellings in table names.
@@ -434,9 +486,10 @@ class SyntaxErrorDetector(BaseDetector):
             if select_stripped.ast is None:
                 continue
 
-            for table in select_stripped.ast.find_all(exp.Table):
-                table = deepcopy(table)  # avoid modifying the original AST until we are sure we want to apply the correction
-                table_str = table.sql()
+            ast = deepcopy(select_stripped.ast)  # avoid modifying the original AST until we are sure we want to apply the correction
+
+            for table in ast.find_all(exp.Table):
+                table_str_original = self._detect_9_misspellings_expression_to_str(table)
                 table_name = util.ast.table.get_real_name(table)
                 schema_name = util.ast.table.get_schema(table)
 
@@ -454,7 +507,8 @@ class SyntaxErrorDetector(BaseDetector):
                         table.set('db', exp.TableAlias(this=exp.to_identifier(s, quoted=True)))
                         table.set('this', exp.to_identifier(t, quoted=True))
                         
-                        results.add(DetectedError(SqlErrors.MISSPELLINGS, (table_str, table.sql())))
+                        table_str = self._detect_9_misspellings_expression_to_str(table)
+                        results.add(DetectedError(SqlErrors.MISSPELLINGS, (table_str_original, table_str)))
                     continue
                 
                 else:
@@ -474,7 +528,9 @@ class SyntaxErrorDetector(BaseDetector):
                         table.set('this', exp.to_identifier(match[0], quoted=True))
                         if db != select.search_path:
                             table.set('db', exp.TableAlias(this=exp.to_identifier(db, quoted=True)))
-                        results.add(DetectedError(SqlErrors.MISSPELLINGS, (table_str, table.sql())))
+
+                        table_str = self._detect_9_misspellings_expression_to_str(table)
+                        results.add(DetectedError(SqlErrors.MISSPELLINGS, (table_str_original, table_str)))
 
         return [*results]     
 
@@ -491,13 +547,14 @@ class SyntaxErrorDetector(BaseDetector):
             if select_stripped.ast is None:
                 continue
 
-            for column in select_stripped.ast.find_all(exp.Column):
+            ast = deepcopy(select_stripped.ast)  # avoid modifying the original AST until we are sure we want to apply the correction
+
+            for column in ast.find_all(exp.Column):
                 # skip `table.*` syntax, we only want to check actual column references
                 if isinstance(column.this, exp.Star):
                     continue
 
-                column = deepcopy(column)  # avoid modifying the original AST until we are sure we want to apply the correction
-                column_str = column.sql()
+                column_str_original = self._detect_9_misspellings_expression_to_str(column)
                 column_name = util.ast.column.get_name(column)
                 table_name = util.ast.column.get_table(column)
 
@@ -531,7 +588,8 @@ class SyntaxErrorDetector(BaseDetector):
                     else:
                         column.set('this', exp.to_identifier(match[0], quoted=True))
                     
-                    results.add(DetectedError(SqlErrors.MISSPELLINGS, (column_str, column.sql())))
+                    column_str = self._detect_9_misspellings_expression_to_str(column)
+                    results.add(DetectedError(SqlErrors.MISSPELLINGS, (column_str_original, column_str)))
 
         return [*results]
     
