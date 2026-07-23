@@ -77,6 +77,25 @@ def test_wrong(query, column, schema):
         WHERE cdl.denominazione = 'Informatica'
         GROUP BY s.matricola, YEAR, MONTH
     ''', 'unicorsi'),
+    ('''select s.matricola
+        from studenti s
+        where
+            s.relatore is null
+            and not exists (
+                select 1
+                from corsi c
+                where
+                    c.corsodilaurea = s.corsodilaurea
+                    and not exists (
+                        select 1
+                        from esami e
+                        where
+                            e.studente = s.matricola
+                            and e.corso = c.id
+                            and e.voto < 18
+                    )
+            )
+    ''', 'unicorsi'),
     # CTEs
     ('WITH temp AS (SELECT sname as name FROM store) SELECT name FROM temp;', 'miedema'),
 ])
