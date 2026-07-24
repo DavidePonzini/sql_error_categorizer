@@ -406,18 +406,15 @@ class SyntaxErrorDetector(BaseDetector):
 
         results: list[DetectedError] = []
 
-        # standard_functions = {
-        known_aggregate_functions = {
+        standard_functions = {
             'SUM', 'AVG', 'COUNT', 'MIN', 'MAX',
             'IN', 'EXISTS', 'ANY', 'ALL',
+            'OVER',
             'FILTER', 'EXTRACT', 'DATE_TRUNC', 'DATE_PART',
             'COALESCE', 'NULLIF', 'CAST', 'CONVERT',
             'UPPER', 'LOWER', 'LENGTH', 'SUBSTRING',
             'NOW', 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP',
         }
-        user_defined_functions = set() # TODO: self.catalog.functions
-
-        all_functions = known_aggregate_functions.union(user_defined_functions)
 
         for func, clause in self.query.functions:
             func_name = func.get_name()
@@ -425,8 +422,13 @@ class SyntaxErrorDetector(BaseDetector):
             if func_name is None:
                 continue
             
-            if func_name.upper() not in all_functions:
-                results.append(DetectedError(SqlErrors.UNDEFINED_FUNCTION, (func_name, clause)))
+            if func_name.upper() in standard_functions:
+                continue
+
+            if self.query.catalog.has_function(self.query.search_path, func_name.lower()):
+                continue
+
+            results.append(DetectedError(SqlErrors.UNDEFINED_FUNCTION, (func_name, clause)))
 
         return results
 
